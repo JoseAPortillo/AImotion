@@ -1,0 +1,13 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "integration: marks tests that require GPU and actual model weights",
+]
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["tests/*", "app/models/graph.py"]
+
+[tool.coverage.report]
+fail_under = 80

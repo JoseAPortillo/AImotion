@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AImotion - Video Generation</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0f0f0f; color: #e0e0e0; min-height: 100vh;
+    display: flex; justify-content: center;
+  }
+  .container { max-width: 720px; width: 100%; padding: 24px; }
+  h1 { font-size: 1.5rem; margin-bottom: 4px; }
+  .subtitle { color: #888; font-size: 0.85rem; margin-bottom: 24px; }
+  .status-banner {
+    padding: 8px 12px; border-radius: 6px; font-size: 0.85rem; margin-bottom: 16px;
+  }
+  .status-ok { background: #0a2e1a; color: #4ade80; border: 1px solid #166534; }
+  .status-err { background: #2e0a0a; color: #f87171; border: 1px solid #7f1d1d; }
+  .card {
+    background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px;
+    padding: 20px; margin-bottom: 16px;
+  }
+  .card-title { font-size: 0.9rem; font-weight: 600; margin-bottom: 12px; color: #aaa; text-transform: uppercase; letter-spacing: 0.5px; }
+  .drop-zone {
+    border: 2px dashed #333; border-radius: 6px; padding: 32px 16px;
+    text-align: center; cursor: pointer; transition: border-color 0.2s;
+  }
+  .drop-zone:hover, .drop-zone.drag-over { border-color: #4ade80; }
+  .drop-zone.has-file { border-color: #4ade80; border-style: solid; }
+  .drop-zone-text { color: #666; font-size: 0.9rem; }
+  .drop-zone-text strong { color: #4ade80; }
+  .file-info { margin-top: 8px; font-size: 0.85rem; color: #4ade80; }
+  input[type="file"] { display: none; }
+  label, .field-label { display: block; font-size: 0.85rem; color: #aaa; margin-bottom: 6px; }
+  textarea, input[type="number"] {
+    width: 100%; background: #0f0f0f; border: 1px solid #2a2a2a; border-radius: 6px;
+    color: #e0e0e0; padding: 10px 12px; font-size: 0.9rem; font-family: inherit;
+  }
+  textarea:focus, input:focus { outline: none; border-color: #4ade80; }
+  textarea { resize: vertical; min-height: 64px; }
+  .params-row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .params-row > div { flex: 1; min-width: 100px; }
+  .collapsible-header {
+    cursor: pointer; user-select: none; display: flex; justify-content: space-between; align-items: center;
+  }
+  .collapsible-body { margin-top: 12px; }
+  .arrow { transition: transform 0.2s; }
+  .arrow.open { transform: rotate(180deg); }
+  button {
+    width: 100%; padding: 12px; border: none; border-radius: 6px;
+    font-size: 1rem; font-weight: 600; cursor: pointer; transition: background 0.2s;
+  }
+  button.generate { background: #4ade80; color: #0f0f0f; }
+  button.generate:hover:not(:disabled) { background: #22c55e; }
+  button.generate:disabled { background: #333; color: #666; cursor: not-allowed; }
+  .progress-section { margin-top: 16px; }
+  .progress-bar-bg {
+    width: 100%; height: 8px; background: #2a2a2a; border-radius: 4px; overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%; background: #4ade80; border-radius: 4px; transition: width 0.3s; width: 0%;
+  }
+  .progress-text { font-size: 0.85rem; color: #888; margin-top: 6px; text-align: center; }
+  .result-section { margin-top: 16px; }
+  video { width: 100%; border-radius: 6px; }
+  .download-btn {
+    display: inline-block; margin-top: 8px; padding: 8px 16px;
+    background: #2563eb; color: white; border-radius: 6px; text-decoration: none;
+    font-size: 0.85rem; text-align: center;
+  }
+  .download-btn:hover { background: #1d4ed8; }
+  .error-box {
+    margin-top: 12px; padding: 10px 12px; background: #2e0a0a; border: 1px solid #7f1d1d;
+    border-radius: 6px; color: #f87171; font-size: 0.85rem;
+  }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>⚡ AImotion</h1>
+  <p class="subtitle">Video generation with LTX-Video 2B</p>
+
+  <div id="status" class="status-banner status-err">Connecting to backend...</div>
+
+  <div class="card">
+    <div class="card-title">Input</div>
+    <div id="dropZone" class="drop-zone">
+      <div class="drop-zone-text">Drop a video here or <strong>browse</strong></div>
+      <div class="file-info hidden" id="fileInfo"></div>
+    </div>
+    <input type="file" id="fileInput" accept=".mp4,.mov,.avi,.mkv">
+  </div>
+
+  <div class="card">
+    <div class="card-title">Prompt</div>
+    <textarea id="prompt" placeholder="Describe the scene you want to generate..."></textarea>
+    <div class="collapsible-header" onclick="toggleNeg()">
+      <span class="field-label" style="margin-top:12px;margin-bottom:0">Negative prompt</span>
+      <span class="arrow" id="negArrow">▾</span>
+    </div>
+    <div id="negBody" class="collapsible-body hidden">
+      <textarea id="negPrompt" placeholder="Elements to avoid..." style="margin-top:8px"></textarea>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Parameters</div>
+    <div class="params-row">
+      <div><label class="field-label">Width</label><input type="number" id="width" value="512" min="64" max="768" step="8"></div>
+      <div><label class="field-label">Height</label><input type="number" id="height" value="512" min="64" max="768" step="8"></div>
+      <div><label class="field-label">Steps</label><input type="number" id="steps" value="25" min="1" max="100"></div>
+    </div>
+    <div class="params-row" style="margin-top:8px">
+      <div><label class="field-label">CFG</label><input type="number" id="cfg" value="7.5" min="1" max="20" step="0.5"></div>
+      <div><label class="field-label">Seed (0=random)</label><input type="number" id="seed" value="0" min="0"></div>
+    </div>
+  </div>
+
+  <button class="generate" id="genBtn" onclick="generate()">Generate</button>
+
+  <div id="progressSection" class="progress-section hidden">
+    <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressFill"></div></div>
+    <div class="progress-text" id="progressText">Starting...</div>
+  </div>
+
+  <div id="errorBox" class="error-box hidden"></div>
+
+  <div id="resultSection" class="result-section hidden">
+    <div class="card">
+      <div class="card-title">Result</div>
+      <video id="resultVideo" controls></video>
+      <a id="downloadLink" class="download-btn" href="#" download>Download MP4</a>
+    </div>
+  </div>
+</div>
+
+<script>
+let backendOk = false;
+let polling = false;
+
+async function checkHealth() {
+  const el = document.getElementById('status');
+  try {
+    const r = await fetch('/health');
+    const data = await r.json();
+    if (data.status === 'ok') {
+      backendOk = true;
+      el.className = 'status-banner status-ok';
+      el.textContent = `Backend connected · GPU: ${data.gpu_name || 'N/A'} · VRAM: ${data.vram_free_gb ?? '?'} GB free`;
+    } else {
+      throw new Error('Not ok');
+    }
+  } catch {
+    backendOk = false;
+    el.className = 'status-banner status-err';
+    el.textContent = 'Backend unavailable — start the server';
+  }
+}
+
+checkHealth();
+setInterval(checkHealth, 10000);
+
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const fileInfo = document.getElementById('fileInfo');
+let selectedFile = null;
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length) handleFile(fileInput.files[0]);
+});
+
+function handleFile(file) {
+  const validExts = ['.mp4', '.mov', '.avi', '.mkv'];
+  const ext = '.' + file.name.split('.').pop().toLowerCase();
+  if (!validExts.includes(ext)) {
+    alert('Unsupported format. Allowed: mp4, mov, avi, mkv');
+    return;
+  }
+  selectedFile = file;
+  const sizeMB = (file.size / (1024*1024)).toFixed(1);
+  dropZone.classList.add('has-file');
+  fileInfo.classList.remove('hidden');
+  fileInfo.textContent = `${file.name} (${sizeMB} MB)`;
+  document.querySelector('.drop-zone-text').textContent = 'Click to change file';
+}
+
+function toggleNeg() {
+  const body = document.getElementById('negBody');
+  const arrow = document.getElementById('negArrow');
+  body.classList.toggle('hidden');
+  arrow.classList.toggle('open');
+}
+
+async function generate() {
+  const btn = document.getElementById('genBtn');
+  const errorBox = document.getElementById('errorBox');
+  const progressSection = document.getElementById('progressSection');
+  const resultSection = document.getElementById('resultSection');
+
+  errorBox.classList.add('hidden');
+  resultSection.classList.add('hidden');
+
+  if (!backendOk) {
+    showError('Backend is not available');
+    return;
+  }
+  if (!selectedFile) {
+    showError('Please select a video file');
+    return;
+  }
+  const prompt = document.getElementById('prompt').value.trim();
+  if (!prompt) {
+    showError('Please enter a prompt');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Generating...';
+
+  const formData = new FormData();
+  formData.append('video', selectedFile);
+  formData.append('prompt', prompt);
+  formData.append('negative_prompt', document.getElementById('negPrompt').value.trim());
+  formData.append('width', parseInt(document.getElementById('width').value));
+  formData.append('height', parseInt(document.getElementById('height').value));
+  formData.append('steps', parseInt(document.getElementById('steps').value));
+  formData.append('cfg', parseFloat(document.getElementById('cfg').value));
+  formData.append('seed', parseInt(document.getElementById('seed').value));
+
+  try {
+    const resp = await fetch('/generate', { method: 'POST', body: formData });
+    if (!resp.ok) {
+      const err = await resp.json();
+      showError(err.detail || 'Generation request failed');
+      btn.disabled = false;
+      btn.textContent = 'Generate';
+      return;
+    }
+    const data = await resp.json();
+    progressSection.classList.remove('hidden');
+    await pollTask(data.task_id);
+  } catch (err) {
+    showError('Network error: ' + err.message);
+    btn.disabled = false;
+    btn.textContent = 'Generate';
+  }
+}
+
+async function pollTask(taskId) {
+  const progressFill = document.getElementById('progressFill');
+  const progressText = document.getElementById('progressText');
+  polling = true;
+
+  while (polling) {
+    try {
+      const r = await fetch(`/generate/${taskId}`);
+      const data = await r.json();
+
+      if (data.status === 'running' || data.status === 'pending') {
+        const pct = Math.round((data.progress || 0) * 100);
+        progressFill.style.width = pct + '%';
+        const eta = data.eta_sec ? ` · ETA ${Math.round(data.eta_sec)}s` : '';
+        progressText.textContent = `Step ${data.current_step || 0} / ${data.total_steps || '?'}${eta}`;
+      } else if (data.status === 'completed') {
+        progressFill.style.width = '100%';
+        progressText.textContent = 'Generation complete!';
+        polling = false;
+        showResult(data.result_url);
+        resetBtn();
+        return;
+      } else if (data.status === 'failed') {
+        progressText.textContent = 'Generation failed';
+        polling = false;
+        showError(data.error || 'Unknown error');
+        resetBtn();
+        return;
+      }
+    } catch {
+      progressText.textContent = 'Polling failed... retrying';
+    }
+    await new Promise(r => setTimeout(r, 2000));
+  }
+}
+
+function showResult(url) {
+  const section = document.getElementById('resultSection');
+  const video = document.getElementById('resultVideo');
+  const link = document.getElementById('downloadLink');
+  section.classList.remove('hidden');
+  video.src = url;
+  link.href = url;
+  video.play().catch(() => {});
+}
+
+function showError(msg) {
+  const el = document.getElementById('errorBox');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+}
+
+function resetBtn() {
+  const btn = document.getElementById('genBtn');
+  btn.disabled = false;
+  btn.textContent = 'Generate';
+  document.getElementById('progressSection').classList.add('hidden');
+}
+</script>
+</body>
+</html>

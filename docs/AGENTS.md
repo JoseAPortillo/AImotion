@@ -1,50 +1,49 @@
 # AImotion Agent Instructions
 
-Load [AImotion main skill](.github/skills/aimotion-main/SKILL.md) for project-wide planning and implementation decisions.
-
-Load [AImotion agent](.github/agents/aimotion.agent.md) when you want the project-specific agent behavior and scope guardrails.
-
 ## Project Direction
 
-- Build AImotion as a web-first node workflow for animation and video planning.
-- Keep the system as a modular monolith with a decoupled backend.
-- Treat the frontend as a graph editor, not as a place for heavy AI processing.
-- Prefer REST for the MVP unless the UI clearly requires a different API style.
+- Build AImotion as a **desktop-first** node workflow for animation and video generation.
+- MVP is a **pragmatic modular monolith** built in 3 phases, each delivering real value.
+- Phase 1 priority: get a real video generated with LTX-Video 2B on the user's RTX 3080 FAST. No graph, no Tauri, no providers.
+- Phase 2: Tauri + React Flow + full node graph + first cloud provider.
+- Phase 3: Audio + export + model installer + reference conditioning + full SpecSecOps.
 
-## MVP Architecture
+## Development Methodology
 
-- Frontend: React with React Flow or Litegraph.js.
-- Backend: **Python** with FastAPI and a modular monolith structure.
-- Async execution: Celery + Redis.
-- Provider layer: cloud APIs plus local bridges such as ComfyUI or Ollama.
-- Media processing: FFmpeg for audio/video muxing.
+- **Phase 1-2:** Lightweight SDD (Spec → Implement → Verify). No adversarial reviews, no threat models.
+- **Phase 3+:** Graduate to full SpecSecOps (8-phase SDD + DevSecOps).
+- **Tests are mandatory.** Every backend module must have tests. No test == incomplete task.
+- **Security by default.** No secrets in code, validate all inputs, strip keys from logs.
 
-## Execution Layer Rules
+## Architecture
 
-- Cloud providers should connect through API clients to services such as Kling and Stability AI.
-- Local execution should use API bridges such as Ollama or ComfyUI in API mode.
-- Do not build a native local installer before the MVP proves the provider abstraction.
-- Keep provider adapters replaceable so execution targets can change without redesigning the graph editor.
+- Phase 1: Python/FastAPI backend + LTX-Video 2B via diffusers + minimal HTML/JS web UI on localhost.
+- Phase 2: Tauri (Rust) desktop shell + React + React Flow node editor.
+- Backend: modular monolith, local service, asyncio background tasks.
+- Inference: LTX-Video 2B with FP8 quantisation, CPU-offloaded T5-XXL.
+- Media: FFmpeg via subprocess (Phase 3).
 
-## MVP Node Set
+## Hardware Reality
 
-- Image Input: accept a single image or an image sequence; read the first frame and continue by consecutive numbering, or accept a ZIP for frame batches.
-- Video Input: accept a source video file.
-- Prompt Input: accept textual guidance.
-- Generation: resolve provider, model, and generation parameters dynamically based on connected inputs.
-- Audio: attach an audio track for later muxing.
-- Output: preview and export the final result as MP4 or GIF.
+- GPU: NVIDIA RTX 3080 (10 GB VRAM). ~7-8 GB usable.
+- Local models: ≤2B params at ≤512px with FP8 quantisation. LTX-Video 2B is the target.
+- Larger models (Wan2.2, CogVideoX 5B+) require cloud adapters.
+
+## MVP Node Set Evolution
+
+- Phase 1: Form-based (video upload + prompt + generate + preview). No node graph.
+- Phase 2: Full node editor with Video Input, Image Input, Prompt Input, Generation, Sampling Parameters, Aspect & Resolution, Denoising Strength, Output, Group.
+- Phase 3: Audio Input, reference conditioning, sub-workflow composition.
 
 ## Delivery Phases
 
-- Phase 1: graph editor, workflow JSON, graph validation, and simulated generation.
-- Phase 2: async jobs, progress reporting, ZIP/video ingestion, and cloud provider integration.
-- Phase 3: FFmpeg muxing, export controls, local bridge support, and a lightweight model manager.
+- Phase 1 (4-6 weeks): FastAPI + LTX-Video + minimal UI + pytest. Real video generation.
+- Phase 2 (6-8 weeks): Tauri + React Flow + graph validation + cloud provider + more local models.
+- Phase 3 (4-6 weeks): Audio + FFmpeg + credential manager + model installer + full SpecSecOps.
 
 ## Non-Negotiable Rules
 
-- Keep local preview in the MVP.
-- Support DevSecOps from the start: security checks, secrets management, access control, and observability are part of the normal flow.
-- Validate the workflow graph before execution.
-- Make the image sequence flow efficient for web usage; do not rely on one-file-at-a-time uploads for long sequences.
-- Keep scope focused on the six core MVP nodes and avoid marketplace or advanced automation features.
+- **Tests are mandatory.** Every backend module must have tests.
+- **Security by default.** No secrets in code, validate all inputs.
+- **Scope discipline.** Each phase delivers ONE thing that works. No scope creep.
+- **Validate the pipeline first.** Real generation before graph editor or desktop shell.

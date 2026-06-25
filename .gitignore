@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.coverage
+.atl/
+.venv/
+src/backend/uploads/
+src/backend/results/
