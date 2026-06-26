@@ -81,8 +81,8 @@ class VideoGenerator:
             from diffusers import LTXPipeline
             self._pipe = LTXPipeline.from_pretrained(model_name, torch_dtype=dtype, token=tok)
         elif cls_name == "CogVideoXPipeline":
-            from diffusers import CogVideoXPipeline
-            self._pipe = CogVideoXPipeline.from_pretrained(model_name, torch_dtype=dtype, token=tok)
+            from diffusers import CogVideoXVideoToVideoPipeline
+            self._pipe = CogVideoXVideoToVideoPipeline.from_pretrained(model_name, torch_dtype=dtype, token=tok)
         self._pipe.enable_model_cpu_offload()
         if hasattr(self._pipe.vae, "enable_tiling"):
             self._pipe.vae.enable_tiling()
@@ -153,54 +153,50 @@ class VideoGenerator:
 
         try:
             cls_name = self.model_cfg["pipeline_class"]
-            if video_frames and cls_name in ("CogVideoXPipeline",):
-                logger.info(f"V2V mode: {len(video_frames)} frames, strength={strength}")
-                video_tensor = pipe.video_processor.preprocess_video(
-                    video_frames, height=h, width=w,
-                ).to(device=self.device, dtype=torch.float16)
-
-                init_latents = pipe.vae.encode(video_tensor).latent_dist.sample(gen)
-                init_latents = init_latents.permute(0, 2, 1, 3, 4)
-                init_latents = pipe.vae_scaling_factor_image * init_latents
-
-                timesteps = pipe.scheduler.timesteps.to(device=self.device)
-                init_timestep = min(int(s * strength), s)
-                t_start = max(s - init_timestep, 0)
-                sigmas = timesteps[t_start:]
-                logger.info(f"V2V: {len(sigmas)} denoising steps from timestep {sigmas[0].item():.1f}")
-
-                noise = randn_tensor(
-                    init_latents.shape, generator=gen,
-                    device=self.device, dtype=init_latents.dtype,
-                )
-                noisy_latents = pipe.scheduler.add_noise(init_latents, noise, sigmas[0:1])
-                latents_arg = noisy_latents
-                nf = init_latents.size(1)
-            else:
-                latents_arg = None
-                nf = d["num_frames"]
-
+            is_v2v = video_frames and cls_name in ("CogVideoXPipeline",)
+            
             cb = self._build_callback(s, progress_callback)
             if progress_callback:
                 await progress_callback(0, s)
 
-            output = pipe(
-                prompt=prompt,
-                negative_prompt=negative_prompt or None,
-                latents=latents_arg,
-                width=w,
-                height=h,
-                num_frames=nf,
-                num_inference_steps=s,
-                guidance_scale=c,
-                generator=gen,
-                callback_on_step_end=cb,
-                output_type="pil",
-                max_sequence_length=max_seq,
-            )
+            logger.info(f"Starting {'V2V' if is_v2v else 'T2V'} generation...")
+            self._log_vram()
+            
+            if is_v2v:
+                # V2V: usar el pipeline directamente con el video
+                output = pipe(
+                    video=video_frames,
+                    prompt=prompt,
+                    negative_prompt=negative_prompt or None,
+                    strength=strength,
+                    num_inference_steps=s,
+                    guidance_scale=c,
+                    generator=gen,
+                    callback_on_step_end=cb,
+                    output_type="pil",
+                    max_sequence_length=max_seq,
+                )
+            else:
+                # T2V: text-to-video normal
+                output = pipe(
+                    prompt=prompt,
+                    negative_prompt=negative_prompt or None,
+                    width=w,
+                    height=h,
+                    num_frames=nf,
+                    num_inference_steps=s,
+                    guidance_scale=c,
+                    generator=gen,
+                    callback_on_step_end=cb,
+                    output_type="pil",
+                    max_sequence_length=max_seq,
+                )
 
             if progress_callback:
                 await progress_callback(s, s)
+
+            logger.info("Pipeline completed, saving video...")
+            self._log_vram()
 
             output_dir = settings.results_dir
             os.makedirs(output_dir, exist_ok=True)
