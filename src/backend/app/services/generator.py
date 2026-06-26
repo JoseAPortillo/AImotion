@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 SUPPORTED_MODELS = {
     "ltx-video": {
         "pipeline_class": "LTXPipeline",
+        "dtype": "bfloat16",
         "defaults": {
             "width": 704, "height": 512,
             "steps": 50, "cfg": 3.0,
@@ -20,6 +21,18 @@ SUPPORTED_MODELS = {
     },
     "cogvideox": {
         "pipeline_class": "CogVideoXPipeline",
+        "dtype": "bfloat16",
+        "defaults": {
+            "width": 720, "height": 480,
+            "steps": 50, "cfg": 6.0,
+            "num_frames": 49, "fps": 8,
+            "max_seq": 226,
+        },
+        "needs_token": False,
+    },
+    "cogvideox-2b": {
+        "pipeline_class": "CogVideoXPipeline",
+        "dtype": "float16",
         "defaults": {
             "width": 720, "height": 480,
             "steps": 50, "cfg": 6.0,
@@ -45,7 +58,8 @@ class VideoGenerator:
         import torch
         model_name = settings.model_name
         tok = settings.hf_token if self.model_cfg["needs_token"] else None
-        dtype = torch.bfloat16 if settings.dtype == "bfloat16" else torch.float16
+        dtype_name = self.model_cfg.get("dtype", settings.dtype)
+        dtype = torch.bfloat16 if dtype_name == "bfloat16" else torch.float16
 
         if self.model_cfg["pipeline_class"] == "LTXPipeline":
             from diffusers import LTXPipeline

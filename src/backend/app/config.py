@@ -18,8 +18,8 @@ class Settings(BaseSettings):
     default_height: int = 480
     max_width: int = 768
     max_height: int = 768
-    model_name: str = "THUDM/CogVideoX-5b"
-    model_type: str = "cogvideox"
+    model_name: str = "THUDM/CogVideoX-2b"
+    model_type: str = "cogvideox-2b"
     device: str = "cuda"
     dtype: str = "bfloat16"
     offload_text_encoder: bool = True
