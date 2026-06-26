@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from app.config import settings
 from app.models.generate import TaskInfo, TaskStatus
 from app.services.task_manager import TaskManager
-from app.services.generator import VideoGenerator, SUPPORTED_MODELS
+from app.services.generator import VideoGenerator, SUPPORTED_MODELS, extract_frames
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +62,7 @@ async def create_generation(
     steps: int = Form(_defaults["steps"], ge=1, le=100),
     cfg: float = Form(_defaults["cfg"], ge=1.0, le=20.0),
     seed: int = Form(0, ge=0),
+    strength: float = Form(0.8, ge=0.0, le=1.0),
 ):
     _validate_dimensions(width, height)
     video_path = None
@@ -88,6 +89,7 @@ async def create_generation(
         "steps": steps,
         "cfg": cfg,
         "seed": seed,
+        "strength": strength,
     }
     task_id = await task_manager.create_task(params)
     _dispatch_generation(task_id, params)
@@ -107,9 +109,18 @@ async def _run_generation(task_id: str, params: dict):
         async def progress_callback(current: int, total: int):
             await task_manager.set_progress(task_id, current, total)
 
+        video_frames = None
+        video_path = params.get("video_path")
+        if video_path and os.path.exists(video_path):
+            video_frames = extract_frames(video_path, max_frames=49)
+            if not video_frames:
+                video_frames = None
+
         result_url = await video_generator.generate(
             prompt=params["prompt"],
             negative_prompt=params.get("negative_prompt", ""),
+            video_frames=video_frames,
+            strength=params.get("strength", 0.8),
             width=params["width"],
             height=params["height"],
             steps=params["steps"],
