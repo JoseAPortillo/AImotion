@@ -5,10 +5,10 @@ from typing import Optional
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query
 from fastapi.responses import FileResponse
 
-from app.core.config import settings
+from app.config import settings
 from app.models.generate import TaskInfo, TaskStatus
 from app.services.task_manager import TaskManager
-from app.services.generator import VideoGenerator
+from app.services.generator import VideoGenerator, SUPPORTED_MODELS
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +16,7 @@ router = APIRouter(prefix="/generate", tags=["generate"])
 
 task_manager = TaskManager()
 video_generator = VideoGenerator()
+_defaults = SUPPORTED_MODELS[settings.model_type]["defaults"]
 
 ALLOWED_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv"}
 
@@ -53,30 +54,33 @@ def _validate_dimensions(width: int, height: int):
 
 @router.post("", status_code=202)
 async def create_generation(
-    video: UploadFile = File(...),
+    video: Optional[UploadFile] = File(None),
     prompt: str = Form(..., min_length=1, max_length=1000),
     negative_prompt: str = Form("", max_length=1000),
-    width: int = Form(512),
-    height: int = Form(512),
-    steps: int = Form(25, ge=1, le=100),
-    cfg: float = Form(7.5, ge=1.0, le=20.0),
+    width: int = Form(_defaults["width"]),
+    height: int = Form(_defaults["height"]),
+    steps: int = Form(_defaults["steps"], ge=1, le=100),
+    cfg: float = Form(_defaults["cfg"], ge=1.0, le=20.0),
     seed: int = Form(0, ge=0),
 ):
-    _validate_video(video)
     _validate_dimensions(width, height)
-    os.makedirs(settings.upload_dir, exist_ok=True)
-    file_ext = os.path.splitext(video.filename or "input.mp4")[1]
-    upload_path = os.path.join(settings.upload_dir, f"input_{seed}{file_ext}")
-    content = await video.read()
-    if len(content) > settings.max_upload_size_mb * 1024 * 1024:
-        raise HTTPException(
-            status_code=413,
-            detail=f"File exceeds maximum size of {settings.max_upload_size_mb} MB",
-        )
-    with open(upload_path, "wb") as f:
-        f.write(content)
+    video_path = None
+    if video:
+        _validate_video(video)
+        os.makedirs(settings.upload_dir, exist_ok=True)
+        file_ext = os.path.splitext(video.filename or "input.mp4")[1]
+        upload_path = os.path.join(settings.upload_dir, f"input_{seed}{file_ext}")
+        content = await video.read()
+        if len(content) > settings.max_upload_size_mb * 1024 * 1024:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File exceeds maximum size of {settings.max_upload_size_mb} MB",
+            )
+        with open(upload_path, "wb") as f:
+            f.write(content)
+        video_path = upload_path
     params = {
-        "video_path": upload_path,
+        "video_path": video_path,
         "prompt": prompt,
         "negative_prompt": negative_prompt,
         "width": width,

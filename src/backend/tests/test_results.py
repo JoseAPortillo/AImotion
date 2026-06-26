@@ -1,5 +1,5 @@
 import os
-from app.core.config import settings
+from app.config import settings
 
 
 def test_results_404_on_nonexistent(client):

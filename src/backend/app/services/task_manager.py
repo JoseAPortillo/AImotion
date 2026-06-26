@@ -5,7 +5,7 @@ import os
 import time
 from typing import Optional
 from app.models.generate import TaskStatus
-from app.core.config import settings
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 

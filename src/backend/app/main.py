@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.health import router as health_router
 from app.api.generate import router as generate_router, results_router, task_manager
-from app.core.config import settings
+from app.config import settings
 
 logging.basicConfig(
     level=logging.INFO,

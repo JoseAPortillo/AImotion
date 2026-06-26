@@ -31,7 +31,7 @@ def test_model_generates_output():
     import tempfile
     import os
     from app.services.generator import VideoGenerator
-    from app.core.config import settings
+    from app.config import settings
 
     gen = VideoGenerator()
     gen.load_model()

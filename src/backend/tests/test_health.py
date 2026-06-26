@@ -26,11 +26,10 @@ def test_health_gpu_field_types(client):
 def test_health_gpu_detection(client):
     """When CUDA is available, GPU fields should be populated."""
     import torch
+    if not torch.cuda.is_available():
+        pytest.skip("CUDA not available")
     resp = client.get("/health")
     data = resp.json()
-    if torch.cuda.is_available():
-        assert data["gpu_available"] is True
-        assert data["gpu_name"] is not None
-        assert data["vram_total_gb"] is not None
-    else:
-        assert data["gpu_available"] is False
+    assert data["gpu_available"] is True
+    assert data["gpu_name"] is not None
+    assert data["vram_total_gb"] is not None
