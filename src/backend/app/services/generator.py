@@ -61,13 +61,14 @@ def extract_frames(path: str, max_frames: int = 49) -> list[Image.Image]:
 class VideoGenerator:
     def __init__(self):
         self._pipe = None
-        self._v2v_pipe = None
         self.device = settings.device
         self.model_cfg = SUPPORTED_MODELS.get(settings.model_type)
         if self.model_cfg is None:
             raise RuntimeError(f"Unsupported model_type: {settings.model_type}")
 
-    def _make_pipeline(self, cls, **overrides):
+    def _ensure_pipe(self):
+        if self._pipe is not None:
+            return
         import torch
         model_name = settings.model_name
         tok = settings.hf_token if self.model_cfg["needs_token"] else None
@@ -75,29 +76,18 @@ class VideoGenerator:
             os.environ["HF_TOKEN"] = tok
         dtype_name = self.model_cfg.get("dtype", settings.dtype)
         dtype = torch.bfloat16 if dtype_name == "bfloat16" else torch.float16
-        pipe = cls.from_pretrained(model_name, torch_dtype=dtype, token=tok, **overrides)
-        pipe.enable_model_cpu_offload()
-        if hasattr(pipe.vae, "enable_tiling"):
-            pipe.vae.enable_tiling()
-        logger.info(f"{cls.__name__} loaded")
-        return pipe
-
-    def _ensure_t2v(self):
-        if self._pipe is not None:
-            return
         cls_name = self.model_cfg["pipeline_class"]
         if cls_name == "LTXPipeline":
             from diffusers import LTXPipeline
-            self._pipe = self._make_pipeline(LTXPipeline)
+            self._pipe = LTXPipeline.from_pretrained(model_name, torch_dtype=dtype, token=tok)
         elif cls_name == "CogVideoXPipeline":
             from diffusers import CogVideoXPipeline
-            self._pipe = self._make_pipeline(CogVideoXPipeline)
-
-    def _ensure_v2v(self):
-        if self._v2v_pipe is not None:
-            return
-        from diffusers import CogVideoXVideoToVideoPipeline
-        self._v2v_pipe = self._make_pipeline(CogVideoXVideoToVideoPipeline)
+            self._pipe = CogVideoXPipeline.from_pretrained(model_name, torch_dtype=dtype, token=tok)
+        self._pipe.enable_model_cpu_offload()
+        if hasattr(self._pipe.vae, "enable_tiling"):
+            self._pipe.vae.enable_tiling()
+        self._log_vram()
+        logger.info(f"Pipeline loaded: {cls_name}({model_name})")
 
     def _log_vram(self):
         import torch
@@ -120,7 +110,7 @@ class VideoGenerator:
 
         def callback(pipe, step_index, timestep, callback_kwargs):
             current_step[0] = step_index + 1
-            logger.debug(f"Step {current_step[0]}/{steps}")
+            logger.info(f"Step {current_step[0]}/{steps}")
             try:
                 asyncio.run_coroutine_threadsafe(
                     progress_callback(current_step[0], steps), loop,
@@ -145,13 +135,15 @@ class VideoGenerator:
         progress_callback: Optional[Callable[[int, int], Awaitable[None]]] = None,
     ) -> str:
         import torch
+        from diffusers.utils import randn_tensor
 
+        self._ensure_pipe()
+        pipe = self._pipe
         d = self.model_cfg["defaults"]
         w = width or d["width"]
         h = height or d["height"]
         s = steps or d["steps"]
         c = cfg or d["cfg"]
-        nf = d["num_frames"]
         fps = d["fps"]
         max_seq = d["max_seq"]
 
@@ -160,30 +152,51 @@ class VideoGenerator:
             gen.manual_seed(seed)
 
         try:
-            if video_frames and self.model_cfg["pipeline_class"] == "CogVideoXPipeline":
-                self._ensure_v2v()
-                pipe = self._v2v_pipe
-                kw = dict(video=video_frames, strength=strength)
+            cls_name = self.model_cfg["pipeline_class"]
+            if video_frames and cls_name in ("CogVideoXPipeline",):
+                logger.info(f"V2V mode: {len(video_frames)} frames, strength={strength}")
+                video_tensor = pipe.video_processor.preprocess_video(
+                    video_frames, height=h, width=w,
+                ).to(device=self.device, dtype=torch.float16)
+
+                init_latents = pipe.vae.encode(video_tensor).latent_dist.sample(gen)
+                init_latents = init_latents.permute(0, 2, 1, 3, 4)
+                init_latents = pipe.vae_scaling_factor_image * init_latents
+
+                timesteps = pipe.scheduler.timesteps.to(device=self.device)
+                init_timestep = min(int(s * strength), s)
+                t_start = max(s - init_timestep, 0)
+                sigmas = timesteps[t_start:]
+                logger.info(f"V2V: {len(sigmas)} denoising steps from timestep {sigmas[0].item():.1f}")
+
+                noise = randn_tensor(
+                    init_latents.shape, generator=gen,
+                    device=self.device, dtype=init_latents.dtype,
+                )
+                noisy_latents = pipe.scheduler.add_noise(init_latents, noise, sigmas[0:1])
+                latents_arg = noisy_latents
+                nf = init_latents.size(1)
             else:
-                self._ensure_t2v()
-                pipe = self._pipe
-                kw = dict(width=w, height=h, num_frames=nf)
+                latents_arg = None
+                nf = d["num_frames"]
 
             cb = self._build_callback(s, progress_callback)
-
             if progress_callback:
                 await progress_callback(0, s)
 
             output = pipe(
                 prompt=prompt,
                 negative_prompt=negative_prompt or None,
+                latents=latents_arg,
+                width=w,
+                height=h,
+                num_frames=nf,
                 num_inference_steps=s,
                 guidance_scale=c,
                 generator=gen,
                 callback_on_step_end=cb,
                 output_type="pil",
                 max_sequence_length=max_seq,
-                **kw,
             )
 
             if progress_callback:
