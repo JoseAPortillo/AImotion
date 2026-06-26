@@ -135,7 +135,7 @@ class VideoGenerator:
         progress_callback: Optional[Callable[[int, int], Awaitable[None]]] = None,
     ) -> str:
         import torch
-        from diffusers.utils import randn_tensor
+        from diffusers.utils.torch_utils import randn_tensor
 
         self._ensure_pipe()
         pipe = self._pipe
