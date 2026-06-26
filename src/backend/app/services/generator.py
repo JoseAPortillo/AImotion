@@ -114,15 +114,16 @@ class VideoGenerator:
     def _build_callback(self, steps: int, progress_callback):
         if not progress_callback:
             return None
+        import asyncio
+        loop = asyncio.get_running_loop()
         current_step = [0]
 
         def callback(pipe, step_index, timestep, callback_kwargs):
             current_step[0] = step_index + 1
+            logger.debug(f"Step {current_step[0]}/{steps}")
             try:
-                import asyncio
                 asyncio.run_coroutine_threadsafe(
-                    progress_callback(current_step[0], steps),
-                    asyncio.get_running_loop(),
+                    progress_callback(current_step[0], steps), loop,
                 )
             except RuntimeError:
                 pass
