@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import httpx
 from fastapi import APIRouter, HTTPException
@@ -8,7 +9,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/prompt", tags=["prompt"])
 
-GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent"
+MAX_RETRIES = 3
+BASE_BACKOFF = 2.0
 
 
 class ImprovePromptRequest(BaseModel):
@@ -59,22 +62,42 @@ Output: "High-speed chase scene with a sleek sports car racing through city stre
         },
     }
 
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                GEMINI_API_URL,
-                params={"key": settings.gemini_api_key},
-                json=payload,
-            )
-            response.raise_for_status()
-            data = response.json()
+    last_error: Exception | None = None
 
-            improved = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-            return ImprovePromptResponse(improved_prompt=improved)
+    for attempt in range(MAX_RETRIES):
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    GEMINI_API_URL,
+                    params={"key": settings.gemini_api_key},
+                    json=payload,
+                )
+                if response.status_code != 200:
+                    logger.error(f"Gemini API {response.status_code}: {response.text}")
+                    if response.status_code == 429 and attempt < MAX_RETRIES - 1:
+                        raise httpx.HTTPStatusError(
+                            f"429 Too Many Requests", request=response.request, response=response
+                        )
+                    response.raise_for_status()
+                data = response.json()
 
-    except httpx.HTTPError as e:
-        logger.error(f"Gemini API error: {e}")
-        raise HTTPException(status_code=502, detail=f"AI service error: {str(e)}")
-    except (KeyError, IndexError) as e:
-        logger.error(f"Unexpected response format: {e}")
-        raise HTTPException(status_code=500, detail="Failed to parse AI response")
+                improved = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+                return ImprovePromptResponse(improved_prompt=improved)
+
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 429 and attempt < MAX_RETRIES - 1:
+                wait = BASE_BACKOFF ** (attempt + 1)
+                logger.warning(f"Gemini API 429, retrying in {wait:.0f}s (attempt {attempt + 1}/{MAX_RETRIES})")
+                await asyncio.sleep(wait)
+                continue
+            last_error = e
+            break
+        except httpx.HTTPError as e:
+            last_error = e
+            break
+        except (KeyError, IndexError) as e:
+            logger.error(f"Unexpected response format: {e}")
+            raise HTTPException(status_code=500, detail="Failed to parse AI response")
+
+    logger.error(f"Gemini API error after {MAX_RETRIES} attempts: {last_error}")
+    raise HTTPException(status_code=502, detail=f"AI service error: {str(last_error)}")
