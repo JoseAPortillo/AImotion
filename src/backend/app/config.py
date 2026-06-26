@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     dtype: str = "bfloat16"
     offload_text_encoder: bool = True
     hf_token: Optional[str] = None
+    gemini_api_key: Optional[str] = None
 
 
 settings = Settings()

@@ -9,6 +9,7 @@ export default defineConfig({
       '/health': 'http://localhost:8000',
       '/generate': 'http://localhost:8000',
       '/results': 'http://localhost:8000',
+      '/prompt': 'http://localhost:8000',
     },
   },
 })

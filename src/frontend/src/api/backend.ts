@@ -61,3 +61,17 @@ export async function pollTask(taskId: string): Promise<TaskStatus> {
   if (!r.ok) throw new Error('Failed to poll task')
   return r.json()
 }
+
+export async function improvePrompt(prompt: string): Promise<string> {
+  const r = await fetch('/prompt/improve', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt }),
+  })
+  if (!r.ok) {
+    const err = await r.json()
+    throw new Error(err.detail || 'Failed to improve prompt')
+  }
+  const data = await r.json()
+  return data.improved_prompt
+}

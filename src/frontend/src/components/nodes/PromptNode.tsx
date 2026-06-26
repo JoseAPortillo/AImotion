@@ -1,21 +1,57 @@
-import { memo } from 'react'
+import { memo, useState } from 'react'
 import type { NodeProps } from '@xyflow/react'
 import { Handle, Position } from '@xyflow/react'
 import { NODE_DEFINITIONS, type NodeType } from '../../types/nodes'
+import { useGraphStore } from '../../store/graph'
+import { improvePrompt } from '../../api/backend'
 
 function PromptNode(props: NodeProps) {
   const def = NODE_DEFINITIONS[props.type as NodeType]
   const { positive, negative } = props.data as { positive?: string; negative?: string }
+  const updateNodeData = useGraphStore((s) => s.updateNodeData)
+  const [improving, setImproving] = useState(false)
+
   const preview = positive
     ? positive.length > 60
       ? positive.slice(0, 60) + '...'
       : positive
     : 'No prompt'
 
+  const handleImprove = async () => {
+    if (!positive || improving) return
+    setImproving(true)
+    try {
+      const improved = await improvePrompt(positive)
+      updateNodeData(props.id, { positive: improved })
+    } catch (err) {
+      console.error('Failed to improve prompt:', err)
+    } finally {
+      setImproving(false)
+    }
+  }
+
   return (
     <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, minWidth: 200, overflow: 'hidden' }}>
-      <div style={{ background: def.color, padding: '6px 10px', fontSize: 12, fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
+      <div style={{ background: def.color, padding: '6px 10px', fontSize: 12, fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span>{def.label}</span>
+        <button
+          onClick={handleImprove}
+          disabled={improving || !positive}
+          style={{
+            background: improving ? '#555' : '#2563eb',
+            color: 'white',
+            border: 'none',
+            borderRadius: 4,
+            padding: '2px 8px',
+            fontSize: 10,
+            cursor: improving || !positive ? 'not-allowed' : 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+          }}
+        >
+          {improving ? '⏳' : '✨'} {improving ? 'Improving...' : 'Improve'}
+        </button>
       </div>
       <div style={{ padding: 10, fontSize: 12, color: '#ccc' }}>
         <div style={{ marginBottom: 4 }}>
