@@ -51,9 +51,14 @@ function VideoInputNode(props: NodeProps) {
         <span>{def.label}</span>
       </div>
       {objUrl ? (
-        <div style={{ padding: 6 }}>
+        <div
+          style={{ padding: 6, cursor: 'pointer' }}
+          onClick={handleClick}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={handleDrop}
+        >
           <video src={objUrl} style={{ width: '100%', borderRadius: 4, maxHeight: 100 }} controls />
-          <div style={{ fontSize: 10, color: '#888', marginTop: 2, textAlign: 'center' }}>{data.fileName}</div>
+          <div style={{ fontSize: 10, color: '#888', marginTop: 2, textAlign: 'center' }}>{data.fileName} — click to change</div>
         </div>
       ) : (
         <div
