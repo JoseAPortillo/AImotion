@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import type { NodeProps } from '@xyflow/react'
 import { Handle, Position, NodeResizer } from '@xyflow/react'
-import { NODE_DEFINITIONS, type NodeType } from '../../types/nodes'
+import { NODE_DEFINITIONS, PORT_COLORS, type NodeType } from '../../types/nodes'
 import { useGraphStore } from '../../store/graph'
 
 function VideoInputNode(props: NodeProps) {
@@ -67,7 +67,7 @@ function VideoInputNode(props: NodeProps) {
       )}
       <input ref={inputRef} type="file" accept=".mp4,.mov,.avi,.mkv" style={{ display: 'none' }} onChange={handleChange} />
       <Handle type="source" position={Position.Right} id="video" style={{ top: '50%' }}>
-        <div style={{ position: 'absolute', right: 14, top: -2, fontSize: 10, color: '#999', whiteSpace: 'nowrap' }}>Video</div>
+        <div style={{ position: 'absolute', right: 14, top: -2, fontSize: 10, color: PORT_COLORS.video_tensor, whiteSpace: 'nowrap' }}>Video</div>
       </Handle>
     </div>
   )

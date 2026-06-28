@@ -1,7 +1,7 @@
 import { memo } from 'react'
 import type { NodeProps } from '@xyflow/react'
 import { Handle, Position, NodeResizer } from '@xyflow/react'
-import { NODE_DEFINITIONS, type NodeType, type DenoisingStrengthData } from '../../types/nodes'
+import { NODE_DEFINITIONS, PORT_COLORS, type NodeType, type DenoisingStrengthData } from '../../types/nodes'
 import { useGraphStore } from '../../store/graph'
 
 function DenoisingStrengthNode(props: NodeProps) {
@@ -31,7 +31,7 @@ function DenoisingStrengthNode(props: NodeProps) {
         </div>
       </div>
       <Handle type="source" position={Position.Right} id="strength" style={{ top: '50%' }}>
-        <div style={{ position: 'absolute', right: 14, top: -2, fontSize: 10, color: '#999', whiteSpace: 'nowrap' }}>Strength</div>
+        <div style={{ position: 'absolute', right: 14, top: -2, fontSize: 10, color: PORT_COLORS.params, whiteSpace: 'nowrap' }}>Strength</div>
       </Handle>
     </div>
   )

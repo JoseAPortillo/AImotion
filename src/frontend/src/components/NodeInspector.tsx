@@ -164,6 +164,7 @@ export default function NodeInspector() {
                 Model
                 <select style={inputStyle} value={data.model} onChange={(e) => handleChange('model', e.target.value)}>
                   <option value="cogvideox-2b">cogvideox-2b</option>
+                  <option value="cogvideox-5b">cogvideox-5b</option>
                   <option value="ltx-video">ltx-video</option>
                 </select>
               </Label>

@@ -1,7 +1,7 @@
 import { memo, useCallback, useState } from 'react'
 import type { NodeProps } from '@xyflow/react'
 import { Handle, Position, NodeResizer } from '@xyflow/react'
-import { NODE_DEFINITIONS, type NodeType, type PromptData } from '../../types/nodes'
+import { NODE_DEFINITIONS, PORT_COLORS, type NodeType, type PromptData } from '../../types/nodes'
 import { useGraphStore } from '../../store/graph'
 import { improvePrompt } from '../../api/backend'
 
@@ -100,10 +100,10 @@ function PromptNode(props: NodeProps) {
         </div>
       </div>
       <Handle type="source" position={Position.Right} id="positive" style={{ top: '35%' }}>
-        <div style={{ position: 'absolute', right: 14, top: -2, fontSize: 10, color: '#999', whiteSpace: 'nowrap' }}>Positive</div>
+        <div style={{ position: 'absolute', right: 14, top: -2, fontSize: 10, color: PORT_COLORS.prompt, whiteSpace: 'nowrap' }}>Positive</div>
       </Handle>
       <Handle type="source" position={Position.Right} id="negative" style={{ top: '65%' }}>
-        <div style={{ position: 'absolute', right: 14, top: -2, fontSize: 10, color: '#999', whiteSpace: 'nowrap' }}>Negative</div>
+        <div style={{ position: 'absolute', right: 14, top: -2, fontSize: 10, color: PORT_COLORS.prompt, whiteSpace: 'nowrap' }}>Negative</div>
       </Handle>
     </div>
   )

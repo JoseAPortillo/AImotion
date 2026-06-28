@@ -1,7 +1,7 @@
 import { memo } from 'react'
 import type { NodeProps } from '@xyflow/react'
 import { Handle, Position, NodeResizer } from '@xyflow/react'
-import { NODE_DEFINITIONS, type NodeType, type OutputData } from '../../types/nodes'
+import { NODE_DEFINITIONS, PORT_COLORS, type NodeType, type OutputData } from '../../types/nodes'
 import { useGraphStore } from '../../store/graph'
 
 function OutputNode(props: NodeProps) {
@@ -26,7 +26,7 @@ function OutputNode(props: NodeProps) {
         </select>
       </div>
       <Handle type="target" position={Position.Left} id="video_in" style={{ top: '50%' }}>
-        <div style={{ position: 'absolute', left: 14, top: -2, fontSize: 10, color: '#999', whiteSpace: 'nowrap' }}>Video</div>
+        <div style={{ position: 'absolute', left: 14, top: -2, fontSize: 10, color: PORT_COLORS.video_tensor, whiteSpace: 'nowrap' }}>Video</div>
       </Handle>
     </div>
   )

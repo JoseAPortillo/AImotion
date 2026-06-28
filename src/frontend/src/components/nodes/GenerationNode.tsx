@@ -1,7 +1,7 @@
 import { memo, useCallback, useState } from 'react'
 import type { NodeProps } from '@xyflow/react'
 import { Handle, Position, NodeResizer } from '@xyflow/react'
-import { NODE_DEFINITIONS, type NodeType, type GenerationData, type PromptData, type SamplingParamsData, type DenoisingStrengthData } from '../../types/nodes'
+import { NODE_DEFINITIONS, PORT_COLORS, type NodeType, type GenerationData, type PromptData, type SamplingParamsData, type DenoisingStrengthData } from '../../types/nodes'
 import { useGraphStore } from '../../store/graph'
 import { startGeneration, pollTask, type TaskStatus } from '../../api/backend'
 
@@ -105,6 +105,7 @@ function GenerationNode(props: NodeProps) {
           style={selectStyle}
         >
           <option value="cogvideox-2b">cogvideox-2b</option>
+          <option value="cogvideox-5b">cogvideox-5b</option>
           <option value="ltx-video">ltx-video</option>
         </select>
         <select
@@ -120,12 +121,13 @@ function GenerationNode(props: NodeProps) {
           <option value="ltx_euler_ancestral_rf">Euler Anc RF (LTX)</option>
         </select>
         {schedLabel && <div style={{ marginTop: 2, fontSize: 10, color: '#888' }}>Current: {schedLabel}</div>}
+      </div>
+      <div style={{ borderTop: '1px solid #2a2a2a', padding: '6px 10px' }}>
         <button
           onClick={handleGenWorkflow}
           disabled={genRunning}
           style={{
             width: '100%',
-            marginTop: 8,
             padding: '6px 0',
             borderRadius: 4,
             border: 'none',
@@ -139,21 +141,25 @@ function GenerationNode(props: NodeProps) {
           {genRunning ? 'Generating...' : 'Generate ▶'}
         </button>
       </div>
-      {inputHandles.map((id, i) => (
-        <Handle
-          key={id}
-          type="target"
-          position={Position.Left}
-          id={id}
-          style={{ top: `${((i + 1) / (inputHandles.length + 1)) * 100}%` }}
-        >
-          <div style={{ position: 'absolute', left: 14, top: -2, fontSize: 10, color: '#999', whiteSpace: 'nowrap' }}>
-            {def.inputs.find((inp) => inp.id === id)?.label || id}
-          </div>
-        </Handle>
-      ))}
+      {inputHandles.map((id, i) => {
+        const inp = def.inputs.find((p) => p.id === id)
+        const portColor = inp ? PORT_COLORS[inp.type] : '#999'
+        return (
+          <Handle
+            key={id}
+            type="target"
+            position={Position.Left}
+            id={id}
+            style={{ top: `${((i + 1) / (inputHandles.length + 1)) * 100}%` }}
+          >
+            <div style={{ position: 'absolute', left: 14, top: -2, fontSize: 10, color: portColor, whiteSpace: 'nowrap' }}>
+              {inp?.label || id}
+            </div>
+          </Handle>
+        )
+      })}
       <Handle type="source" position={Position.Right} id="video_out" style={{ top: '50%' }}>
-        <div style={{ position: 'absolute', right: 14, top: -2, fontSize: 10, color: '#999', whiteSpace: 'nowrap' }}>Video</div>
+        <div style={{ position: 'absolute', right: 14, top: -2, fontSize: 10, color: PORT_COLORS.video_tensor, whiteSpace: 'nowrap' }}>Video</div>
       </Handle>
     </div>
   )

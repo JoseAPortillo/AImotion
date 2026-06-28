@@ -1,7 +1,7 @@
 import { memo, useCallback, useRef } from 'react'
 import type { NodeProps } from '@xyflow/react'
 import { Handle, Position, NodeResizer } from '@xyflow/react'
-import { NODE_DEFINITIONS, type NodeType } from '../../types/nodes'
+import { NODE_DEFINITIONS, PORT_COLORS, type NodeType } from '../../types/nodes'
 import { useGraphStore } from '../../store/graph'
 
 function AudioInputNode(props: NodeProps) {
@@ -51,7 +51,7 @@ function AudioInputNode(props: NodeProps) {
       </div>
       <input ref={inputRef} type="file" accept=".mp3,.wav,.flac,.ogg" style={{ display: 'none' }} onChange={handleChange} />
       <Handle type="source" position={Position.Right} id="audio" style={{ top: '50%' }}>
-        <div style={{ position: 'absolute', right: 14, top: -2, fontSize: 10, color: '#999', whiteSpace: 'nowrap' }}>Audio</div>
+        <div style={{ position: 'absolute', right: 14, top: -2, fontSize: 10, color: PORT_COLORS.audio_features, whiteSpace: 'nowrap' }}>Audio</div>
       </Handle>
     </div>
   )

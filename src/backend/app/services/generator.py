@@ -58,6 +58,22 @@ SUPPORTED_MODELS = {
         },
         "default_scheduler": "cogvideox_ddim",
     },
+    "cogvideox-5b": {
+        "pipeline_class": "CogVideoXPipeline",
+        "dtype": "float16",
+        "defaults": {
+            "width": 720, "height": 480,
+            "steps": 50, "cfg": 6.0,
+            "num_frames": 49, "fps": 8,
+            "max_seq": 226,
+        },
+        "needs_token": False,
+        "schedulers": {
+            "cogvideox_ddim": "CogVideoXDDIMScheduler",
+            "cogvideox_dpm": "CogVideoXDPMScheduler",
+        },
+        "default_scheduler": "cogvideox_ddim",
+    },
 }
 
 SCHEDULER_NAMES: dict[str, str] = {}
