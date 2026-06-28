@@ -85,14 +85,18 @@ for _cfg in SUPPORTED_MODELS.values():
 
 def extract_frames(path: str, max_frames: int = 49) -> list[Image.Image]:
     import imageio
-    frames: list[Image.Image] = []
+    all_frames: list[Image.Image] = []
     reader = imageio.get_reader(path)
-    for i, frame in enumerate(reader):
-        if i >= max_frames:
-            break
-        frames.append(Image.fromarray(frame))
+    for frame in reader:
+        all_frames.append(Image.fromarray(frame))
     reader.close()
-    logger.info(f"Extracted {len(frames)} frames from {path}")
+    total = len(all_frames)
+    if total <= max_frames:
+        logger.info(f"Extracted {total} frames from {path} (≤ max)")
+        return all_frames
+    step = total / max_frames
+    frames = [all_frames[int(i * step)] for i in range(max_frames)]
+    logger.info(f"Extracted {len(frames)} frames from {path} (total={total}, step={step:.1f})")
     return frames
 
 
@@ -252,6 +256,7 @@ class VideoGenerator:
                 self._apply_scheduler(scheduler, pipe=pipe)
                 pipe_kwargs["video"] = video_frames
                 pipe_kwargs["strength"] = strength
+                pipe_kwargs["num_frames"] = nf
             else:
                 pipe_kwargs["width"] = w
                 pipe_kwargs["height"] = h
