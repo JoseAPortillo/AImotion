@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 SUPPORTED_MODELS = {
     "ltx-video": {
+        "model_name": "Lightricks/LTX-Video",
         "pipeline_class": "LTXPipeline",
         "dtype": "bfloat16",
         "defaults": {
@@ -27,6 +28,7 @@ SUPPORTED_MODELS = {
         "default_scheduler": "flow_match_euler",
     },
     "cogvideox": {
+        "model_name": "THUDM/CogVideoX-2b",
         "pipeline_class": "CogVideoXPipeline",
         "dtype": "bfloat16",
         "defaults": {
@@ -43,6 +45,7 @@ SUPPORTED_MODELS = {
         "default_scheduler": "cogvideox_ddim",
     },
     "cogvideox-2b": {
+        "model_name": "THUDM/CogVideoX-2b",
         "pipeline_class": "CogVideoXPipeline",
         "dtype": "float16",
         "defaults": {
@@ -59,6 +62,7 @@ SUPPORTED_MODELS = {
         "default_scheduler": "cogvideox_ddim",
     },
     "cogvideox-5b": {
+        "model_name": "THUDM/CogVideoX-5b",
         "pipeline_class": "CogVideoXPipeline",
         "dtype": "float16",
         "defaults": {
@@ -103,40 +107,52 @@ def extract_frames(path: str, max_frames: int = 49) -> list[Image.Image]:
 class VideoGenerator:
     def __init__(self):
         self._pipe = None
+        self._current_model_key: str | None = None
+        self._current_model_cfg: dict | None = None
         self.device = settings.device
-        self.model_cfg = SUPPORTED_MODELS.get(settings.model_type)
-        if self.model_cfg is None:
-            raise RuntimeError(f"Unsupported model_type: {settings.model_type}")
 
-    def _ensure_pipe(self):
-        if self._pipe is not None:
-            return
+    def _load_pipe(self, model_key: str):
         import torch
-        model_name = settings.model_name
-        tok = settings.hf_token if self.model_cfg["needs_token"] else None
+        cfg = SUPPORTED_MODELS.get(model_key)
+        if cfg is None:
+            raise ValueError(f"Unsupported model: {model_key}")
+
+        model_name = cfg["model_name"]
+        tok = settings.hf_token if cfg["needs_token"] else None
         if tok:
             os.environ["HF_TOKEN"] = tok
-        dtype_name = self.model_cfg.get("dtype", settings.dtype)
+        dtype_name = cfg.get("dtype", settings.dtype)
         dtype = torch.bfloat16 if dtype_name == "bfloat16" else torch.float16
-        cls_name = self.model_cfg["pipeline_class"]
+        cls_name = cfg["pipeline_class"]
         if cls_name == "LTXPipeline":
             from diffusers import LTXPipeline
-            self._pipe = LTXPipeline.from_pretrained(model_name, torch_dtype=dtype, token=tok)
+            pipe = LTXPipeline.from_pretrained(model_name, torch_dtype=dtype, token=tok)
         elif cls_name == "CogVideoXPipeline":
             from diffusers import CogVideoXPipeline
-            self._pipe = CogVideoXPipeline.from_pretrained(model_name, torch_dtype=dtype, token=tok)
-        self._pipe.enable_model_cpu_offload()
-        if hasattr(self._pipe.vae, "enable_tiling"):
-            self._pipe.vae.enable_tiling()
+            pipe = CogVideoXPipeline.from_pretrained(model_name, torch_dtype=dtype, token=tok)
+        else:
+            raise ValueError(f"Unknown pipeline class: {cls_name}")
+        pipe.enable_model_cpu_offload()
         self._log_vram()
         logger.info(f"Pipeline loaded: {cls_name}({model_name})")
+        return pipe, cfg
 
-    def _apply_scheduler(self, name: str | None = None, pipe=None):
+    def _ensure_pipe(self, model_key: str):
+        if self._pipe is not None and self._current_model_key == model_key:
+            return
+        self.unload()
+        self._pipe, self._current_model_cfg = self._load_pipe(model_key)
+        self._current_model_key = model_key
+
+    def _apply_scheduler(self, name: str | None = None, pipe=None, cfg=None):
         pipe = pipe or self._pipe
-        schedulers = self.model_cfg.get("schedulers", {})
+        cfg = cfg or self._current_model_cfg
+        if cfg is None:
+            return
+        schedulers = cfg.get("schedulers", {})
         if not schedulers:
             return
-        name = name or self.model_cfg.get("default_scheduler")
+        name = name or cfg.get("default_scheduler")
         cls_name = schedulers.get(name)
         if cls_name is None:
             logger.warning(f"Unknown scheduler '{name}', using default")
@@ -150,6 +166,21 @@ class VideoGenerator:
 
         pipe.scheduler = cls.from_config(pipe.scheduler.config)
         logger.info(f"Scheduler set to {cls_name}")
+
+    def _apply_vae_config(self, pipe, vae_tiling: bool = True, vae_tile_overlap: float = 0.0):
+        vae = pipe.vae
+        if not hasattr(vae, "use_tiling"):
+            return
+        if not vae_tiling:
+            vae.disable_tiling()
+            return
+        if vae_tile_overlap > 0:
+            vae.enable_tiling(
+                tile_overlap_factor_height=vae_tile_overlap,
+                tile_overlap_factor_width=vae_tile_overlap,
+            )
+        else:
+            vae.enable_tiling()
 
     def _log_vram(self):
         import torch
@@ -204,15 +235,18 @@ class VideoGenerator:
         cfg: Optional[float] = None,
         seed: int = 0,
         scheduler: str | None = None,
+        model: str = "cogvideox-2b",
+        vae_tiling: bool = True,
+        vae_tile_overlap: float = 0.0,
         progress_callback: Optional[Callable[[int, int], Awaitable[None]]] = None,
     ) -> str:
         import torch
-        from diffusers.utils.torch_utils import randn_tensor
 
-        self._ensure_pipe()
-        self._apply_scheduler(scheduler)
-        pipe = self._pipe
-        d = self.model_cfg["defaults"]
+        model_cfg = SUPPORTED_MODELS.get(model)
+        if model_cfg is None:
+            raise ValueError(f"Unsupported model: {model}")
+
+        d = model_cfg["defaults"]
         w = width or d["width"]
         h = height or d["height"]
         s = steps or d["steps"]
@@ -221,45 +255,55 @@ class VideoGenerator:
         nf = d["num_frames"]
         max_seq = d["max_seq"]
 
+        cls_name = model_cfg["pipeline_class"]
+        is_v2v = video_frames and cls_name in ("CogVideoXPipeline",)
+
         gen = torch.Generator(device=self.device)
         if seed > 0:
             gen.manual_seed(seed)
 
         try:
-            cls_name = self.model_cfg["pipeline_class"]
-            is_v2v = video_frames and cls_name in ("CogVideoXPipeline",)
-            
-            cb = self._build_callback(s, progress_callback)
-            if progress_callback:
-                await progress_callback(0, s)
-
-            logger.info(f"Starting {'V2V' if is_v2v else 'T2V'} generation...")
-            self._log_vram()
-            
             pipe_kwargs = dict(
                 prompt=prompt,
                 negative_prompt=negative_prompt or None,
                 num_inference_steps=s,
                 guidance_scale=c,
                 generator=gen,
-                callback_on_step_end=cb,
                 output_type="pil",
                 max_sequence_length=max_seq,
             )
 
             if is_v2v:
+                self._current_model_cfg = model_cfg
                 from diffusers import CogVideoXVideoToVideoPipeline
+                hf_name = model_cfg["model_name"]
+                dtype_name = model_cfg.get("dtype", settings.dtype)
+                dtype = torch.bfloat16 if dtype_name == "bfloat16" else torch.float16
+                tok = settings.hf_token if model_cfg.get("needs_token") else settings.hf_token
                 pipe = CogVideoXVideoToVideoPipeline.from_pretrained(
-                    settings.model_name, torch_dtype=pipe.dtype, token=settings.hf_token,
+                    hf_name, torch_dtype=dtype, token=tok,
                 )
                 pipe.enable_model_cpu_offload()
-                self._apply_scheduler(scheduler, pipe=pipe)
+                self._apply_scheduler(scheduler, pipe=pipe, cfg=model_cfg)
+                self._apply_vae_config(pipe, vae_tiling, vae_tile_overlap)
                 pipe_kwargs["video"] = video_frames
                 pipe_kwargs["strength"] = strength
             else:
+                self._ensure_pipe(model)
+                self._apply_scheduler(scheduler)
+                self._apply_vae_config(self._pipe, vae_tiling, vae_tile_overlap)
+                pipe = self._pipe
                 pipe_kwargs["width"] = w
                 pipe_kwargs["height"] = h
                 pipe_kwargs["num_frames"] = nf
+            
+            cb = self._build_callback(s, progress_callback)
+            if progress_callback:
+                await progress_callback(0, s)
+            pipe_kwargs["callback_on_step_end"] = cb
+
+            logger.info(f"Starting {'V2V' if is_v2v else 'T2V'} generation...")
+            self._log_vram()
 
             output = pipe(**pipe_kwargs)
 

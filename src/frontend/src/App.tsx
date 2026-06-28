@@ -124,6 +124,9 @@ function AppInner() {
         strength: strengthNode?.strength ?? 0.8,
         seed: samplingNode.seed || 0,
         scheduler: genNode?.scheduler || '',
+        model: genNode?.model || 'cogvideox-2b',
+        vae_tiling: genNode?.vae_tiling ?? true,
+        vae_tile_overlap: genNode?.vae_tile_overlap ?? 0.0,
       }, videoNode?.file)
 
       let status: TaskStatus

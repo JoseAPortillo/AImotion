@@ -35,6 +35,9 @@ export async function startGeneration(
     strength: number
     seed: number
     scheduler: string
+    model: string
+    vae_tiling: boolean
+    vae_tile_overlap: number
   },
   videoFile?: File,
 ): Promise<TaskResponse> {
@@ -49,6 +52,9 @@ export async function startGeneration(
   formData.append('strength', String(params.strength))
   formData.append('seed', String(params.seed))
   if (params.scheduler) formData.append('scheduler', params.scheduler)
+  formData.append('model', params.model)
+  formData.append('vae_tiling', String(params.vae_tiling))
+  formData.append('vae_tile_overlap', String(params.vae_tile_overlap))
 
   const r = await fetch('/generate', { method: 'POST', body: formData })
   if (!r.ok) {

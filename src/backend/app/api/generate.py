@@ -64,14 +64,24 @@ async def create_generation(
     seed: int = Form(0, ge=0),
     strength: float = Form(0.8, ge=0.0, le=1.0),
     scheduler: str = Form(""),
+    model: str = Form(settings.model_type),
+    vae_tiling: bool = Form(True),
+    vae_tile_overlap: float = Form(0.0),
 ):
+    if model not in SUPPORTED_MODELS:
+        valid = ", ".join(SUPPORTED_MODELS)
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown model '{model}'. Valid: {valid}",
+        )
+    model_cfg = SUPPORTED_MODELS[model]
     _validate_dimensions(width, height)
-    model_schedulers = SUPPORTED_MODELS[settings.model_type].get("schedulers", {})
+    model_schedulers = model_cfg.get("schedulers", {})
     if scheduler and scheduler not in model_schedulers:
         valid = ", ".join(model_schedulers)
         raise HTTPException(
             status_code=422,
-            detail=f"Unknown scheduler '{scheduler}' for {settings.model_type}. Valid: {valid}",
+            detail=f"Unknown scheduler '{scheduler}' for {model}. Valid: {valid}",
         )
     video_path = None
     if video:
@@ -99,6 +109,9 @@ async def create_generation(
         "seed": seed,
         "strength": strength,
         "scheduler": scheduler or None,
+        "model": model,
+        "vae_tiling": vae_tiling,
+        "vae_tile_overlap": vae_tile_overlap,
     }
     task_id = await task_manager.create_task(params)
     _dispatch_generation(task_id, params)
@@ -136,6 +149,9 @@ async def _run_generation(task_id: str, params: dict):
             cfg=params["cfg"],
             seed=params["seed"],
             scheduler=params.get("scheduler"),
+            model=params.get("model", settings.model_type),
+            vae_tiling=params.get("vae_tiling", True),
+            vae_tile_overlap=params.get("vae_tile_overlap", 0.0),
             progress_callback=progress_callback,
         )
         await task_manager.complete_task(task_id, result_url)

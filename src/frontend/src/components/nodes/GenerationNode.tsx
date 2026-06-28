@@ -70,6 +70,9 @@ function GenerationNode(props: NodeProps) {
           strength: strengthData?.strength ?? 0.8,
           seed: paramsData.seed || 0,
           scheduler: data.scheduler || '',
+          model: data.model || 'cogvideox-2b',
+          vae_tiling: data.vae_tiling ?? true,
+          vae_tile_overlap: data.vae_tile_overlap ?? 0.0,
         },
         videoNode?.data && 'file' in videoNode.data ? (videoNode.data as { file?: File }).file : undefined,
       )
@@ -121,6 +124,30 @@ function GenerationNode(props: NodeProps) {
           <option value="ltx_euler_ancestral_rf">Euler Anc RF (LTX)</option>
         </select>
         {schedLabel && <div style={{ marginTop: 2, fontSize: 10, color: '#888' }}>Current: {schedLabel}</div>}
+        <div style={{ marginTop: 8 }}>
+          <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={data.vae_tiling}
+              onChange={(e) => updateNodeData(props.id, { vae_tiling: e.target.checked } as Partial<GenerationData>)}
+            />
+            VAE Tiling
+          </label>
+          {data.vae_tiling && (
+            <div style={{ marginTop: 4 }}>
+              <label style={{ fontSize: 10, color: '#888' }}>Tile Overlap: {data.vae_tile_overlap > 0 ? data.vae_tile_overlap : 'VAE default'}</label>
+              <input
+                type="range"
+                min="0"
+                max="0.9"
+                step="0.1"
+                value={data.vae_tile_overlap}
+                onChange={(e) => updateNodeData(props.id, { vae_tile_overlap: parseFloat(e.target.value) } as Partial<GenerationData>)}
+                style={{ width: '100%', marginTop: 2 }}
+              />
+            </div>
+          )}
+        </div>
       </div>
       <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, borderTop: '1px solid #2a2a2a', padding: '6px 10px', background: '#1a1a1a' }}>
         <button
