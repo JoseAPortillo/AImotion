@@ -256,7 +256,6 @@ class VideoGenerator:
                 self._apply_scheduler(scheduler, pipe=pipe)
                 pipe_kwargs["video"] = video_frames
                 pipe_kwargs["strength"] = strength
-                pipe_kwargs["num_frames"] = nf
             else:
                 pipe_kwargs["width"] = w
                 pipe_kwargs["height"] = h
