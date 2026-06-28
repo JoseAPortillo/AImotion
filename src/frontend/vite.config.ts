@@ -6,10 +6,10 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/health': 'http://localhost:8000',
-      '/generate': 'http://localhost:8000',
-      '/results': 'http://localhost:8000',
-      '/prompt': 'http://localhost:8000',
+      '/health': 'http://localhost:8001',
+      '/generate': 'http://localhost:8001',
+      '/results': 'http://localhost:8001',
+      '/prompt': 'http://localhost:8001',
     },
   },
 })
