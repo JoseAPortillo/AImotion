@@ -125,6 +125,18 @@
       <div><label class="field-label">Strength (V2V)</label><input type="number" id="strength" value="0.8" min="0" max="1" step="0.05"></div>
       <div><label class="field-label">Seed (0=random)</label><input type="number" id="seed" value="0" min="0"></div>
     </div>
+    <div class="params-row" style="margin-top:8px">
+      <div><label class="field-label">Scheduler</label>
+        <select id="scheduler" style="width:100%;background:#0f0f0f;border:1px solid #2a2a2a;border-radius:6px;color:#e0e0e0;padding:10px 12px;font-size:0.9rem">
+          <option value="">Default</option>
+          <option value="cogvideox_ddim">DDIM (CogVideoX)</option>
+          <option value="cogvideox_dpm">DPM (CogVideoX)</option>
+          <option value="flow_match_euler">Flow Euler (LTX)</option>
+          <option value="flow_match_heun">Flow Heun (LTX)</option>
+          <option value="ltx_euler_ancestral_rf">Euler Ancestral RF (LTX)</option>
+        </select>
+      </div>
+    </div>
   </div>
 
   <button class="generate" id="genBtn" onclick="generate()">Generate</button>
@@ -287,6 +299,8 @@ async function generate() {
   formData.append('cfg', parseFloat(document.getElementById('cfg').value));
   formData.append('strength', parseFloat(document.getElementById('strength').value));
   formData.append('seed', parseInt(document.getElementById('seed').value));
+  const sched = document.getElementById('scheduler').value;
+  if (sched) formData.append('scheduler', sched);
 
   try {
     const resp = await fetch('/generate', { method: 'POST', body: formData });
