@@ -158,15 +158,30 @@ export default function NodeInspector() {
       case 'generation': {
         const data = n.data as GenerationData
         return (
-          <FieldWrap>
-            <Label>
-              Model
-              <select style={inputStyle} value={data.model} onChange={(e) => handleChange('model', e.target.value)}>
-                <option value="cogvideox-2b">cogvideox-2b</option>
-                <option value="ltx-video">ltx-video</option>
-              </select>
-            </Label>
-          </FieldWrap>
+          <>
+            <FieldWrap>
+              <Label>
+                Model
+                <select style={inputStyle} value={data.model} onChange={(e) => handleChange('model', e.target.value)}>
+                  <option value="cogvideox-2b">cogvideox-2b</option>
+                  <option value="ltx-video">ltx-video</option>
+                </select>
+              </Label>
+            </FieldWrap>
+            <FieldWrap>
+              <Label>
+                Scheduler
+                <select style={inputStyle} value={data.scheduler} onChange={(e) => handleChange('scheduler', e.target.value)}>
+                  <option value="">Default</option>
+                  <option value="cogvideox_ddim">DDIM (CogVideoX)</option>
+                  <option value="cogvideox_dpm">DPM (CogVideoX)</option>
+                  <option value="flow_match_euler">Flow Euler (LTX)</option>
+                  <option value="flow_match_heun">Flow Heun (LTX)</option>
+                  <option value="ltx_euler_ancestral_rf">Euler Ancestral RF (LTX)</option>
+                </select>
+              </Label>
+            </FieldWrap>
+          </>
         )
       }
 

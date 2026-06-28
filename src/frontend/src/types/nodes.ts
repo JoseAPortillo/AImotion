@@ -62,6 +62,7 @@ export interface DenoisingStrengthData extends Record<string, unknown> {
 
 export interface GenerationData extends Record<string, unknown> {
   model: string
+  scheduler: string
 }
 
 export interface OutputData extends Record<string, unknown> {
@@ -119,7 +120,7 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
     outputs: [
       { id: 'video_out', label: 'Video', type: 'video_tensor' },
     ],
-    defaultData: { model: 'cogvideox-2b' },
+    defaultData: { model: 'cogvideox-2b', scheduler: '' },
   },
   samplingParams: {
     type: 'samplingParams',

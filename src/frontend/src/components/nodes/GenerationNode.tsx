@@ -7,17 +7,23 @@ const inputHandles = ['video_in', 'audio_in', 'prompt_pos', 'prompt_neg', 'param
 
 function GenerationNode(props: NodeProps) {
   const def = NODE_DEFINITIONS[props.type as NodeType]
-  const { model } = props.data as { model?: string }
+  const data = props.data as { model?: string; scheduler?: string }
+  const schedLabel = data.scheduler
+    ? ({ cogvideox_ddim: 'DDIM', cogvideox_dpm: 'DPM', flow_match_euler: 'Flow Euler', flow_match_heun: 'Flow Heun', ltx_euler_ancestral_rf: 'Euler Anc RF' } as Record<string, string>)[data.scheduler] || data.scheduler
+    : ''
 
   return (
     <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, minWidth: 220, minHeight: 240, position: 'relative' }}>
-      <NodeResizer minWidth={180} minHeight={160} />
+      {props.selected && <NodeResizer minWidth={180} minHeight={160} />}
       <div style={{ background: def.color, padding: '6px 10px', fontSize: 12, fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
         <span>{def.label}</span>
       </div>
       <div style={{ padding: 10, fontSize: 12, color: '#ccc' }}>
-        {model ? (
-          <span style={{ fontFamily: 'monospace' }}>{model}</span>
+        {data.model ? (
+          <>
+            <div><span style={{ color: '#999' }}>Model: </span><span style={{ fontFamily: 'monospace' }}>{data.model}</span></div>
+            {schedLabel && <div style={{ marginTop: 4 }}><span style={{ color: '#999' }}>Scheduler: </span><span>{schedLabel}</span></div>}
+          </>
         ) : (
           <span style={{ color: '#888' }}>Connect inputs to generate</span>
         )}

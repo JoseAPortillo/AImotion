@@ -17,7 +17,8 @@ import type { NodeType, AppNode } from './types/nodes'
 import Sidebar from './components/Sidebar'
 import NodeInspector from './components/NodeInspector'
 import { useCallback, useEffect, useState, type DragEvent } from 'react'
-import { checkHealth } from './api/backend'
+import { checkHealth, startGeneration, pollTask, type TaskStatus } from './api/backend'
+import type { PromptData, SamplingParamsData, DenoisingStrengthData, VideoInputData, GenerationData } from './types/nodes'
 import VideoInputNode from './components/nodes/VideoInputNode'
 import AudioInputNode from './components/nodes/AudioInputNode'
 import PromptNode from './components/nodes/PromptNode'
@@ -85,6 +86,51 @@ function AppInner() {
       .catch(() => setBackendOk(false))
   }, [])
 
+  const [generating, setGenerating] = useState(false)
+  const setOutputUrl = useGraphStore((s) => s.setOutputUrl)
+
+  const handleGenerate = useCallback(async () => {
+    const promptNode = nodes.find((n) => n.type === 'prompt')?.data as PromptData | undefined
+    const genNode = nodes.find((n) => n.type === 'generation')?.data as GenerationData | undefined
+    const samplingNode = nodes.find((n) => n.type === 'samplingParams')?.data as SamplingParamsData | undefined
+    const strengthNode = nodes.find((n) => n.type === 'denoisingStrength')?.data as DenoisingStrengthData | undefined
+    const videoNode = nodes.find((n) => n.type === 'videoInput')?.data as VideoInputData | undefined
+
+    if (!promptNode?.positive || !samplingNode) {
+      alert('Add at least a Prompt and Sampling node to the graph')
+      return
+    }
+
+    setGenerating(true)
+    try {
+      const task = await startGeneration(promptNode.positive, promptNode.negative || '', {
+        width: samplingNode.width || 720,
+        height: samplingNode.height || 480,
+        steps: samplingNode.steps || 50,
+        cfg: samplingNode.cfg || 6,
+        strength: strengthNode?.strength ?? 0.8,
+        seed: samplingNode.seed || 0,
+        scheduler: genNode?.scheduler || '',
+      }, videoNode?.file)
+
+      let status: TaskStatus
+      do {
+        await new Promise((r) => setTimeout(r, 2000))
+        status = await pollTask(task.task_id)
+      } while (status.status === 'pending' || status.status === 'running')
+
+      if (status.status === 'completed' && status.result_url) {
+        setOutputUrl(status.result_url)
+      } else {
+        alert(`Generation failed: ${status.error || 'unknown error'}`)
+      }
+    } catch (err: any) {
+      alert(`Error: ${err.message}`)
+    } finally {
+      setGenerating(false)
+    }
+  }, [nodes, setOutputUrl])
+
   return (
     <div style={{ display: 'flex', height: '100vh', background: '#0f0f0f', color: '#e0e0e0' }}>
       <Sidebar />
@@ -111,6 +157,24 @@ function AppInner() {
             nodeColor={() => '#333'}
             maskColor="rgba(0,0,0,0.7)"
           />
+          <Panel position="top-left" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button
+              onClick={handleGenerate}
+              disabled={generating || !backendOk}
+              style={{
+                padding: '8px 20px',
+                borderRadius: 6,
+                border: 'none',
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: generating || !backendOk ? 'not-allowed' : 'pointer',
+                background: generating ? '#333' : '#4ade80',
+                color: generating ? '#888' : '#0f0f0f',
+              }}
+            >
+              {generating ? 'Generating...' : 'Generate'}
+            </button>
+          </Panel>
           <Panel position="top-right">
             <div
               style={{
