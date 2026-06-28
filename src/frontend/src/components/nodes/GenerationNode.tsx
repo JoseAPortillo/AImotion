@@ -1,32 +1,143 @@
-import { memo } from 'react'
+import { memo, useCallback, useState } from 'react'
 import type { NodeProps } from '@xyflow/react'
 import { Handle, Position, NodeResizer } from '@xyflow/react'
-import { NODE_DEFINITIONS, type NodeType } from '../../types/nodes'
+import { NODE_DEFINITIONS, type NodeType, type GenerationData, type PromptData, type SamplingParamsData, type DenoisingStrengthData } from '../../types/nodes'
+import { useGraphStore } from '../../store/graph'
+import { startGeneration, pollTask, type TaskStatus } from '../../api/backend'
 
 const inputHandles = ['video_in', 'audio_in', 'prompt_pos', 'prompt_neg', 'params', 'strength']
 
+const schedLabels: Record<string, string> = {
+  cogvideox_ddim: 'DDIM',
+  cogvideox_dpm: 'DPM',
+  flow_match_euler: 'Flow Euler',
+  flow_match_heun: 'Flow Heun',
+  ltx_euler_ancestral_rf: 'Euler Anc RF',
+}
+
+const selectStyle: React.CSSProperties = {
+  background: '#0f0f0f',
+  border: '1px solid #333',
+  borderRadius: 4,
+  color: '#ccc',
+  padding: '3px 6px',
+  fontSize: 11,
+  outline: 'none',
+  width: '100%',
+  marginTop: 4,
+}
+
 function GenerationNode(props: NodeProps) {
   const def = NODE_DEFINITIONS[props.type as NodeType]
-  const data = props.data as { model?: string; scheduler?: string }
-  const schedLabel = data.scheduler
-    ? ({ cogvideox_ddim: 'DDIM', cogvideox_dpm: 'DPM', flow_match_euler: 'Flow Euler', flow_match_heun: 'Flow Heun', ltx_euler_ancestral_rf: 'Euler Anc RF' } as Record<string, string>)[data.scheduler] || data.scheduler
-    : ''
+  const data = props.data as GenerationData
+  const updateNodeData = useGraphStore((s) => s.updateNodeData)
+  const nodes = useGraphStore((s) => s.nodes)
+  const edges = useGraphStore((s) => s.edges)
+  const setOutputUrl = useGraphStore((s) => s.setOutputUrl)
+  const [genRunning, setGenRunning] = useState(false)
+  const schedLabel = data.scheduler ? schedLabels[data.scheduler] || data.scheduler : ''
+
+  const handleGenWorkflow = useCallback(async () => {
+    const genEdges = edges.filter((e) => e.target === props.id)
+    const getNode = (edge: typeof genEdges[0]) => nodes.find((n) => n.id === edge.source)
+
+    const promptEdgePos = genEdges.find((e) => e.targetHandle === 'prompt_pos')
+    const promptEdgeNeg = genEdges.find((e) => e.targetHandle === 'prompt_neg')
+    const paramsEdge = genEdges.find((e) => e.targetHandle === 'params')
+    const strengthEdge = genEdges.find((e) => e.targetHandle === 'strength')
+    const videoEdge = genEdges.find((e) => e.targetHandle === 'video_in')
+
+    const promptData = promptEdgePos ? getNode(promptEdgePos)?.data as PromptData | undefined : undefined
+    const paramsData = paramsEdge ? getNode(paramsEdge)?.data as SamplingParamsData | undefined : undefined
+    const strengthData = strengthEdge ? getNode(strengthEdge)?.data as DenoisingStrengthData | undefined : undefined
+    const videoNode = videoEdge ? getNode(videoEdge) : undefined
+
+    if (!promptData?.positive || !paramsData) {
+      alert('Connect at least a Prompt and Sampling node to this Generation node')
+      return
+    }
+
+    setGenRunning(true)
+    try {
+      const task = await startGeneration(
+        promptData.positive,
+        promptEdgeNeg ? (getNode(promptEdgeNeg)?.data as PromptData | undefined)?.negative || '' : '',
+        {
+          width: paramsData.width || 720,
+          height: paramsData.height || 480,
+          steps: paramsData.steps || 50,
+          cfg: paramsData.cfg || 6,
+          strength: strengthData?.strength ?? 0.8,
+          seed: paramsData.seed || 0,
+          scheduler: data.scheduler || '',
+        },
+        videoNode?.data && 'file' in videoNode.data ? (videoNode.data as { file?: File }).file : undefined,
+      )
+
+      let status: TaskStatus
+      do {
+        await new Promise((r) => setTimeout(r, 2000))
+        status = await pollTask(task.task_id)
+      } while (status.status === 'pending' || status.status === 'running')
+
+      if (status.status === 'completed' && status.result_url) {
+        setOutputUrl(status.result_url)
+      } else {
+        alert(`Workflow failed: ${status.error || 'unknown error'}`)
+      }
+    } catch (err: any) {
+      alert(`Error: ${err.message}`)
+    } finally {
+      setGenRunning(false)
+    }
+  }, [props.id, data.scheduler, nodes, edges, setOutputUrl])
 
   return (
-    <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, minWidth: 220, minHeight: 240, position: 'relative' }}>
-      {props.selected && <NodeResizer minWidth={180} minHeight={160} />}
-      <div style={{ background: def.color, padding: '6px 10px', fontSize: 12, fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
+    <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, minWidth: 240, minHeight: 260, position: 'relative' }}>
+      {props.selected && <NodeResizer minWidth={200} minHeight={180} />}
+      <div style={{ background: def.color, padding: '6px 10px', fontSize: 12, fontWeight: 600, display: 'flex', justifyContent: 'space-between', borderRadius: '8px 8px 0 0', overflow: 'hidden' }}>
         <span>{def.label}</span>
       </div>
-      <div style={{ padding: 10, fontSize: 12, color: '#ccc' }}>
-        {data.model ? (
-          <>
-            <div><span style={{ color: '#999' }}>Model: </span><span style={{ fontFamily: 'monospace' }}>{data.model}</span></div>
-            {schedLabel && <div style={{ marginTop: 4 }}><span style={{ color: '#999' }}>Scheduler: </span><span>{schedLabel}</span></div>}
-          </>
-        ) : (
-          <span style={{ color: '#888' }}>Connect inputs to generate</span>
-        )}
+      <div style={{ padding: '6px 10px', fontSize: 12, color: '#ccc' }}>
+        <select
+          value={data.model}
+          onChange={(e) => updateNodeData(props.id, { model: e.target.value } as Partial<GenerationData>)}
+          style={selectStyle}
+        >
+          <option value="cogvideox-2b">cogvideox-2b</option>
+          <option value="ltx-video">ltx-video</option>
+        </select>
+        <select
+          value={data.scheduler}
+          onChange={(e) => updateNodeData(props.id, { scheduler: e.target.value } as Partial<GenerationData>)}
+          style={selectStyle}
+        >
+          <option value="">Default scheduler</option>
+          <option value="cogvideox_ddim">DDIM (CogVideoX)</option>
+          <option value="cogvideox_dpm">DPM (CogVideoX)</option>
+          <option value="flow_match_euler">Flow Euler (LTX)</option>
+          <option value="flow_match_heun">Flow Heun (LTX)</option>
+          <option value="ltx_euler_ancestral_rf">Euler Anc RF (LTX)</option>
+        </select>
+        {schedLabel && <div style={{ marginTop: 2, fontSize: 10, color: '#888' }}>Current: {schedLabel}</div>}
+        <button
+          onClick={handleGenWorkflow}
+          disabled={genRunning}
+          style={{
+            width: '100%',
+            marginTop: 8,
+            padding: '6px 0',
+            borderRadius: 4,
+            border: 'none',
+            fontSize: 12,
+            fontWeight: 600,
+            cursor: genRunning ? 'not-allowed' : 'pointer',
+            background: genRunning ? '#333' : '#4ade80',
+            color: genRunning ? '#888' : '#0f0f0f',
+          }}
+        >
+          {genRunning ? 'Generating...' : 'Generate ▶'}
+        </button>
       </div>
       {inputHandles.map((id, i) => (
         <Handle

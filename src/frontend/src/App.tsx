@@ -10,10 +10,12 @@ import {
   type NodeChange,
   type EdgeChange,
   type Connection,
+  type Edge,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useGraphStore } from './store/graph'
 import type { NodeType, AppNode } from './types/nodes'
+import { NODE_DEFINITIONS, getPortTypeFromHandle } from './types/nodes'
 import Sidebar from './components/Sidebar'
 import NodeInspector from './components/NodeInspector'
 import { useCallback, useEffect, useState, type DragEvent } from 'react'
@@ -58,6 +60,17 @@ function AppInner() {
   const onConnect = useGraphStore((s) => s.onConnect)
   const addNode = useGraphStore((s) => s.addNode)
   const selectNode = useGraphStore((s) => s.selectNode)
+
+  const isValidConnection = useCallback((conn: Edge | Connection) => {
+    const sourceNode = nodes.find((n) => n.id === conn.source)
+    const targetNode = nodes.find((n) => n.id === conn.target)
+    if (!sourceNode || !targetNode) return false
+    const srcDef = NODE_DEFINITIONS[sourceNode.type as NodeType]
+    const tgtDef = NODE_DEFINITIONS[targetNode.type as NodeType]
+    const srcType = getPortTypeFromHandle(conn.sourceHandle || '', srcDef)
+    const tgtType = getPortTypeFromHandle(conn.targetHandle || '', tgtDef)
+    return !!srcType && !!tgtType && srcType === tgtType
+  }, [nodes])
 
   const handleDragOver = useCallback((event: DragEvent) => {
     event.preventDefault()
@@ -141,6 +154,7 @@ function AppInner() {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          isValidConnection={isValidConnection}
           onDragOver={handleDragOver}
           onDrop={handleDrop}
           onNodeClick={(_, node) => selectNode(node.id)}

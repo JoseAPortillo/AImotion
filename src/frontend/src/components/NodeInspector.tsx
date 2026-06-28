@@ -347,7 +347,8 @@ export default function NodeInspector() {
           Remove
         </button>
       </div>
-      <p style={{ margin: '0 0 16px', color: '#555', fontSize: 11 }}>{node.id}</p>
+      <p style={{ margin: '0 0 12px', color: '#888', fontSize: 11, lineHeight: 1.5 }}>{def.description}</p>
+      <p style={{ margin: '0 0 16px', color: '#555', fontSize: 10 }}>{node.id}</p>
       {renderFields(node)}
     </div>
   )

@@ -9,7 +9,7 @@ import {
   type NodeChange,
   type EdgeChange,
 } from '@xyflow/react'
-import { NODE_DEFINITIONS, type NodeType, type AppNode, type NodeData } from '../types/nodes'
+import { NODE_DEFINITIONS, type NodeType, type AppNode, type NodeData, getPortTypeFromHandle, getEdgeStyle } from '../types/nodes'
 
 interface GraphState {
   nodes: AppNode[]
@@ -56,7 +56,27 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   },
 
   onConnect: (connection) => {
-    set((state) => ({ edges: addEdge(connection, state.edges) }))
+    const nodes = get().nodes
+    const sourceNode = nodes.find((n) => n.id === connection.source)
+    const targetNode = nodes.find((n) => n.id === connection.target)
+    if (!sourceNode || !targetNode) return
+
+    const srcDef = NODE_DEFINITIONS[sourceNode.type as NodeType]
+    const tgtDef = NODE_DEFINITIONS[targetNode.type as NodeType]
+    const srcPortType = getPortTypeFromHandle(connection.sourceHandle || '', srcDef)
+    const tgtPortType = getPortTypeFromHandle(connection.targetHandle || '', tgtDef)
+
+    if (!srcPortType || !tgtPortType || srcPortType !== tgtPortType) return
+
+    set((state) => ({
+      edges: addEdge(
+        {
+          ...connection,
+          style: getEdgeStyle(srcPortType),
+        },
+        state.edges,
+      ),
+    }))
   },
 
   updateNodeData: (nodeId, data) => {

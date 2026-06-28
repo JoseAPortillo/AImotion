@@ -11,7 +11,7 @@ function PreviewNode(props: NodeProps) {
   return (
     <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, minWidth: 200, minHeight: 100, position: 'relative' }}>
       {props.selected && <NodeResizer minWidth={150} minHeight={80} />}
-      <div style={{ background: def.color, padding: '6px 10px', fontSize: 12, fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
+      <div style={{ background: def.color, padding: '6px 10px', fontSize: 12, fontWeight: 600, display: 'flex', justifyContent: 'space-between', borderRadius: '8px 8px 0 0', overflow: 'hidden' }}>
         <span>{def.label}</span>
       </div>
       <div style={{ padding: 10, fontSize: 12, color: '#ccc' }}>

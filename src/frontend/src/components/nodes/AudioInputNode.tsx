@@ -38,7 +38,7 @@ function AudioInputNode(props: NodeProps) {
   return (
     <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, minWidth: 200, minHeight: 100, position: 'relative' }}>
       {props.selected && <NodeResizer minWidth={150} minHeight={80} />}
-      <div style={{ background: def.color, padding: '6px 10px', fontSize: 12, fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
+      <div style={{ background: def.color, padding: '6px 10px', fontSize: 12, fontWeight: 600, display: 'flex', justifyContent: 'space-between', borderRadius: '8px 8px 0 0', overflow: 'hidden' }}>
         <span>{def.label}</span>
       </div>
       <div
@@ -50,8 +50,8 @@ function AudioInputNode(props: NodeProps) {
         {fileName || 'Drop audio file here'}
       </div>
       <input ref={inputRef} type="file" accept=".mp3,.wav,.flac,.ogg" style={{ display: 'none' }} onChange={handleChange} />
-      <Handle type="source" position={Position.Bottom} id="audio" style={{ bottom: -4 }}>
-        <div style={{ position: 'absolute', left: 14, top: -2, fontSize: 10, color: '#999', whiteSpace: 'nowrap' }}>Audio</div>
+      <Handle type="source" position={Position.Right} id="audio" style={{ top: '50%' }}>
+        <div style={{ position: 'absolute', right: 14, top: -2, fontSize: 10, color: '#999', whiteSpace: 'nowrap' }}>Audio</div>
       </Handle>
     </div>
   )
