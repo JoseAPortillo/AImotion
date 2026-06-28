@@ -131,6 +131,8 @@ async def _run_generation(task_id: str, params: dict):
         await task_manager.complete_task(task_id, result_url)
     except Exception as e:
         await task_manager.fail_task(task_id, str(e))
+    finally:
+        video_generator.unload()
 
 
 @router.get("/{task_id}")

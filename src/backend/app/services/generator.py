@@ -81,8 +81,8 @@ class VideoGenerator:
             from diffusers import LTXPipeline
             self._pipe = LTXPipeline.from_pretrained(model_name, torch_dtype=dtype, token=tok)
         elif cls_name == "CogVideoXPipeline":
-            from diffusers import CogVideoXVideoToVideoPipeline
-            self._pipe = CogVideoXVideoToVideoPipeline.from_pretrained(model_name, torch_dtype=dtype, token=tok)
+            from diffusers import CogVideoXPipeline
+            self._pipe = CogVideoXPipeline.from_pretrained(model_name, torch_dtype=dtype, token=tok)
         self._pipe.enable_model_cpu_offload()
         if hasattr(self._pipe.vae, "enable_tiling"):
             self._pipe.vae.enable_tiling()
@@ -121,6 +121,15 @@ class VideoGenerator:
 
         return callback
 
+    def unload(self):
+        if self._pipe is not None:
+            import torch
+            logger.info("Unloading pipeline and clearing VRAM...")
+            self._pipe = None
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+            self._log_vram()
+
     async def generate(
         self,
         prompt: str,
@@ -145,6 +154,7 @@ class VideoGenerator:
         s = steps or d["steps"]
         c = cfg or d["cfg"]
         fps = d["fps"]
+        nf = d["num_frames"]
         max_seq = d["max_seq"]
 
         gen = torch.Generator(device=self.device)
@@ -162,35 +172,31 @@ class VideoGenerator:
             logger.info(f"Starting {'V2V' if is_v2v else 'T2V'} generation...")
             self._log_vram()
             
+            pipe_kwargs = dict(
+                prompt=prompt,
+                negative_prompt=negative_prompt or None,
+                num_inference_steps=s,
+                guidance_scale=c,
+                generator=gen,
+                callback_on_step_end=cb,
+                output_type="pil",
+                max_sequence_length=max_seq,
+            )
+
             if is_v2v:
-                # V2V: usar el pipeline directamente con el video
-                output = pipe(
-                    video=video_frames,
-                    prompt=prompt,
-                    negative_prompt=negative_prompt or None,
-                    strength=strength,
-                    num_inference_steps=s,
-                    guidance_scale=c,
-                    generator=gen,
-                    callback_on_step_end=cb,
-                    output_type="pil",
-                    max_sequence_length=max_seq,
+                from diffusers import CogVideoXVideoToVideoPipeline
+                pipe = CogVideoXVideoToVideoPipeline.from_pretrained(
+                    settings.model_name, torch_dtype=pipe.dtype, token=settings.hf_token,
                 )
+                pipe.enable_model_cpu_offload()
+                pipe_kwargs["video"] = video_frames
+                pipe_kwargs["strength"] = strength
             else:
-                # T2V: text-to-video normal
-                output = pipe(
-                    prompt=prompt,
-                    negative_prompt=negative_prompt or None,
-                    width=w,
-                    height=h,
-                    num_frames=nf,
-                    num_inference_steps=s,
-                    guidance_scale=c,
-                    generator=gen,
-                    callback_on_step_end=cb,
-                    output_type="pil",
-                    max_sequence_length=max_seq,
-                )
+                pipe_kwargs["width"] = w
+                pipe_kwargs["height"] = h
+                pipe_kwargs["num_frames"] = nf
+
+            output = pipe(**pipe_kwargs)
 
             if progress_callback:
                 await progress_callback(s, s)
