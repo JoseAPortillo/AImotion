@@ -1,7 +1,7 @@
 import { memo, useCallback, useRef } from 'react'
 import type { NodeProps } from '@xyflow/react'
 import { Handle, Position, NodeResizer } from '@xyflow/react'
-import { NODE_DEFINITIONS, PORT_COLORS, type NodeType } from '../../types/nodes'
+import { NODE_DEFINITIONS, PORT_COLORS, getHandleColor, type NodeType } from '../../types/nodes'
 import { useGraphStore } from '../../store/graph'
 
 function AudioInputNode(props: NodeProps) {
@@ -37,7 +37,7 @@ function AudioInputNode(props: NodeProps) {
 
   return (
     <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, minWidth: 200, minHeight: 100, position: 'relative' }}>
-      {props.selected && <NodeResizer minWidth={150} minHeight={80} />}
+      {props.selected && <NodeResizer minWidth={150} minHeight={80} handleStyle={{ width: 10, height: 10, border: '2px solid #fff', background: '#555', zIndex: 10 }} lineStyle={{ border: '2px dashed #555' }} />}
       <div style={{ background: def.color, padding: '6px 10px', fontSize: 12, fontWeight: 600, display: 'flex', justifyContent: 'space-between', borderRadius: '8px 8px 0 0', overflow: 'hidden' }}>
         <span>{def.label}</span>
       </div>
@@ -50,8 +50,8 @@ function AudioInputNode(props: NodeProps) {
         {fileName || 'Drop audio file here'}
       </div>
       <input ref={inputRef} type="file" accept=".mp3,.wav,.flac,.ogg" style={{ display: 'none' }} onChange={handleChange} />
-      <Handle type="source" position={Position.Right} id="audio" style={{ top: '50%' }}>
-        <div style={{ position: 'absolute', right: 14, top: -2, fontSize: 10, color: PORT_COLORS.audio_features, whiteSpace: 'nowrap' }}>Audio</div>
+      <Handle type="source" position={Position.Right} id="audio" style={{ top: '50%', background: PORT_COLORS.audio_features }}>
+        <div style={{ position: 'absolute', right: -8, top: -2, transform: 'translateX(100%)', fontSize: 10, color: getHandleColor('audio', 'audio_features'), whiteSpace: 'nowrap' }}>Audio</div>
       </Handle>
     </div>
   )

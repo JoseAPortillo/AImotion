@@ -189,9 +189,9 @@ function AppInner() {
               {generating ? 'Generating...' : 'Generate'}
             </button>
           </Panel>
-          <Panel position="bottom-left" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#666', letterSpacing: 1 }}>AImotion</div>
-            <div style={{ fontSize: 10, color: '#444' }}>beta v0.1.0</div>
+          <Panel position="bottom-center" style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center', marginBottom: 4 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#555', letterSpacing: 1 }}>AImotion</div>
+            <div style={{ fontSize: 9, color: '#444' }}>beta v0.1.0</div>
           </Panel>
           <Panel position="top-right">
             <div

@@ -94,6 +94,12 @@ export function getPortTypeFromHandle(handleId: string, nodeDef: NodeDefinition)
   return all.find((p) => p.id === handleId)?.type ?? null
 }
 
+export function getHandleColor(handleId: string, portType: PortType): string {
+  if (handleId === 'negative' || handleId === 'prompt_neg') return '#86efac'
+  if (handleId === 'strength') return '#a78bfa'
+  return PORT_COLORS[portType]
+}
+
 export function getEdgeStyle(portType: PortType | null): React.CSSProperties {
   return {
     stroke: portType ? PORT_COLORS[portType] : '#555',

@@ -1,7 +1,7 @@
 import { memo, useCallback, useState } from 'react'
 import type { NodeProps } from '@xyflow/react'
 import { Handle, Position, NodeResizer } from '@xyflow/react'
-import { NODE_DEFINITIONS, PORT_COLORS, type NodeType, type PromptData } from '../../types/nodes'
+import { NODE_DEFINITIONS, PORT_COLORS, getHandleColor, type NodeType, type PromptData } from '../../types/nodes'
 import { useGraphStore } from '../../store/graph'
 import { improvePrompt } from '../../api/backend'
 
@@ -27,7 +27,7 @@ function PromptNode(props: NodeProps) {
 
   return (
     <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, minWidth: 240, minHeight: 120, position: 'relative' }}>
-      {props.selected && <NodeResizer minWidth={180} minHeight={100} />}
+      {props.selected && <NodeResizer minWidth={180} minHeight={100} handleStyle={{ width: 10, height: 10, border: '2px solid #fff', background: '#555', zIndex: 10 }} lineStyle={{ border: '2px dashed #555' }} />}
       <div style={{ background: def.color, padding: '6px 10px', fontSize: 12, fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderRadius: '8px 8px 0 0', overflow: 'hidden' }}>
         <span>{def.label}</span>
         <button
@@ -99,11 +99,11 @@ function PromptNode(props: NodeProps) {
           )}
         </div>
       </div>
-      <Handle type="source" position={Position.Right} id="positive" style={{ top: '35%' }}>
-        <div style={{ position: 'absolute', right: 14, top: -2, fontSize: 10, color: PORT_COLORS.prompt, whiteSpace: 'nowrap' }}>Positive</div>
+      <Handle type="source" position={Position.Right} id="positive" style={{ top: '35%', background: getHandleColor('positive', 'prompt') }}>
+        <div style={{ position: 'absolute', right: -8, top: -2, transform: 'translateX(100%)', fontSize: 10, color: getHandleColor('positive', 'prompt'), whiteSpace: 'nowrap' }}>Positive</div>
       </Handle>
-      <Handle type="source" position={Position.Right} id="negative" style={{ top: '65%' }}>
-        <div style={{ position: 'absolute', right: 14, top: -2, fontSize: 10, color: PORT_COLORS.prompt, whiteSpace: 'nowrap' }}>Negative</div>
+      <Handle type="source" position={Position.Right} id="negative" style={{ top: '65%', background: getHandleColor('negative', 'prompt') }}>
+        <div style={{ position: 'absolute', right: -8, top: -2, transform: 'translateX(100%)', fontSize: 10, color: getHandleColor('negative', 'prompt'), whiteSpace: 'nowrap' }}>Negative</div>
       </Handle>
     </div>
   )

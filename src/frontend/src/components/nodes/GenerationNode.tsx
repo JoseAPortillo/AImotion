@@ -1,7 +1,7 @@
 import { memo, useCallback, useState } from 'react'
 import type { NodeProps } from '@xyflow/react'
 import { Handle, Position, NodeResizer } from '@xyflow/react'
-import { NODE_DEFINITIONS, PORT_COLORS, type NodeType, type GenerationData, type PromptData, type SamplingParamsData, type DenoisingStrengthData } from '../../types/nodes'
+import { NODE_DEFINITIONS, PORT_COLORS, getHandleColor, type NodeType, type GenerationData, type PromptData, type SamplingParamsData, type DenoisingStrengthData } from '../../types/nodes'
 import { useGraphStore } from '../../store/graph'
 import { startGeneration, pollTask, type TaskStatus } from '../../api/backend'
 
@@ -93,8 +93,8 @@ function GenerationNode(props: NodeProps) {
   }, [props.id, data.scheduler, nodes, edges, setOutputUrl])
 
   return (
-    <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, minWidth: 240, minHeight: 260, position: 'relative' }}>
-      {props.selected && <NodeResizer minWidth={200} minHeight={180} />}
+    <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, minWidth: 240, minHeight: 260, position: 'relative', paddingBottom: 38 }}>
+      {props.selected && <NodeResizer minWidth={200} minHeight={180} handleStyle={{ width: 10, height: 10, border: '2px solid #fff', background: '#555', zIndex: 10 }} lineStyle={{ border: '2px dashed #555' }} />}
       <div style={{ background: def.color, padding: '6px 10px', fontSize: 12, fontWeight: 600, display: 'flex', justifyContent: 'space-between', borderRadius: '8px 8px 0 0', overflow: 'hidden' }}>
         <span>{def.label}</span>
       </div>
@@ -122,7 +122,7 @@ function GenerationNode(props: NodeProps) {
         </select>
         {schedLabel && <div style={{ marginTop: 2, fontSize: 10, color: '#888' }}>Current: {schedLabel}</div>}
       </div>
-      <div style={{ borderTop: '1px solid #2a2a2a', padding: '6px 10px' }}>
+      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, borderTop: '1px solid #2a2a2a', padding: '6px 10px', background: '#1a1a1a' }}>
         <button
           onClick={handleGenWorkflow}
           disabled={genRunning}
@@ -143,23 +143,24 @@ function GenerationNode(props: NodeProps) {
       </div>
       {inputHandles.map((id, i) => {
         const inp = def.inputs.find((p) => p.id === id)
-        const portColor = inp ? PORT_COLORS[inp.type] : '#999'
+        const portType = inp?.type || 'params'
+        const color = getHandleColor(id, portType)
         return (
           <Handle
             key={id}
             type="target"
             position={Position.Left}
             id={id}
-            style={{ top: `${((i + 1) / (inputHandles.length + 1)) * 100}%` }}
+            style={{ top: `${((i + 1) / (inputHandles.length + 1)) * 100}%`, background: color }}
           >
-            <div style={{ position: 'absolute', left: 14, top: -2, fontSize: 10, color: portColor, whiteSpace: 'nowrap' }}>
+            <div style={{ position: 'absolute', left: -8, top: -2, transform: 'translateX(-100%)', fontSize: 10, color, whiteSpace: 'nowrap' }}>
               {inp?.label || id}
             </div>
           </Handle>
         )
       })}
-      <Handle type="source" position={Position.Right} id="video_out" style={{ top: '50%' }}>
-        <div style={{ position: 'absolute', right: 14, top: -2, fontSize: 10, color: PORT_COLORS.video_tensor, whiteSpace: 'nowrap' }}>Video</div>
+      <Handle type="source" position={Position.Right} id="video_out" style={{ top: '50%', background: getHandleColor('video_out', 'video_tensor') }}>
+        <div style={{ position: 'absolute', right: -8, top: -2, transform: 'translateX(100%)', fontSize: 10, color: getHandleColor('video_out', 'video_tensor'), whiteSpace: 'nowrap' }}>Video</div>
       </Handle>
     </div>
   )
