@@ -19,6 +19,12 @@ SUPPORTED_MODELS = {
             "max_seq": 256,
         },
         "needs_token": True,
+        "schedulers": {
+            "flow_match_euler": "FlowMatchEulerDiscreteScheduler",
+            "flow_match_heun": "FlowMatchHeunDiscreteScheduler",
+            "ltx_euler_ancestral_rf": "LTXEulerAncestralRFScheduler",
+        },
+        "default_scheduler": "flow_match_euler",
     },
     "cogvideox": {
         "pipeline_class": "CogVideoXPipeline",
@@ -30,6 +36,11 @@ SUPPORTED_MODELS = {
             "max_seq": 226,
         },
         "needs_token": False,
+        "schedulers": {
+            "cogvideox_ddim": "CogVideoXDDIMScheduler",
+            "cogvideox_dpm": "CogVideoXDPMScheduler",
+        },
+        "default_scheduler": "cogvideox_ddim",
     },
     "cogvideox-2b": {
         "pipeline_class": "CogVideoXPipeline",
@@ -41,8 +52,19 @@ SUPPORTED_MODELS = {
             "max_seq": 226,
         },
         "needs_token": False,
+        "schedulers": {
+            "cogvideox_ddim": "CogVideoXDDIMScheduler",
+            "cogvideox_dpm": "CogVideoXDPMScheduler",
+        },
+        "default_scheduler": "cogvideox_ddim",
     },
 }
+
+SCHEDULER_NAMES: dict[str, str] = {}
+for _cfg in SUPPORTED_MODELS.values():
+    for key, cls_name in _cfg.get("schedulers", {}).items():
+        SCHEDULER_NAMES.setdefault(cls_name, key)
+        SCHEDULER_NAMES[key] = cls_name
 
 
 def extract_frames(path: str, max_frames: int = 49) -> list[Image.Image]:
@@ -88,6 +110,26 @@ class VideoGenerator:
             self._pipe.vae.enable_tiling()
         self._log_vram()
         logger.info(f"Pipeline loaded: {cls_name}({model_name})")
+
+    def _apply_scheduler(self, name: str | None = None, pipe=None):
+        pipe = pipe or self._pipe
+        schedulers = self.model_cfg.get("schedulers", {})
+        if not schedulers:
+            return
+        name = name or self.model_cfg.get("default_scheduler")
+        cls_name = schedulers.get(name)
+        if cls_name is None:
+            logger.warning(f"Unknown scheduler '{name}', using default")
+            return
+
+        from diffusers import schedulers as sched_module
+        cls = getattr(sched_module, cls_name, None)
+        if cls is None:
+            logger.warning(f"Scheduler class {cls_name} not found in diffusers")
+            return
+
+        pipe.scheduler = cls.from_config(pipe.scheduler.config)
+        logger.info(f"Scheduler set to {cls_name}")
 
     def _log_vram(self):
         import torch
@@ -141,12 +183,14 @@ class VideoGenerator:
         steps: Optional[int] = None,
         cfg: Optional[float] = None,
         seed: int = 0,
+        scheduler: str | None = None,
         progress_callback: Optional[Callable[[int, int], Awaitable[None]]] = None,
     ) -> str:
         import torch
         from diffusers.utils.torch_utils import randn_tensor
 
         self._ensure_pipe()
+        self._apply_scheduler(scheduler)
         pipe = self._pipe
         d = self.model_cfg["defaults"]
         w = width or d["width"]
@@ -189,6 +233,7 @@ class VideoGenerator:
                     settings.model_name, torch_dtype=pipe.dtype, token=settings.hf_token,
                 )
                 pipe.enable_model_cpu_offload()
+                self._apply_scheduler(scheduler, pipe=pipe)
                 pipe_kwargs["video"] = video_frames
                 pipe_kwargs["strength"] = strength
             else:

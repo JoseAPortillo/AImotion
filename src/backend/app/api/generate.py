@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from app.config import settings
 from app.models.generate import TaskInfo, TaskStatus
 from app.services.task_manager import TaskManager
-from app.services.generator import VideoGenerator, SUPPORTED_MODELS, extract_frames
+from app.services.generator import VideoGenerator, SUPPORTED_MODELS, extract_frames, SCHEDULER_NAMES
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +63,16 @@ async def create_generation(
     cfg: float = Form(_defaults["cfg"], ge=1.0, le=20.0),
     seed: int = Form(0, ge=0),
     strength: float = Form(0.8, ge=0.0, le=1.0),
+    scheduler: str = Form(""),
 ):
     _validate_dimensions(width, height)
+    model_schedulers = SUPPORTED_MODELS[settings.model_type].get("schedulers", {})
+    if scheduler and scheduler not in model_schedulers:
+        valid = ", ".join(model_schedulers)
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown scheduler '{scheduler}' for {settings.model_type}. Valid: {valid}",
+        )
     video_path = None
     if video:
         _validate_video(video)
@@ -90,6 +98,7 @@ async def create_generation(
         "cfg": cfg,
         "seed": seed,
         "strength": strength,
+        "scheduler": scheduler or None,
     }
     task_id = await task_manager.create_task(params)
     _dispatch_generation(task_id, params)
@@ -126,6 +135,7 @@ async def _run_generation(task_id: str, params: dict):
             steps=params["steps"],
             cfg=params["cfg"],
             seed=params["seed"],
+            scheduler=params.get("scheduler"),
             progress_callback=progress_callback,
         )
         await task_manager.complete_task(task_id, result_url)
