@@ -34,6 +34,7 @@ export async function startGeneration(
     cfg: number
     strength: number
     seed: number
+    scheduler: string
   },
   videoFile?: File,
 ): Promise<TaskResponse> {
@@ -47,6 +48,7 @@ export async function startGeneration(
   formData.append('cfg', String(params.cfg))
   formData.append('strength', String(params.strength))
   formData.append('seed', String(params.seed))
+  if (params.scheduler) formData.append('scheduler', params.scheduler)
 
   const r = await fetch('/generate', { method: 'POST', body: formData })
   if (!r.ok) {

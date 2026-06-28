@@ -213,6 +213,47 @@ export default function NodeInspector() {
                 />
               </Label>
             </FieldWrap>
+            <FieldWrap>
+              <Label>
+                Width
+                <input
+                  type="number"
+                  style={inputStyle}
+                  min={128}
+                  max={768}
+                  step={8}
+                  value={data.width}
+                  onChange={(e) => handleChange('width', parseInt(e.target.value, 10) || 128)}
+                />
+              </Label>
+            </FieldWrap>
+            <FieldWrap>
+              <Label>
+                Height
+                <input
+                  type="number"
+                  style={inputStyle}
+                  min={128}
+                  max={768}
+                  step={8}
+                  value={data.height}
+                  onChange={(e) => handleChange('height', parseInt(e.target.value, 10) || 128)}
+                />
+              </Label>
+            </FieldWrap>
+            <FieldWrap>
+              <Label>
+                Scheduler
+                <select style={inputStyle} value={data.scheduler} onChange={(e) => handleChange('scheduler', e.target.value)}>
+                  <option value="">Default</option>
+                  <option value="cogvideox_ddim">DDIM (CogVideoX)</option>
+                  <option value="cogvideox_dpm">DPM (CogVideoX)</option>
+                  <option value="flow_match_euler">Flow Euler (LTX)</option>
+                  <option value="flow_match_heun">Flow Heun (LTX)</option>
+                  <option value="ltx_euler_ancestral_rf">Euler Ancestral RF (LTX)</option>
+                </select>
+              </Label>
+            </FieldWrap>
           </>
         )
       }

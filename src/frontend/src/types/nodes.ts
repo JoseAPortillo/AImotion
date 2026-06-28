@@ -51,6 +51,9 @@ export interface SamplingParamsData extends Record<string, unknown> {
   steps: number
   cfg: number
   seed: number
+  width: number
+  height: number
+  scheduler: string
 }
 
 export interface DenoisingStrengthData extends Record<string, unknown> {
@@ -124,7 +127,7 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
     color: '#3b82f6',
     inputs: [],
     outputs: [{ id: 'params', label: 'Params', type: 'params' }],
-    defaultData: { steps: 50, cfg: 6, seed: 0 },
+    defaultData: { steps: 50, cfg: 6, seed: 0, width: 720, height: 480, scheduler: '' },
   },
   denoisingStrength: {
     type: 'denoisingStrength',
