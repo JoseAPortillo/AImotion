@@ -123,16 +123,22 @@ class VideoGenerator:
             os.environ["HF_TOKEN"] = tok
         dtype_name = cfg.get("dtype", settings.dtype)
         dtype = torch.bfloat16 if dtype_name == "bfloat16" else torch.float16
+        q_kwargs = self._build_quantization_kwargs()
         cls_name = cfg["pipeline_class"]
+        pipe_kwargs = dict(torch_dtype=dtype, token=tok, **q_kwargs)
         if cls_name == "LTXPipeline":
             from diffusers import LTXPipeline
-            pipe = LTXPipeline.from_pretrained(model_name, torch_dtype=dtype, token=tok)
+            pipe = LTXPipeline.from_pretrained(model_name, **pipe_kwargs)
         elif cls_name == "CogVideoXPipeline":
             from diffusers import CogVideoXPipeline
-            pipe = CogVideoXPipeline.from_pretrained(model_name, torch_dtype=dtype, token=tok)
+            pipe = CogVideoXPipeline.from_pretrained(model_name, **pipe_kwargs)
         else:
             raise ValueError(f"Unknown pipeline class: {cls_name}")
-        pipe.enable_model_cpu_offload()
+        if q_kwargs:
+            pipe.enable_attention_slicing()
+            pipe.to(self.device)
+        else:
+            pipe.enable_model_cpu_offload()
         self._log_vram()
         logger.info(f"Pipeline loaded: {cls_name}({model_name})")
         return pipe, cfg
@@ -181,6 +187,30 @@ class VideoGenerator:
             )
         else:
             vae.enable_tiling()
+
+    def _build_quantization_kwargs(self) -> dict:
+        q = settings.quantization
+        if q == "none":
+            return {}
+        try:
+            import bitsandbytes  # noqa: F401 — verify it's installed
+            if q == "8bit":
+                logger.info("Using 8-bit quantization")
+                return {"load_in_8bit": True}
+            elif q == "4bit":
+                logger.info("Using 4-bit quantization (NF4)")
+                return {
+                    "load_in_4bit": True,
+                    "bnb_4bit_compute_dtype": "float16",
+                    "bnb_4bit_use_double_quant": True,
+                    "bnb_4bit_quant_type": "nf4",
+                }
+            else:
+                logger.warning(f"Unknown quantization '{q}', ignoring")
+                return {}
+        except ImportError:
+            logger.warning("bitsandbytes not installed — quantization unavailable, running without")
+            return {}
 
     def _log_vram(self):
         import torch
@@ -280,10 +310,16 @@ class VideoGenerator:
                 dtype_name = model_cfg.get("dtype", settings.dtype)
                 dtype = torch.bfloat16 if dtype_name == "bfloat16" else torch.float16
                 tok = settings.hf_token if model_cfg.get("needs_token") else settings.hf_token
+                q_kwargs = self._build_quantization_kwargs()
+                v2v_kwargs = dict(torch_dtype=dtype, token=tok, **q_kwargs)
                 pipe = CogVideoXVideoToVideoPipeline.from_pretrained(
-                    hf_name, torch_dtype=dtype, token=tok,
+                    hf_name, **v2v_kwargs,
                 )
-                pipe.enable_model_cpu_offload()
+                if q_kwargs:
+                    pipe.enable_attention_slicing()
+                    pipe.to(self.device)
+                else:
+                    pipe.enable_model_cpu_offload()
                 self._apply_scheduler(scheduler, pipe=pipe, cfg=model_cfg)
                 self._apply_vae_config(pipe, vae_tiling, vae_tile_overlap)
                 pipe_kwargs["video"] = video_frames

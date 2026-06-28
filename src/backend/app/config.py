@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     model_type: str = "cogvideox-2b"
     device: str = "cuda"
     dtype: str = "bfloat16"
+    quantization: str = "none"
     offload_text_encoder: bool = True
     hf_token: Optional[str] = None
     gemini_api_key: Optional[str] = None

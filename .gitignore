@@ -3,5 +3,6 @@ __pycache__/
 .coverage
 .atl/
 .venv/
+.env
 src/backend/uploads/
 src/backend/results/
