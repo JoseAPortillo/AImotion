@@ -121,7 +121,7 @@ async def _run_generation(task_id: str, params: dict):
         video_frames = None
         video_path = params.get("video_path")
         if video_path and os.path.exists(video_path):
-            video_frames = extract_frames(video_path, max_frames=12)
+            video_frames = extract_frames(video_path)
             if not video_frames:
                 video_frames = None
 
