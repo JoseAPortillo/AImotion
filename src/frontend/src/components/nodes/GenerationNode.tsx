@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import type { NodeProps } from '@xyflow/react'
-import { Handle, Position } from '@xyflow/react'
+import { Handle, Position, NodeResizer } from '@xyflow/react'
 import { NODE_DEFINITIONS, type NodeType } from '../../types/nodes'
 
 const inputHandles = ['video_in', 'audio_in', 'prompt_pos', 'prompt_neg', 'params', 'strength']
@@ -10,7 +10,8 @@ function GenerationNode(props: NodeProps) {
   const { model } = props.data as { model?: string }
 
   return (
-    <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, minWidth: 220, minHeight: 240 }}>
+    <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, minWidth: 220, minHeight: 240, position: 'relative' }}>
+      <NodeResizer minWidth={180} minHeight={160} />
       <div style={{ background: def.color, padding: '6px 10px', fontSize: 12, fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
         <span>{def.label}</span>
       </div>

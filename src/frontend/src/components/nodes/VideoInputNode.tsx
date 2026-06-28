@@ -1,6 +1,6 @@
 import { memo, useCallback, useRef } from 'react'
 import type { NodeProps } from '@xyflow/react'
-import { Handle, Position } from '@xyflow/react'
+import { Handle, Position, NodeResizer } from '@xyflow/react'
 import { NODE_DEFINITIONS, type NodeType } from '../../types/nodes'
 import { useGraphStore } from '../../store/graph'
 
@@ -36,7 +36,8 @@ function VideoInputNode(props: NodeProps) {
   const handleClick = () => inputRef.current?.click()
 
   return (
-    <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, minWidth: 200 }}>
+    <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, minWidth: 200, minHeight: 100, position: 'relative' }}>
+      <NodeResizer minWidth={150} minHeight={80} />
       <div style={{ background: def.color, padding: '6px 10px', fontSize: 12, fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
         <span>{def.label}</span>
       </div>

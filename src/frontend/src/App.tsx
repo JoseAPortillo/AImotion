@@ -4,15 +4,16 @@ import {
   Controls,
   MiniMap,
   type NodeTypes,
-  useNodesState,
-  useEdgesState,
   Panel,
   useReactFlow,
   ReactFlowProvider,
+  type NodeChange,
+  type EdgeChange,
+  type Connection,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useGraphStore } from './store/graph'
-import type { NodeType } from './types/nodes'
+import type { NodeType, AppNode } from './types/nodes'
 import Sidebar from './components/Sidebar'
 import NodeInspector from './components/NodeInspector'
 import { useCallback, useEffect, useState, type DragEvent } from 'react'
@@ -49,33 +50,13 @@ function AppInner() {
   const [backendOk, setBackendOk] = useState(false)
   const { screenToFlowPosition } = useReactFlow()
 
-  const store = useGraphStore()
-  const [, onNodesChange] = useNodesState(store.nodes)
-  const [, onEdgesChange, onConnect] = useEdgesState(store.edges)
-
-  const handleNodesChange = useCallback(
-    (changes: any) => {
-      store.onNodesChange(changes)
-      onNodesChange(changes)
-    },
-    [store, onNodesChange],
-  )
-
-  const handleEdgesChange = useCallback(
-    (changes: any) => {
-      store.onEdgesChange(changes)
-      onEdgesChange(changes)
-    },
-    [store, onEdgesChange],
-  )
-
-  const handleConnect = useCallback(
-    (connection: any) => {
-      store.onConnect(connection)
-      onConnect(connection)
-    },
-    [store, onConnect],
-  )
+  const nodes = useGraphStore((s) => s.nodes)
+  const edges = useGraphStore((s) => s.edges)
+  const onNodesChange = useGraphStore((s) => s.onNodesChange)
+  const onEdgesChange = useGraphStore((s) => s.onEdgesChange)
+  const onConnect = useGraphStore((s) => s.onConnect)
+  const addNode = useGraphStore((s) => s.addNode)
+  const selectNode = useGraphStore((s) => s.selectNode)
 
   const handleDragOver = useCallback((event: DragEvent) => {
     event.preventDefault()
@@ -93,9 +74,9 @@ function AppInner() {
         y: event.clientY,
       })
 
-      store.addNode(type, position)
+      addNode(type, position)
     },
-    [screenToFlowPosition, store],
+    [screenToFlowPosition, addNode],
   )
 
   useEffect(() => {
@@ -109,15 +90,15 @@ function AppInner() {
       <Sidebar />
       <div style={{ flex: 1, position: 'relative' }}>
         <ReactFlow
-          nodes={store.nodes}
-          edges={store.edges}
-          onNodesChange={handleNodesChange}
-          onEdgesChange={handleEdgesChange}
-          onConnect={handleConnect}
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
           onDragOver={handleDragOver}
           onDrop={handleDrop}
-          onNodeClick={(_, node) => store.selectNode(node.id)}
-          onPaneClick={() => store.selectNode(null)}
+          onNodeClick={(_, node) => selectNode(node.id)}
+          onPaneClick={() => selectNode(null)}
           nodeTypes={nodeTypes}
           fitView
           colorMode="dark"

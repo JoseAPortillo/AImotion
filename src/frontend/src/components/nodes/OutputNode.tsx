@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import type { NodeProps } from '@xyflow/react'
-import { Handle, Position } from '@xyflow/react'
+import { Handle, Position, NodeResizer } from '@xyflow/react'
 import { NODE_DEFINITIONS, type NodeType } from '../../types/nodes'
 import type { OutputData } from '../../types/nodes'
 
@@ -9,7 +9,8 @@ function OutputNode(props: NodeProps) {
   const data = props.data as OutputData
 
   return (
-    <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, minWidth: 200 }}>
+    <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, minWidth: 200, minHeight: 60, position: 'relative' }}>
+      <NodeResizer minWidth={150} minHeight={60} />
       <div style={{ background: def.color, padding: '6px 10px', fontSize: 12, fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
         <span>{def.label}</span>
       </div>
