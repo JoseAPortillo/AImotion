@@ -72,6 +72,7 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
   const [aliasInput, setAliasInput] = useState('')
   const [selectedInstalledKey, setSelectedInstalledKey] = useState<string | null>(null)
   const [taskId, setTaskId] = useState<string | null>(null)
+  const [installingHfName, setInstallingHfName] = useState<string | null>(null)
   const [progress, setProgress] = useState<InstallProgress | null>(null)
   const ref = useRef<HTMLDivElement>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -112,13 +113,31 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const startPolling = useCallback((tid: string) => {
+  const startPolling = useCallback((tid: string, hfName: string) => {
     stopPolling()
     pollRef.current = setInterval(async () => {
       if (!mountedRef.current) return
       try {
         const res = await fetch(`/models/install/${tid}/progress`)
-        if (!res.ok) { stopPolling(); return }
+        if (!res.ok) {
+          stopPolling()
+          if (!mountedRef.current) return
+          const fresh = await fetch('/models').then(r => r.ok ? r.json() : null).catch(() => null)
+          const installed = fresh?.models?.filter((m: any) => m.type === 'installed') ?? []
+          const found = installed.find((m: any) => m.hf_name === hfName || (m.alias || m.name) === hfName.split('/').pop())
+          if (found) {
+            setStatus('done')
+            setTaskId(null)
+            setStatusMsg('Installed (server restarted)')
+            setHfInput('')
+            await fetchAll()
+          } else {
+            setStatus('error')
+            setTaskId(null)
+            setStatusMsg(`Server restarted during install — progress lost`)
+          }
+          return
+        }
         const p: InstallProgress = await res.json()
         if (!mountedRef.current) return
         setProgress(p)
@@ -127,6 +146,7 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
           stopPolling()
           setStatus('done')
           setTaskId(null)
+          setInstallingHfName(null)
           const d = p as any
           const ptype = d.pipeline_class?.replace('Pipeline', '') || ''
           setStatusMsg(`Installed${ptype ? ` (${ptype})` : ''}`)
@@ -138,6 +158,7 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
           stopPolling()
           setStatus('error')
           setTaskId(null)
+          setInstallingHfName(null)
           setStatusMsg(p.error_msg || 'Install failed')
           return
         }
@@ -145,6 +166,7 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
           stopPolling()
           setStatus('idle')
           setTaskId(null)
+          setInstallingHfName(null)
           setProgress(null)
           setStatusMsg('')
           return
@@ -152,7 +174,14 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
         setStatus(p.status === 'discovering' ? 'checking' : 'installing')
         const fname = p.current_file ? ` (${p.current_file})` : ''
         setStatusMsg(`${p.status} ${p.progress_pct.toFixed(0)}%${fname}`)
-      } catch { stopPolling() }
+      } catch {
+        stopPolling()
+        if (!mountedRef.current) return
+        setStatus('error')
+        setTaskId(null)
+        setInstallingHfName(null)
+        setStatusMsg('Connection lost during install')
+      }
     }, 400)
   }, [stopPolling, fetchAll])
 
@@ -166,6 +195,7 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
     setStatus('checking')
     setStatusMsg(`Starting install for ${name}...`)
     setProgress(null)
+    setInstallingHfName(name)
     try {
       const res = await fetch('/models/install', {
         method: 'POST',
@@ -189,11 +219,13 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
         setStatus('installing')
         setStatusMsg('Already in progress')
         setTaskId(data.task_id)
-        startPolling(data.task_id)
+        setInstallingHfName(name)
+        startPolling(data.task_id, name)
         return
       }
       setTaskId(data.task_id)
-      startPolling(data.task_id)
+      setInstallingHfName(name)
+      startPolling(data.task_id, name)
     } catch (e: any) {
       setStatus('error')
       setStatusMsg(e.message || 'Connection failed')
