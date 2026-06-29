@@ -18,6 +18,7 @@ import type { NodeType, AppNode } from './types/nodes'
 import { NODE_DEFINITIONS, getPortTypeFromHandle } from './types/nodes'
 import Sidebar from './components/Sidebar'
 import NodeInspector from './components/NodeInspector'
+import ModelManager from './components/ModelManager'
 import { useCallback, useEffect, useState, type DragEvent } from 'react'
 import { checkHealth, startGeneration, pollTask, type TaskStatus } from './api/backend'
 import type { PromptData, SamplingParamsData, DenoisingStrengthData, VideoInputData, GenerationData } from './types/nodes'
@@ -197,18 +198,7 @@ function AppInner() {
             <div style={{ fontSize: 9, color: '#444' }}>beta v0.1.0</div>
           </Panel>
           <Panel position="top-right">
-            <div
-              style={{
-                padding: '6px 12px',
-                borderRadius: 6,
-                fontSize: 12,
-                background: backendOk ? '#0a2e1a' : '#2e0a0a',
-                color: backendOk ? '#4ade80' : '#f87171',
-                border: `1px solid ${backendOk ? '#166534' : '#7f1d1d'}`,
-              }}
-            >
-              {backendOk ? 'Backend connected' : 'Backend offline'}
-            </div>
+            <ModelManager backendOk={backendOk} />
           </Panel>
         </ReactFlow>
       </div>
