@@ -98,7 +98,6 @@ def is_model_cached(hf_name: str) -> bool:
 
 KNOWN_PIPELINES = {
     "CogVideoXPipeline": {
-        "module": "diffusers",
         "schedulers": {
             "cogvideox_ddim": "CogVideoXDDIMScheduler",
             "cogvideox_dpm": "CogVideoXDPMScheduler",
@@ -112,7 +111,6 @@ KNOWN_PIPELINES = {
         },
     },
     "LTXPipeline": {
-        "module": "diffusers",
         "schedulers": {
             "flow_match_euler": "FlowMatchEulerDiscreteScheduler",
             "flow_match_heun": "FlowMatchHeunDiscreteScheduler",
@@ -128,12 +126,16 @@ KNOWN_PIPELINES = {
     },
 }
 
+_VIDEO_PIPELINES = {
+    "CogVideoXPipeline", "CogVideoXImageToVideoPipeline", "CogVideoXVideoToVideoPipeline",
+    "LTXPipeline", "I2VGenXLPipeline", "StableVideoDiffusionPipeline",
+    "AnimateDiffPipeline", "VideoToVideoPipeline", "TextToVideoSDPipeline",
+}
+
 
 def _read_hf_json(hf_name: str, filename: str) -> Optional[dict]:
     try:
-        from huggingface_hub import HfApi
         import requests
-        api = HfApi()
         url = f"https://huggingface.co/{hf_name}/raw/main/{filename}"
         resp = requests.get(url, timeout=10, headers={"User-Agent": "AImation/0.1"})
         resp.raise_for_status()
@@ -142,16 +144,25 @@ def _read_hf_json(hf_name: str, filename: str) -> Optional[dict]:
         return None
 
 
-def _has_weight_files(hf_name: str) -> bool:
+def _read_scheduler_config(hf_name: str, comp_name: str) -> Optional[dict]:
+    candidates = [
+        f"{comp_name}/config.json",
+        f"{comp_name}/{comp_name}_config.json",
+        f"{comp_name}/scheduler_config.json",
+    ]
+    for path in candidates:
+        cfg = _read_hf_json(hf_name, path)
+        if cfg and "_class_name" in cfg:
+            return cfg
+    return None
+
+
+def _list_hf_files(hf_name: str) -> list[str]:
     try:
         from huggingface_hub import HfApi
-        api = HfApi()
-        for f in api.list_repo_files(hf_name):
-            if f.endswith((".safetensors", ".bin", ".pt", ".pth")):
-                return True
-        return False
+        return HfApi().list_repo_files(hf_name)
     except Exception:
-        return False
+        return []
 
 
 def discover_pipeline(hf_name: str) -> Optional[dict]:
@@ -164,47 +175,75 @@ def discover_pipeline(hf_name: str) -> Optional[dict]:
 
         logger.info(f"Model {hf_name}: pipeline_tag={pipeline_tag}, tags={tags}")
 
-        cls_name = None
+        files = _list_hf_files(hf_name)
+        weight_exts = (".safetensors", ".bin", ".pt", ".pth")
+        has_weights = any(f.endswith(weight_exts) for f in files)
+        if not has_weights:
+            logger.warning(f"Model {hf_name} has no weight files")
+            return None
+
+        pipeline_class = None
+        schedulers: dict[str, str] = {}
 
         model_index = _read_hf_json(hf_name, "model_index.json")
-        if model_index and "_class_name" in model_index:
-            cls_name = model_index["_class_name"]
-            if cls_name not in KNOWN_PIPELINES:
-                logger.info(f"Model {hf_name} uses unsupported pipeline {cls_name}")
+        if model_index:
+            pipeline_class = model_index.get("_class_name", "")
+            if not pipeline_class:
+                logger.warning(f"Model {hf_name} has model_index.json but no _class_name")
                 return None
 
-        if not cls_name:
-            supported = {
+            for comp_name, comp_info in model_index.items():
+                if comp_name.startswith("_"):
+                    continue
+                if not isinstance(comp_info, (list, tuple)) or len(comp_info) < 2:
+                    continue
+                class_name = comp_info[1]
+                if not isinstance(class_name, str):
+                    continue
+                if "scheduler" in class_name.lower():
+                    cfg = _read_scheduler_config(hf_name, comp_name)
+                    if cfg and "_class_name" in cfg:
+                        schedulers[comp_name] = cfg["_class_name"]
+
+        if not pipeline_class:
+            supported_keywords = {
                 "cogvideox": "CogVideoXPipeline",
                 "ltx": "LTXPipeline",
             }
-            for keyword, klass in supported.items():
+            for keyword, klass in supported_keywords.items():
                 if keyword in tags or keyword in pipeline_tag:
-                    cls_name = klass
+                    pipeline_class = klass
                     break
+            if not pipeline_class:
+                for t in tags:
+                    if t in supported_keywords:
+                        pipeline_class = supported_keywords[t]
+                        break
+            if not pipeline_class and "video" in pipeline_tag:
+                pipeline_class = "CogVideoXPipeline"
 
-        if not cls_name:
-            for t in tags:
-                if t in supported:
-                    cls_name = supported[t]
-                    break
-
-        if not cls_name and "video" in pipeline_tag:
-            cls_name = "CogVideoXPipeline"
-
-        if not cls_name:
+        if not pipeline_class:
             logger.warning(f"Unsupported model {hf_name}: pipeline={pipeline_tag}, tags={tags}")
             return None
 
-        if cls_name not in KNOWN_PIPELINES:
-            logger.warning(f"Model {hf_name} resolved to unsupported pipeline {cls_name}")
-            return None
+        known = KNOWN_PIPELINES.get(pipeline_class, {})
+        if not schedulers:
+            schedulers = dict(known.get("schedulers", {}))
 
-        if not _has_weight_files(hf_name):
-            logger.warning(f"Model {hf_name} has no weight files — cannot install")
-            return None
+        default_scheduler = known.get("default_scheduler", "")
+        if not default_scheduler and schedulers:
+            default_scheduler = list(schedulers.keys())[0]
 
-        return {"pipeline_class": cls_name, **KNOWN_PIPELINES[cls_name]}
+        is_video = pipeline_class in _VIDEO_PIPELINES or "video" in pipeline_tag
+        dtype = "bfloat16" if is_video else "float16"
+
+        return {
+            "pipeline_class": pipeline_class,
+            "schedulers": schedulers,
+            "default_scheduler": default_scheduler,
+            "dtype": dtype,
+            "defaults": known.get("defaults", {"steps": 50, "cfg": 7.0}),
+        }
 
     except Exception as e:
         logger.warning(f"Failed to discover {hf_name}: {e}")

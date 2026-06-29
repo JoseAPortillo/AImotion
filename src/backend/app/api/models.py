@@ -131,7 +131,8 @@ async def install_model(req: InstallRequest):
     if not hf_name:
         raise HTTPException(status_code=422, detail="hf_name is required")
 
-    existing = find_installed(generate_key(hf_name))
+    key = generate_key(hf_name)
+    existing = find_installed(key)
     if existing and is_model_cached(hf_name):
         return {"status": "already_installed", "model_key": existing.key}
 
@@ -139,23 +140,18 @@ async def install_model(req: InstallRequest):
     if discovered is None:
         raise HTTPException(
             status_code=422,
-            detail=f"Model '{hf_name}' is not a supported video pipeline. "
-                   f"Only CogVideoX and LTX pipelines are supported.",
+            detail=f"Model '{hf_name}' is not a valid or supported pipeline. "
+                   f"Ensure it exists on HuggingFace and contains model weights.",
         )
 
-    import torch
     pipeline_class_name = discovered["pipeline_class"]
-    tok = settings.hf_token if discovered.get("needs_token") else None
+    tok = settings.hf_token or None
+
+    from huggingface_hub import snapshot_download
 
     logger.info(f"Downloading {hf_name} (pipeline: {pipeline_class_name})...")
     try:
-        if pipeline_class_name == "CogVideoXPipeline":
-            from diffusers import CogVideoXPipeline
-            CogVideoXPipeline.from_pretrained(hf_name, torch_dtype=torch.float16, token=tok)
-        elif pipeline_class_name == "LTXPipeline":
-            from diffusers import LTXPipeline
-            tok = tok or settings.hf_token
-            LTXPipeline.from_pretrained(hf_name, torch_dtype=torch.bfloat16, token=tok)
+        snapshot_download(repo_id=hf_name, token=tok, ignore_patterns=["*.gitattributes"])
     except Exception as e:
         logger.error(f"Failed to download {hf_name}: {e}")
         raise HTTPException(
@@ -164,7 +160,6 @@ async def install_model(req: InstallRequest):
         )
     logger.info(f"Downloaded {hf_name}")
 
-    key = generate_key(hf_name)
     alias = req.alias or hf_name.split("/")[-1]
     model = InstalledModel(
         key=key,
@@ -174,7 +169,7 @@ async def install_model(req: InstallRequest):
         dtype=discovered.get("dtype", "float16"),
         schedulers=discovered["schedulers"],
         default_scheduler=discovered["default_scheduler"],
-        needs_token=discovered.get("needs_token", False),
+        needs_token=False,
         defaults=discovered["defaults"],
         installed_at=__import__("datetime").datetime.now().isoformat(),
     )
@@ -183,6 +178,7 @@ async def install_model(req: InstallRequest):
         "status": "installed",
         "model_key": key,
         "alias": alias,
+        "pipeline_class": pipeline_class_name,
         "schedulers": model.schedulers,
     }
 

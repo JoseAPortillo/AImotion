@@ -116,7 +116,8 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
         setStatusMsg('Already installed')
       } else {
         setStatus('done')
-        setStatusMsg(`Installed: ${data.alias} (${Object.keys(data.schedulers).length} schedulers)`)
+        const ptype = data.pipeline_class?.replace('Pipeline', '') || ''
+        setStatusMsg(`Installed: ${data.alias} (${Object.keys(data.schedulers).length} schedulers${ptype ? `, ${ptype}` : ''})`)
       }
       setHfInput('')
       await fetchAll()
