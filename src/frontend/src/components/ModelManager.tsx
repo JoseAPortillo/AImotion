@@ -23,6 +23,15 @@ interface HealthInfo {
   current_v2v_model?: string | null
 }
 
+interface InstallProgress {
+  status: string
+  progress_pct: number
+  current_file: string
+  total_files: number
+  downloaded_files: number
+  error_msg: string
+}
+
 const popover: React.CSSProperties = {
   position: 'absolute',
   top: '100%',
@@ -50,7 +59,7 @@ const sectionTitle: React.CSSProperties = {
   marginTop: 12,
 }
 
-type Status = 'idle' | 'checking' | 'installing' | 'error' | 'done'
+type Status = 'idle' | 'checking' | 'installing' | 'cancelling' | 'error' | 'done'
 
 export default function ModelManager({ backendOk }: { backendOk: boolean }) {
   const [open, setOpen] = useState(false)
@@ -61,7 +70,17 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
   const [statusMsg, setStatusMsg] = useState('')
   const [editingAlias, setEditingAlias] = useState<string | null>(null)
   const [aliasInput, setAliasInput] = useState('')
+  const [taskId, setTaskId] = useState<string | null>(null)
+  const [progress, setProgress] = useState<InstallProgress | null>(null)
   const ref = useRef<HTMLDivElement>(null)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const mountedRef = useRef(true)
+
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false } }, [])
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
+  }, [])
 
   const fetchAll = useCallback(async () => {
     try {
@@ -92,11 +111,60 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
+  const startPolling = useCallback((tid: string) => {
+    stopPolling()
+    pollRef.current = setInterval(async () => {
+      if (!mountedRef.current) return
+      try {
+        const res = await fetch(`/models/install/${tid}/progress`)
+        if (!res.ok) { stopPolling(); return }
+        const p: InstallProgress = await res.json()
+        if (!mountedRef.current) return
+        setProgress(p)
+
+        if (p.status === 'done') {
+          stopPolling()
+          setStatus('done')
+          setTaskId(null)
+          const d = p as any
+          const ptype = d.pipeline_class?.replace('Pipeline', '') || ''
+          setStatusMsg(`Installed${ptype ? ` (${ptype})` : ''}`)
+          setHfInput('')
+          await fetchAll()
+          return
+        }
+        if (p.status === 'error') {
+          stopPolling()
+          setStatus('error')
+          setTaskId(null)
+          setStatusMsg(p.error_msg || 'Install failed')
+          return
+        }
+        if (p.status === 'cancelled') {
+          stopPolling()
+          setStatus('idle')
+          setTaskId(null)
+          setProgress(null)
+          setStatusMsg('')
+          return
+        }
+        setStatus(p.status === 'discovering' ? 'checking' : 'installing')
+        const fname = p.current_file ? ` (${p.current_file})` : ''
+        setStatusMsg(`${p.status} ${p.progress_pct.toFixed(0)}%${fname}`)
+      } catch { stopPolling() }
+    }, 400)
+  }, [stopPolling, fetchAll])
+
+  useEffect(() => {
+    return () => stopPolling()
+  }, [stopPolling])
+
   const handleInstall = async () => {
     const name = hfInput.trim()
     if (!name) return
     setStatus('checking')
-    setStatusMsg(`Discovering ${name}...`)
+    setStatusMsg(`Starting install for ${name}...`)
+    setProgress(null)
     try {
       const res = await fetch('/models/install', {
         method: 'POST',
@@ -108,23 +176,36 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
       try { data = JSON.parse(text) } catch {}
       if (!res.ok) {
         setStatus('error')
-        setStatusMsg(data.detail || text || `HTTP ${res.status} (empty response)`)
+        setStatusMsg(data.detail || text || `HTTP ${res.status}`)
         return
       }
       if (data.status === 'already_installed') {
         setStatus('done')
         setStatusMsg('Already installed')
-      } else {
-        setStatus('done')
-        const ptype = data.pipeline_class?.replace('Pipeline', '') || ''
-        setStatusMsg(`Installed: ${data.alias} (${Object.keys(data.schedulers).length} schedulers${ptype ? `, ${ptype}` : ''})`)
+        return
       }
-      setHfInput('')
-      await fetchAll()
+      if (data.status === 'already_in_progress') {
+        setStatus('installing')
+        setStatusMsg('Already in progress')
+        setTaskId(data.task_id)
+        startPolling(data.task_id)
+        return
+      }
+      setTaskId(data.task_id)
+      startPolling(data.task_id)
     } catch (e: any) {
       setStatus('error')
       setStatusMsg(e.message || 'Connection failed')
     }
+  }
+
+  const handleCancel = async () => {
+    if (!taskId) return
+    setStatus('cancelling')
+    setStatusMsg('Cancelling...')
+    try {
+      await fetch(`/models/install/${taskId}`, { method: 'DELETE' })
+    } catch { /* ignore */ }
   }
 
   const handleUninstall = async (modelKey: string) => {
@@ -223,35 +304,79 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
                 />
                 <button
                   onClick={handleInstall}
-                  disabled={status === 'checking' || status === 'installing' || !hfInput.trim()}
+                  disabled={status === 'checking' || status === 'installing' || status === 'cancelling' || !hfInput.trim()}
                   style={{
                     padding: '6px 14px',
                     borderRadius: 4,
                     border: 'none',
                     fontSize: 11,
                     fontWeight: 600,
-                    cursor: status === 'checking' || status === 'installing' ? 'not-allowed' : 'pointer',
-                    background: status === 'checking' || status === 'installing' ? '#333' : '#2563eb',
-                    color: status === 'checking' || status === 'installing' ? '#888' : '#fff',
+                    cursor: status === 'checking' || status === 'installing' || status === 'cancelling' ? 'not-allowed' : 'pointer',
+                    background: status === 'checking' || status === 'installing' || status === 'cancelling' ? '#333' : '#2563eb',
+                    color: status === 'checking' || status === 'installing' || status === 'cancelling' ? '#888' : '#fff',
                     whiteSpace: 'nowrap',
                   }}
                 >
-                  {status === 'checking' ? 'Checking...' : status === 'installing' ? 'Installing...' : 'Install'}
+                  {status === 'checking' ? 'Checking...' : status === 'installing' || status === 'cancelling' ? 'Installing...' : 'Install'}
                 </button>
               </div>
+
+              {/* Status message */}
               {status !== 'idle' && (
                 <div style={{
                   fontSize: 11,
                   padding: '4px 8px',
                   borderRadius: 4,
-                  marginBottom: 8,
+                  marginBottom: 4,
                   background: status === 'error' ? '#2e0a0a' : status === 'done' ? '#0a2e1a' : '#1a1a2e',
                   color: status === 'error' ? '#f87171' : status === 'done' ? '#4ade80' : '#8888ff',
                 }}>
                   {statusMsg}
-                  {status === 'error' || status === 'done' ? (
-                    <span onClick={() => setStatus('idle')} style={{ marginLeft: 8, cursor: 'pointer', opacity: 0.6 }}>✕</span>
-                  ) : null}
+                  {(status === 'error' || status === 'done') && (
+                    <span onClick={() => { setStatus('idle'); setProgress(null) }} style={{ marginLeft: 8, cursor: 'pointer', opacity: 0.6 }}>✕</span>
+                  )}
+                </div>
+              )}
+
+              {/* Progress bar + cancel */}
+              {(status === 'checking' || status === 'installing' || status === 'cancelling') && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                  <div style={{
+                    flex: 1,
+                    height: 8,
+                    borderRadius: 4,
+                    background: '#2a2a2a',
+                    overflow: 'hidden',
+                  }}>
+                    <div style={{
+                      width: `${Math.min(progress?.progress_pct ?? 0, 100)}%`,
+                      height: '100%',
+                      borderRadius: 4,
+                      background: status === 'cancelling' ? '#888' : '#2563eb',
+                      transition: 'width 0.3s ease',
+                    }} />
+                  </div>
+                  <span style={{ fontSize: 10, color: '#999', minWidth: 32, textAlign: 'right' }}>
+                    {progress ? `${progress.progress_pct.toFixed(0)}%` : '...'}
+                  </span>
+                  {status !== 'cancelling' && (
+                    <button
+                      onClick={handleCancel}
+                      title="Cancel install"
+                      style={{
+                        padding: '2px 8px',
+                        borderRadius: 4,
+                        border: '1px solid #5a1a1a',
+                        background: 'transparent',
+                        color: '#f87171',
+                        fontSize: 10,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  )}
                 </div>
               )}
 

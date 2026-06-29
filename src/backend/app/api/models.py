@@ -1,7 +1,10 @@
 import os
 import logging
+import threading
+from hashlib import md5
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from huggingface_hub import HfApi, hf_hub_download
 from app.config import settings
 from app.services.generator import VideoGenerator, SUPPORTED_MODELS
 from app.services.model_registry import (
@@ -15,6 +18,145 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/models", tags=["models"])
 
 _video_generator = VideoGenerator()
+
+
+class InstallTask:
+    def __init__(self, hf_name: str):
+        self.hf_name = hf_name
+        self.status = "pending"
+        self.progress_pct = 0.0
+        self.current_file = ""
+        self.total_files = 0
+        self.downloaded_files = 0
+        self.error_msg = ""
+        self.cancel_event = threading.Event()
+        self.result_data: dict = {}
+        self._thread: threading.Thread | None = None
+
+    def to_dict(self):
+        d: dict = {
+            "status": self.status,
+            "progress_pct": round(self.progress_pct, 1),
+            "current_file": self.current_file,
+            "total_files": self.total_files,
+            "downloaded_files": self.downloaded_files,
+            "error_msg": self.error_msg,
+        }
+        if self.status == "done":
+            d.update(self.result_data)
+        return d
+
+
+install_tasks: dict[str, InstallTask] = {}
+tasks_lock = threading.Lock()
+
+
+def _run_install(task_id: str, hf_name: str, alias: str):
+    task = install_tasks.get(task_id)
+    if not task:
+        return
+
+    try:
+        task.status = "discovering"
+        discovered = discover_pipeline(hf_name)
+        if discovered is None:
+            task.status = "error"
+            task.error_msg = (
+                f"Model '{hf_name}' is not a valid or supported pipeline. "
+                f"Ensure it exists on HuggingFace and contains model weights."
+            )
+            return
+
+        pipeline_class_name = discovered["pipeline_class"]
+        tok = settings.hf_token or None
+
+        task.status = "downloading"
+
+        api = HfApi()
+        files = api.list_repo_files(hf_name)
+        weight_exts = (".safetensors", ".bin", ".pt", ".pth")
+        weight_files = [f for f in files if f.endswith(weight_exts)]
+
+        if not weight_files:
+            task.status = "error"
+            task.error_msg = f"Model '{hf_name}' has no weight files"
+            return
+
+        def _get_file_size(filename: str) -> int:
+            try:
+                meta = api.model_info(hf_name, files_metadata=True)
+                for sibling in meta.siblings or []:
+                    if sibling.rfilename == filename:
+                        return sibling.size or 0
+            except Exception:
+                pass
+            return 0
+
+        total_size = sum(_get_file_size(f) for f in weight_files)
+        downloaded_size = 0
+        task.total_files = len(weight_files)
+
+        for i, fname in enumerate(weight_files):
+            if task.cancel_event.is_set():
+                task.status = "cancelled"
+                return
+
+            task.current_file = os.path.basename(fname)
+            task.downloaded_files = i
+
+            try:
+                hf_hub_download(
+                    repo_id=hf_name,
+                    filename=fname,
+                    token=tok,
+                    resume_download=True,
+                )
+            except Exception as e:
+                if task.cancel_event.is_set():
+                    task.status = "cancelled"
+                    return
+                task.status = "error"
+                task.error_msg = f"Failed to download {fname}: {e}"
+                return
+
+            downloaded_size += _get_file_size(fname)
+            task.progress_pct = (downloaded_size / total_size * 100) if total_size else \
+                ((i + 1) / len(weight_files) * 100)
+            task.downloaded_files = i + 1
+
+        if task.cancel_event.is_set():
+            task.status = "cancelled"
+            return
+
+        key = generate_key(hf_name)
+        final_alias = alias or hf_name.split("/")[-1]
+        model = InstalledModel(
+            key=key,
+            hf_name=hf_name,
+            alias=final_alias,
+            pipeline_class=pipeline_class_name,
+            dtype=discovered.get("dtype", "float16"),
+            schedulers=discovered["schedulers"],
+            default_scheduler=discovered["default_scheduler"],
+            needs_token=False,
+            defaults=discovered["defaults"],
+            installed_at=__import__("datetime").datetime.now().isoformat(),
+        )
+        add_installed(model)
+
+        task.status = "done"
+        task.result_data = {
+            "model_key": key,
+            "alias": final_alias,
+            "pipeline_class": pipeline_class_name,
+            "schedulers": model.schedulers,
+        }
+        task.progress_pct = 100.0
+
+    except Exception as e:
+        logger.error(f"Install task {task_id} failed: {e}")
+        task.status = "error"
+        task.error_msg = str(e)
 
 
 BUILTIN_CATALOG: list[dict] = [
@@ -136,51 +278,46 @@ async def install_model(req: InstallRequest):
     if existing and is_model_cached(hf_name):
         return {"status": "already_installed", "model_key": existing.key}
 
-    discovered = discover_pipeline(hf_name)
-    if discovered is None:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Model '{hf_name}' is not a valid or supported pipeline. "
-                   f"Ensure it exists on HuggingFace and contains model weights.",
-        )
+    with tasks_lock:
+        for tid, t in install_tasks.items():
+            if t.hf_name == hf_name and t.status in ("pending", "discovering", "downloading"):
+                return {"status": "already_in_progress", "task_id": tid}
 
-    pipeline_class_name = discovered["pipeline_class"]
-    tok = settings.hf_token or None
+    task_id = md5(hf_name.encode()).hexdigest()[:12]
+    task = InstallTask(hf_name)
+    with tasks_lock:
+        install_tasks[task_id] = task
 
-    from huggingface_hub import snapshot_download
-
-    logger.info(f"Downloading {hf_name} (pipeline: {pipeline_class_name})...")
-    try:
-        snapshot_download(repo_id=hf_name, token=tok, ignore_patterns=["*.gitattributes"])
-    except Exception as e:
-        logger.error(f"Failed to download {hf_name}: {e}")
-        raise HTTPException(
-            status_code=422,
-            detail=f"Failed to download model '{hf_name}': {e}",
-        )
-    logger.info(f"Downloaded {hf_name}")
-
-    alias = req.alias or hf_name.split("/")[-1]
-    model = InstalledModel(
-        key=key,
-        hf_name=hf_name,
-        alias=alias,
-        pipeline_class=pipeline_class_name,
-        dtype=discovered.get("dtype", "float16"),
-        schedulers=discovered["schedulers"],
-        default_scheduler=discovered["default_scheduler"],
-        needs_token=False,
-        defaults=discovered["defaults"],
-        installed_at=__import__("datetime").datetime.now().isoformat(),
+    thread = threading.Thread(
+        target=_run_install,
+        args=(task_id, hf_name, req.alias),
+        daemon=True,
     )
-    add_installed(model)
-    return {
-        "status": "installed",
-        "model_key": key,
-        "alias": alias,
-        "pipeline_class": pipeline_class_name,
-        "schedulers": model.schedulers,
-    }
+    task._thread = thread
+    thread.start()
+
+    return {"status": "started", "task_id": task_id}
+
+
+@router.get("/install/{task_id}/progress")
+async def install_progress(task_id: str):
+    with tasks_lock:
+        task = install_tasks.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task.to_dict()
+
+
+@router.delete("/install/{task_id}")
+async def cancel_install(task_id: str):
+    with tasks_lock:
+        task = install_tasks.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if task.status in ("done", "error", "cancelled"):
+        return {"status": task.status}
+    task.cancel_event.set()
+    return {"status": "cancelling"}
 
 
 class UpdateAliasRequest(BaseModel):
