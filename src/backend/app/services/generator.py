@@ -147,8 +147,14 @@ class VideoGenerator:
         elif cls_name == "CogVideoXPipeline":
             from diffusers import CogVideoXPipeline
             pipe = CogVideoXPipeline.from_pretrained(model_name, torch_dtype=dtype, token=tok)
+        elif cls_name == "CogVideoXImageToVideoPipeline":
+            from diffusers import CogVideoXVideoToVideoPipeline
+            pipe = CogVideoXVideoToVideoPipeline.from_pretrained(model_name, torch_dtype=dtype, token=tok)
+        elif cls_name == "StableDiffusionXLPipeline":
+            from diffusers import StableDiffusionXLPipeline
+            pipe = StableDiffusionXLPipeline.from_pretrained(model_name, torch_dtype=dtype, token=tok)
         else:
-            raise ValueError(f"Unknown pipeline class: {cls_name}")
+            raise ValueError(f"Unsupported pipeline '{cls_name}' for model '{model_name}'. This model cannot be used for video generation.")
         pipe.enable_model_cpu_offload()
         if hasattr(pipe.vae, "enable_tiling"):
             pipe.vae.enable_tiling()
@@ -291,7 +297,10 @@ class VideoGenerator:
         max_seq = d.get("max_seq", 226)
 
         cls_name = model_cfg["pipeline_class"]
-        is_v2v = video_frames and cls_name in ("CogVideoXPipeline",)
+        is_v2v = video_frames and cls_name in ("CogVideoXPipeline", "CogVideoXImageToVideoPipeline")
+
+        if video_frames and not is_v2v:
+            raise ValueError(f"Model '{model}' ({cls_name}) does not support video input. Use a CogVideoX or I2V model for video-to-video.")
 
         gen = torch.Generator(device=self.device)
         if seed > 0:
