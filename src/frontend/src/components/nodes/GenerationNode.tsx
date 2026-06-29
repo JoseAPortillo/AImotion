@@ -5,12 +5,13 @@ import { NODE_DEFINITIONS, PORT_COLORS, getHandleColor, type NodeType, type Gene
 import { useGraphStore } from '../../store/graph'
 import { startGeneration, pollTask, type TaskStatus } from '../../api/backend'
 
-const ALL_INPUT_HANDLES = ['video_in', 'audio_in', 'prompt_pos', 'prompt_neg', 'params', 'strength']
+const INPUT_FALLBACK = ['prompt_pos', 'prompt_neg', 'params']
 
 const INPUTS_BY_PIPELINE: Record<string, string[]> = {
   LTXPipeline: ['prompt_pos', 'prompt_neg', 'params'],
   CogVideoXPipeline: ['prompt_pos', 'prompt_neg', 'params'],
   CogVideoXImageToVideoPipeline: ['video_in', 'prompt_pos', 'prompt_neg', 'params', 'strength'],
+  StableDiffusionXLPipeline: ['prompt_pos', 'prompt_neg', 'params'],
 }
 
 const schedLabels: Record<string, string> = {
@@ -73,8 +74,8 @@ function GenerationNode(props: NodeProps) {
 
   const pipelineClass = modelConfig?.pipeline_class
   const activeInputs = pipelineClass
-    ? (INPUTS_BY_PIPELINE[pipelineClass] || ALL_INPUT_HANDLES)
-    : ALL_INPUT_HANDLES
+    ? (INPUTS_BY_PIPELINE[pipelineClass] || INPUT_FALLBACK)
+    : INPUT_FALLBACK
 
   const schedLabel = data.scheduler
     ? schedLabels[data.scheduler] || data.scheduler
