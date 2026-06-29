@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useGraphStore } from '../store/graph'
 import {
   NODE_DEFINITIONS,
@@ -13,6 +13,23 @@ import {
   type GenerationData,
   type OutputData,
 } from '../types/nodes'
+
+const schedLabels: Record<string, string> = {
+  cogvideox_ddim: 'DDIM',
+  cogvideox_dpm: 'DPM',
+  flow_match_euler: 'Flow Euler',
+  flow_match_heun: 'Flow Heun',
+  ltx_euler_ancestral_rf: 'Euler Anc RF',
+  scheduler: 'Auto-detect',
+}
+
+interface ModelEntry {
+  key: string
+  name: string
+  schedulers: string[]
+  default_scheduler: string
+  type: string
+}
 
 const panelStyle: React.CSSProperties = {
   width: 260,
@@ -63,6 +80,21 @@ export default function NodeInspector() {
   const selectNode = useGraphStore((s) => s.selectNode)
 
   const [negOpen, setNegOpen] = useState(false)
+  const [models, setModels] = useState<ModelEntry[]>([])
+  const [modelsLoaded, setModelsLoaded] = useState(false)
+
+  useEffect(() => {
+    fetch('/models')
+      .then(r => r.json())
+      .then(data => {
+        const filtered = (data.models || []).filter(
+          (m: ModelEntry) => m.type !== 'future' && m.type !== 'api'
+        )
+        setModels(filtered)
+        setModelsLoaded(true)
+      })
+      .catch(() => setModelsLoaded(true))
+  }, [])
 
   const node = nodes.find((n) => n.id === selectedNodeId) ?? null
 
@@ -159,15 +191,31 @@ export default function NodeInspector() {
 
       case 'generation': {
         const data = n.data as GenerationData
+        const modelCfg = models.find(m => m.key === data.model)
+        const scheds = modelCfg?.schedulers || []
+        const defSched = modelCfg?.default_scheduler || ''
+
+        const handleModel = (e: React.ChangeEvent<HTMLSelectElement>) => {
+          const key = e.target.value
+          const cfg = models.find(m => m.key === key)
+          handleChange('model', key)
+          handleChange('scheduler', cfg?.default_scheduler || '')
+        }
+
         return (
           <>
             <FieldWrap>
               <Label>
                 Model
-                <select style={inputStyle} value={data.model} onChange={(e) => handleChange('model', e.target.value)}>
-                  <option value="cogvideox-2b">cogvideox-2b</option>
-                  <option value="cogvideox-5b">cogvideox-5b</option>
-                  <option value="ltx-video">ltx-video</option>
+                <select style={inputStyle} value={data.model} onChange={handleModel}>
+                  {!modelsLoaded && <option value="">Loading...</option>}
+                  {modelsLoaded && models.length === 0 && <option value="">No models</option>}
+                  {models.map(m => (
+                    <option key={m.key} value={m.key}>{m.name}</option>
+                  ))}
+                  {modelsLoaded && data.model && !models.find(m => m.key === data.model) && (
+                    <option value={data.model} disabled>{data.model} (unavailable)</option>
+                  )}
                 </select>
               </Label>
             </FieldWrap>
@@ -175,12 +223,10 @@ export default function NodeInspector() {
               <Label>
                 Scheduler
                 <select style={inputStyle} value={data.scheduler} onChange={(e) => handleChange('scheduler', e.target.value)}>
-                  <option value="">Default</option>
-                  <option value="cogvideox_ddim">DDIM (CogVideoX)</option>
-                  <option value="cogvideox_dpm">DPM (CogVideoX)</option>
-                  <option value="flow_match_euler">Flow Euler (LTX)</option>
-                  <option value="flow_match_heun">Flow Heun (LTX)</option>
-                  <option value="ltx_euler_ancestral_rf">Euler Ancestral RF (LTX)</option>
+                  <option value="">Default{defSched ? ` (${schedLabels[defSched] || defSched})` : ''}</option>
+                  {scheds.map(s => (
+                    <option key={s} value={s}>{schedLabels[s] || s}</option>
+                  ))}
                 </select>
               </Label>
             </FieldWrap>

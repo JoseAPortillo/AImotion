@@ -1,4 +1,4 @@
-import { memo, useCallback, useState } from 'react'
+import { memo, useCallback, useState, useEffect } from 'react'
 import type { NodeProps } from '@xyflow/react'
 import { Handle, Position, NodeResizer } from '@xyflow/react'
 import { NODE_DEFINITIONS, PORT_COLORS, getHandleColor, type NodeType, type GenerationData, type PromptData, type SamplingParamsData, type DenoisingStrengthData } from '../../types/nodes'
@@ -13,6 +13,15 @@ const schedLabels: Record<string, string> = {
   flow_match_euler: 'Flow Euler',
   flow_match_heun: 'Flow Heun',
   ltx_euler_ancestral_rf: 'Euler Anc RF',
+  scheduler: 'Auto-detect',
+}
+
+interface ModelEntry {
+  key: string
+  name: string
+  schedulers: string[]
+  default_scheduler: string
+  type: string
 }
 
 const selectStyle: React.CSSProperties = {
@@ -35,7 +44,40 @@ function GenerationNode(props: NodeProps) {
   const edges = useGraphStore((s) => s.edges)
   const setOutputUrl = useGraphStore((s) => s.setOutputUrl)
   const [genRunning, setGenRunning] = useState(false)
-  const schedLabel = data.scheduler ? schedLabels[data.scheduler] || data.scheduler : ''
+  const [models, setModels] = useState<ModelEntry[]>([])
+  const [modelsLoaded, setModelsLoaded] = useState(false)
+
+  useEffect(() => {
+    fetch('/models')
+      .then(r => r.json())
+      .then(data => {
+        const filtered = (data.models || []).filter(
+          (m: ModelEntry) => m.type !== 'future' && m.type !== 'api'
+        )
+        setModels(filtered)
+        setModelsLoaded(true)
+      })
+      .catch(() => setModelsLoaded(true))
+  }, [])
+
+  const modelConfig = models.find(m => m.key === data.model)
+  const availableScheds = modelConfig?.schedulers || []
+  const defaultSched = modelConfig?.default_scheduler || ''
+
+  const schedLabel = data.scheduler
+    ? schedLabels[data.scheduler] || data.scheduler
+    : defaultSched
+      ? `Default (${schedLabels[defaultSched] || defaultSched})`
+      : 'Default'
+
+  const handleModelChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    const key = e.target.value
+    const cfg = models.find(m => m.key === key)
+    updateNodeData(props.id, {
+      model: key,
+      scheduler: cfg?.default_scheduler || '',
+    } as Partial<GenerationData>)
+  }, [props.id, models, updateNodeData])
 
   const handleGenWorkflow = useCallback(async () => {
     const genEdges = edges.filter((e) => e.target === props.id)
@@ -104,24 +146,29 @@ function GenerationNode(props: NodeProps) {
       <div style={{ padding: '6px 10px', fontSize: 12, color: '#ccc' }}>
         <select
           value={data.model}
-          onChange={(e) => updateNodeData(props.id, { model: e.target.value } as Partial<GenerationData>)}
+          onChange={handleModelChange}
           style={selectStyle}
         >
-          <option value="cogvideox-2b">cogvideox-2b</option>
-          <option value="cogvideox-5b">cogvideox-5b</option>
-          <option value="ltx-video">ltx-video</option>
+          {!modelsLoaded && <option value="">Loading...</option>}
+          {modelsLoaded && models.length === 0 && <option value="">No models</option>}
+          {models.map(m => (
+            <option key={m.key} value={m.key}>
+              {m.name}
+            </option>
+          ))}
+          {modelsLoaded && models.length > 0 && data.model && !models.find(m => m.key === data.model) && (
+            <option value={data.model} disabled>{data.model} (unavailable)</option>
+          )}
         </select>
         <select
           value={data.scheduler}
           onChange={(e) => updateNodeData(props.id, { scheduler: e.target.value } as Partial<GenerationData>)}
           style={selectStyle}
         >
-          <option value="">Default scheduler</option>
-          <option value="cogvideox_ddim">DDIM (CogVideoX)</option>
-          <option value="cogvideox_dpm">DPM (CogVideoX)</option>
-          <option value="flow_match_euler">Flow Euler (LTX)</option>
-          <option value="flow_match_heun">Flow Heun (LTX)</option>
-          <option value="ltx_euler_ancestral_rf">Euler Anc RF (LTX)</option>
+          <option value="">Default{defaultSched ? ` (${schedLabels[defaultSched] || defaultSched})` : ''}</option>
+          {availableScheds.map(s => (
+            <option key={s} value={s}>{schedLabels[s] || s}</option>
+          ))}
         </select>
         {schedLabel && <div style={{ marginTop: 2, fontSize: 10, color: '#888' }}>Current: {schedLabel}</div>}
         <div style={{ marginTop: 8 }}>
