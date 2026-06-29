@@ -106,6 +106,8 @@ class VideoGenerator:
     def __init__(self):
         self._pipe = None
         self._current_model_key: str | None = None
+        self._v2v_pipe = None
+        self._current_v2v_model_key: str | None = None
         self.device = settings.device
 
     def _load_pipe(self, model_key: str):
@@ -142,6 +144,28 @@ class VideoGenerator:
         self.unload()
         self._pipe = self._load_pipe(model_key)
         self._current_model_key = model_key
+
+    def _ensure_v2v_pipe(self, model_key: str):
+        if self._v2v_pipe is not None and self._current_v2v_model_key == model_key:
+            return self._v2v_pipe
+        import torch
+        cfg = SUPPORTED_MODELS.get(model_key)
+        if cfg is None:
+            raise ValueError(f"Unsupported model: {model_key}")
+        hf_name = cfg["model_name"]
+        dtype_name = cfg.get("dtype", settings.dtype)
+        dtype = torch.bfloat16 if dtype_name == "bfloat16" else torch.float16
+        tok = settings.hf_token if cfg.get("needs_token") else settings.hf_token
+        from diffusers import CogVideoXVideoToVideoPipeline
+        self._v2v_pipe = CogVideoXVideoToVideoPipeline.from_pretrained(
+            hf_name, torch_dtype=dtype, token=tok,
+        )
+        self._v2v_pipe.enable_model_cpu_offload()
+        if hasattr(self._v2v_pipe.vae, "enable_tiling"):
+            self._v2v_pipe.vae.enable_tiling()
+        self._current_v2v_model_key = model_key
+        logger.info(f"V2V pipeline loaded: {hf_name}")
+        return self._v2v_pipe
 
     def _apply_scheduler(self, name: str | None = None, pipe=None, cfg=None):
         pipe = pipe or self._pipe
@@ -199,14 +223,15 @@ class VideoGenerator:
         return callback
 
     def unload(self):
-        if self._pipe is not None:
-            import torch
-            logger.info("Unloading pipeline and clearing VRAM...")
-            self._pipe = None
-            self._current_model_key = None
-            torch.cuda.empty_cache()
-            torch.cuda.synchronize()
-            self._log_vram()
+        import torch
+        self._pipe = None
+        self._current_model_key = None
+        self._v2v_pipe = None
+        self._current_v2v_model_key = None
+        torch.cuda.empty_cache()
+        torch.cuda.synchronize()
+        self._log_vram()
+        logger.info("Pipelines unloaded and VRAM cleared")
 
     async def generate(
         self,
@@ -257,15 +282,7 @@ class VideoGenerator:
             )
 
             if is_v2v:
-                hf_name = model_cfg["model_name"]
-                dtype_name = model_cfg.get("dtype", settings.dtype)
-                dtype = torch.bfloat16 if dtype_name == "bfloat16" else torch.float16
-                tok = settings.hf_token if model_cfg.get("needs_token") else settings.hf_token
-                from diffusers import CogVideoXVideoToVideoPipeline
-                pipe = CogVideoXVideoToVideoPipeline.from_pretrained(
-                    hf_name, torch_dtype=dtype, token=tok,
-                )
-                pipe.enable_model_cpu_offload()
+                pipe = self._ensure_v2v_pipe(model)
                 self._apply_scheduler(scheduler, pipe=pipe, cfg=model_cfg)
                 pipe_kwargs["video"] = video_frames
                 pipe_kwargs["strength"] = strength
