@@ -385,43 +385,57 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
               {installed.length > 0 && (
                 <>
                   <div style={sectionTitle}>Installed Models</div>
-                  <select
-                    size={Math.min(installed.length, 5)}
-                    value={selectedInstalledKey ?? ''}
-                    onChange={e => {
-                      setSelectedInstalledKey(e.target.value || null)
-                      setEditingAlias(null)
-                    }}
-                    style={{
-                      width: '100%',
-                      background: '#0f0f0f',
-                      border: '1px solid #333',
-                      borderRadius: 4,
-                      color: '#ccc',
-                      fontSize: 11,
-                      padding: 2,
-                      outline: 'none',
-                      marginBottom: 6,
-                      minHeight: 60,
-                    }}
-                  >
-                    {installed.map(m => (
-                      <option
-                        key={m.key}
-                        value={m.key}
-                        style={{
-                          padding: '3px 6px',
-                          background: m.loaded ? '#0a2e1a' : 'transparent',
-                          color: m.loaded ? '#4ade80' : '#ccc',
-                        }}
-                      >
-                        {m.alias || m.name}
-                        {m.loaded ? ' ●' : ''}
-                      </option>
-                    ))}
-                  </select>
+                  <div style={{
+                    maxHeight: 170,
+                    overflowY: 'auto',
+                    border: '1px solid #333',
+                    borderRadius: 4,
+                    marginBottom: 6,
+                  }}>
+                    {installed.map(m => {
+                      const isSel = selectedInstalledKey === m.key
+                      return (
+                        <div
+                          key={m.key}
+                          onClick={() => {
+                            setSelectedInstalledKey(isSel ? null : m.key)
+                            setEditingAlias(null)
+                          }}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            padding: '5px 8px',
+                            fontSize: 12,
+                            cursor: 'pointer',
+                            background: m.loaded ? '#0a2e1a' : (isSel ? '#1a1a2e' : 'transparent'),
+                            color: m.loaded ? '#4ade80' : (isSel ? '#8888ff' : '#ccc'),
+                            borderBottom: '1px solid #222',
+                          }}
+                        >
+                          <span style={{ fontWeight: 600, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {m.alias || m.name}
+                          </span>
+                          <span style={{ fontSize: 10, color: '#666', whiteSpace: 'nowrap' }}>
+                            {m.schedulers.length} sched{m.schedulers.length !== 1 ? 's' : ''}
+                          </span>
+                          {m.loaded && <span style={{ fontSize: 10, color: '#4ade80' }}>●</span>}
+                          <button
+                            onClick={e => { e.stopPropagation(); handleUninstall(m.key) }}
+                            style={{
+                              padding: '2px 6px', borderRadius: 4, border: '1px solid #5a1a1a',
+                              background: 'transparent', color: '#f87171', fontSize: 10,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Uninstall
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
 
-                  {/* Selected model details + actions */}
+                  {/* Selected model detail */}
                   {(() => {
                     const sel = selectedInstalledKey
                       ? installed.find(m => m.key === selectedInstalledKey)
@@ -462,9 +476,9 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
                             </span>
                             <span onClick={() => startAliasEdit(sel)}
                               style={{ cursor: 'pointer', color: '#666', fontSize: 10 }}>
-                              ✎ rename
+                              rename
                             </span>
-                            {sel.loaded && <span style={{ fontSize: 10, color: '#4ade80' }}>● Loaded</span>}
+                            {sel.loaded && <span style={{ fontSize: 10, color: '#4ade80' }}>Loaded</span>}
                           </div>
                         )}
                         <div style={{ fontSize: 10, lineHeight: 1.6 }}>
@@ -473,19 +487,9 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
                           )}
                           {sel.pipeline_class && (
                             <span style={{ display: 'block', opacity: 0.7 }}>
-                              {sel.pipeline_class.replace('Pipeline', '')}
+                              {sel.pipeline_class}
                             </span>
                           )}
-                        </div>
-                        <div style={{ marginTop: 4, display: 'flex', gap: 6 }}>
-                          <button onClick={() => handleUninstall(sel.key)}
-                            style={{
-                              padding: '3px 10px', borderRadius: 4, border: '1px solid #5a1a1a',
-                              background: 'transparent', color: '#f87171', fontSize: 10,
-                              cursor: 'pointer',
-                            }}>
-                            Uninstall
-                          </button>
                         </div>
                       </div>
                     )
