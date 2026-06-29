@@ -309,8 +309,12 @@ class VideoGenerator:
                 self._ensure_pipe(model)
                 self._apply_scheduler(scheduler)
                 pipe = self._pipe
-                pipe_kwargs["width"] = w
-                pipe_kwargs["height"] = h
+                # align to multiples of 32 for pipelines that require it
+                wa, ha = (w // 32) * 32, (h // 32) * 32
+                if wa != w or ha != h:
+                    logger.info(f"Adjusting resolution {w}x{h} → {wa}x{ha} (must be divisible by 32)")
+                pipe_kwargs["width"] = wa
+                pipe_kwargs["height"] = ha
                 pipe_kwargs["num_frames"] = nf
 
             cb = self._build_callback(s, progress_callback)
