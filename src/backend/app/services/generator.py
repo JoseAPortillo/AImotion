@@ -216,7 +216,7 @@ class VideoGenerator:
             if "sigmas" in kwargs and isinstance(kwargs["sigmas"], np.ndarray):
                 kwargs["sigmas"] = torch.from_numpy(kwargs["sigmas"])
             return orig_st(*args, **kwargs)
-        pipe.scheduler.set_timesteps = _patched_st.__get__(pipe.scheduler, type(pipe.scheduler))
+        pipe.scheduler.set_timesteps = _patched_st
 
     def _log_vram(self):
         import torch
