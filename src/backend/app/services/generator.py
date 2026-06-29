@@ -349,16 +349,26 @@ class VideoGenerator:
             if progress_callback:
                 await progress_callback(s, s)
 
-            logger.info("Pipeline completed, saving video...")
+            logger.info("Pipeline completed, saving output...")
             self._log_vram()
 
             output_dir = settings.results_dir
             os.makedirs(output_dir, exist_ok=True)
-            out_path = os.path.join(output_dir, f"gen_{int(time.time())}_{seed}.mp4")
-            from diffusers.utils import export_to_video
-            export_to_video(output.frames[0], out_path, fps=fps)
-            logger.info(f"Saved to {out_path}")
-            return f"/results/{os.path.basename(out_path)}"
+            ts = int(time.time())
+
+            if hasattr(output, "frames") and output.frames:
+                from diffusers.utils import export_to_video
+                out_path = os.path.join(output_dir, f"gen_{ts}_{seed}.mp4")
+                export_to_video(output.frames[0], out_path, fps=fps)
+                logger.info(f"Saved video to {out_path}")
+                return f"/results/{os.path.basename(out_path)}"
+            elif hasattr(output, "images") and output.images:
+                out_path = os.path.join(output_dir, f"gen_{ts}_{seed}.png")
+                output.images[0].save(out_path)
+                logger.info(f"Saved image to {out_path}")
+                return f"/results/{os.path.basename(out_path)}"
+            else:
+                raise RuntimeError(f"Unknown output type from {cls_name}: no frames or images attribute")
 
         except torch.cuda.OutOfMemoryError:
             raise RuntimeError("CUDA out of memory. Try reducing resolution or enabling CPU offload.")
