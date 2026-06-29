@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from app.config import settings
 from app.models.generate import TaskInfo, TaskStatus
 from app.services.task_manager import TaskManager
-from app.services.generator import VideoGenerator, SUPPORTED_MODELS, extract_frames, SCHEDULER_NAMES
+from app.services.generator import VideoGenerator, SUPPORTED_MODELS, extract_frames, get_model_config
 
 logger = logging.getLogger(__name__)
 
@@ -66,14 +66,14 @@ async def create_generation(
     scheduler: str = Form(""),
     model: str = Form(settings.model_type),
 ):
-    if model not in SUPPORTED_MODELS:
+    model_cfg = get_model_config(model)
+    if model_cfg is None:
         valid = ", ".join(SUPPORTED_MODELS)
         raise HTTPException(
             status_code=422,
             detail=f"Unknown model '{model}'. Valid: {valid}",
         )
     _validate_dimensions(width, height)
-    model_cfg = SUPPORTED_MODELS[model]
     model_schedulers = model_cfg.get("schedulers", {})
     if scheduler and scheduler not in model_schedulers:
         valid = ", ".join(model_schedulers)
@@ -128,7 +128,7 @@ async def _run_generation(task_id: str, params: dict):
             await task_manager.set_progress(task_id, current, total)
 
         model = params.get("model", settings.model_type)
-        model_cfg = SUPPORTED_MODELS.get(model, {})
+        model_cfg = get_model_config(model) or SUPPORTED_MODELS.get(settings.model_type, {})
         frames = model_cfg.get("defaults", {}).get("num_frames", 49)
 
         video_frames = None

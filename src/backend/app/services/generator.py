@@ -5,6 +5,7 @@ from typing import Optional, Callable, Awaitable
 from PIL import Image
 
 from app.config import settings
+from app.services.model_registry import find_installed, is_model_cached
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +88,24 @@ for _cfg in SUPPORTED_MODELS.values():
         SCHEDULER_NAMES[key] = cls_name
 
 
+def get_model_config(key: str) -> dict | None:
+    cfg = SUPPORTED_MODELS.get(key)
+    if cfg:
+        return cfg
+    inst = find_installed(key)
+    if inst and is_model_cached(inst.hf_name):
+        return {
+            "model_name": inst.hf_name,
+            "pipeline_class": inst.pipeline_class,
+            "dtype": inst.dtype,
+            "defaults": inst.defaults,
+            "needs_token": inst.needs_token,
+            "schedulers": inst.schedulers,
+            "default_scheduler": inst.default_scheduler,
+        }
+    return None
+
+
 def extract_frames(path: str, max_frames: int = 49) -> list[Image.Image]:
     import imageio
     reader = imageio.get_reader(path)
@@ -112,7 +131,7 @@ class VideoGenerator:
 
     def _load_pipe(self, model_key: str):
         import torch
-        cfg = SUPPORTED_MODELS.get(model_key)
+        cfg = get_model_config(model_key)
         if cfg is None:
             raise ValueError(f"Unsupported model: {model_key}")
 
@@ -149,7 +168,7 @@ class VideoGenerator:
         if self._v2v_pipe is not None and self._current_v2v_model_key == model_key:
             return self._v2v_pipe
         import torch
-        cfg = SUPPORTED_MODELS.get(model_key)
+        cfg = get_model_config(model_key)
         if cfg is None:
             raise ValueError(f"Unsupported model: {model_key}")
         hf_name = cfg["model_name"]
@@ -169,7 +188,7 @@ class VideoGenerator:
 
     def _apply_scheduler(self, name: str | None = None, pipe=None, cfg=None):
         pipe = pipe or self._pipe
-        cfg = cfg or SUPPORTED_MODELS.get(self._current_model_key or "")
+        cfg = cfg or get_model_config(self._current_model_key or "")
         if cfg is None:
             return
         schedulers = cfg.get("schedulers", {})
@@ -250,7 +269,7 @@ class VideoGenerator:
     ) -> str:
         import torch
 
-        model_cfg = SUPPORTED_MODELS.get(model)
+        model_cfg = get_model_config(model)
         if model_cfg is None:
             raise ValueError(f"Unsupported model: {model}")
 
