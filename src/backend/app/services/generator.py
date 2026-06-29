@@ -209,9 +209,9 @@ class VideoGenerator:
         pipe.scheduler = cls.from_config(pipe.scheduler.config)
         logger.info(f"Scheduler set to {cls_name}")
 
-        import numpy as np
-        import torch
+        import functools, numpy as np, torch
         orig_st = pipe.scheduler.set_timesteps
+        @functools.wraps(orig_st)
         def _patched_st(*args, **kwargs):
             if "sigmas" in kwargs and isinstance(kwargs["sigmas"], np.ndarray):
                 kwargs["sigmas"] = torch.from_numpy(kwargs["sigmas"])
