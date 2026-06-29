@@ -49,16 +49,6 @@ const popover: React.CSSProperties = {
   padding: 12,
 }
 
-const sectionTitle: React.CSSProperties = {
-  fontSize: 11,
-  fontWeight: 700,
-  color: '#888',
-  textTransform: 'uppercase',
-  letterSpacing: 1,
-  marginBottom: 6,
-  marginTop: 12,
-}
-
 type Status = 'idle' | 'checking' | 'installing' | 'cancelling' | 'error' | 'done'
 
 export default function ModelManager({ backendOk }: { backendOk: boolean }) {
@@ -74,6 +64,7 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
   const [taskId, setTaskId] = useState<string | null>(null)
   const [installingHfName, setInstallingHfName] = useState<string | null>(null)
   const [progress, setProgress] = useState<InstallProgress | null>(null)
+  const [modelTab, setModelTab] = useState<'installed' | 'builtin' | 'other'>('installed')
   const ref = useRef<HTMLDivElement>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const mountedRef = useRef(true)
@@ -413,158 +404,207 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
                 </div>
               )}
 
-              {/* Installed models listbox */}
-              {installed.length > 0 && (
-                <>
-                  <div style={sectionTitle}>Installed Models</div>
-                  <div style={{
-                    maxHeight: 170,
-                    overflowY: 'auto',
-                    border: '1px solid #333',
-                    borderRadius: 4,
-                    marginBottom: 6,
-                  }}>
-                    {installed.map(m => {
-                      const isSel = selectedInstalledKey === m.key
-                      return (
-                        <div
-                          key={m.key}
-                          onClick={() => {
-                            setSelectedInstalledKey(isSel ? null : m.key)
-                            setEditingAlias(null)
-                          }}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            padding: '5px 8px',
-                            fontSize: 12,
-                            cursor: 'pointer',
-                            background: m.loaded ? '#0a2e1a' : (isSel ? '#1a1a2e' : 'transparent'),
-                            color: m.loaded ? '#4ade80' : (isSel ? '#8888ff' : '#ccc'),
-                            borderBottom: '1px solid #222',
-                          }}
-                        >
-                          <span style={{ fontWeight: 600, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {m.alias || m.name}
-                          </span>
-                          <span style={{ fontSize: 10, color: '#666', whiteSpace: 'nowrap' }}>
-                            {m.schedulers.length} sched{m.schedulers.length !== 1 ? 's' : ''}
-                          </span>
-                          {m.loaded && <span style={{ fontSize: 10, color: '#4ade80' }}>●</span>}
-                          <button
-                            onClick={e => { e.stopPropagation(); handleUninstall(m.key) }}
+              {/* Tab bar */}
+              <div style={{
+                display: 'flex', gap: 2, marginBottom: 6,
+                borderBottom: '1px solid #2a2a2a', paddingBottom: 2,
+              }}>
+                {(['installed', 'builtin', 'other'] as const).map(t => {
+                  const count = t === 'installed' ? installed.length
+                    : t === 'builtin' ? builtin.filter(m => m.cached).length
+                    : other.length
+                  return (
+                    <div
+                      key={t}
+                      onClick={() => setModelTab(t)}
+                      style={{
+                        padding: '4px 12px',
+                        borderRadius: '4px 4px 0 0',
+                        fontSize: 11,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        background: modelTab === t ? '#2563eb' : 'transparent',
+                        color: modelTab === t ? '#fff' : '#888',
+                        textTransform: 'capitalize',
+                      }}
+                    >
+                      {t === 'builtin' ? 'Built-in' : t === 'other' ? 'API' : 'Installed'}
+                      {count > 0 && (
+                        <span style={{ marginLeft: 4, fontSize: 10, opacity: 0.7 }}>({count})</span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Tab content */}
+              {modelTab === 'installed' && (
+                installed.length === 0 ? (
+                  <div style={{ fontSize: 11, color: '#666', padding: '8px', textAlign: 'center' }}>
+                    No installed models
+                  </div>
+                ) : (
+                  <>
+                    <div style={{
+                      maxHeight: 170,
+                      overflowY: 'auto',
+                      border: '1px solid #333',
+                      borderRadius: 4,
+                      marginBottom: 6,
+                    }}>
+                      {installed.map(m => {
+                        const isSel = selectedInstalledKey === m.key
+                        return (
+                          <div
+                            key={m.key}
+                            onClick={() => {
+                              setSelectedInstalledKey(isSel ? null : m.key)
+                              setEditingAlias(null)
+                            }}
                             style={{
-                              padding: '2px 6px', borderRadius: 4, border: '1px solid #5a1a1a',
-                              background: 'transparent', color: '#f87171', fontSize: 10,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              padding: '5px 8px',
+                              fontSize: 12,
                               cursor: 'pointer',
+                              background: m.loaded ? '#0a2e1a' : (isSel ? '#1a1a2e' : 'transparent'),
+                              color: m.loaded ? '#4ade80' : (isSel ? '#8888ff' : '#ccc'),
+                              borderBottom: '1px solid #222',
                             }}
                           >
-                            Uninstall
-                          </button>
-                        </div>
-                      )
-                    })}
-                  </div>
-
-                  {/* Selected model detail */}
-                  {(() => {
-                    const sel = selectedInstalledKey
-                      ? installed.find(m => m.key === selectedInstalledKey)
-                      : null
-                    if (!sel) return null
-                    return (
-                      <div style={{
-                        fontSize: 11, color: '#999',
-                        padding: '6px 8px', borderRadius: 4,
-                        background: '#0f0f0f', marginBottom: 6,
-                      }}>
-                        {editingAlias === sel.key ? (
-                          <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
-                            <input
-                              autoFocus
-                              value={aliasInput}
-                              onChange={e => setAliasInput(e.target.value)}
-                              onKeyDown={e => {
-                                if (e.key === 'Enter') handleSaveAlias(sel.key)
-                                if (e.key === 'Escape') setEditingAlias(null)
-                              }}
-                              onBlur={() => handleSaveAlias(sel.key)}
+                            <span style={{ fontWeight: 600, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {m.alias || m.name}
+                            </span>
+                            <span style={{ fontSize: 10, color: '#666', whiteSpace: 'nowrap' }}>
+                              {m.schedulers.length} sched{m.schedulers.length !== 1 ? 's' : ''}
+                            </span>
+                            {m.loaded && <span style={{ fontSize: 10, color: '#4ade80' }}>●</span>}
+                            <button
+                              onClick={e => { e.stopPropagation(); handleUninstall(m.key) }}
                               style={{
-                                flex: 1, background: '#1a1a1a', border: '1px solid #555',
-                                borderRadius: 4, color: '#ccc', padding: '2px 6px',
-                                fontSize: 11, outline: 'none',
+                                padding: '2px 6px', borderRadius: 4, border: '1px solid #5a1a1a',
+                                background: 'transparent', color: '#f87171', fontSize: 10,
+                                cursor: 'pointer',
                               }}
-                            />
-                            <button onClick={() => setEditingAlias(null)}
-                              style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: 11 }}>
-                              ✕
+                            >
+                              Uninstall
                             </button>
                           </div>
-                        ) : (
-                          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
-                            <span style={{ fontWeight: 600, color: '#eee' }}>
-                              {sel.alias || sel.name}
-                            </span>
-                            <span onClick={() => startAliasEdit(sel)}
-                              style={{ cursor: 'pointer', color: '#666', fontSize: 10 }}>
-                              rename
-                            </span>
-                            {sel.loaded && <span style={{ fontSize: 10, color: '#4ade80' }}>Loaded</span>}
+                        )
+                      })}
+                    </div>
+
+                    {(() => {
+                      const sel = selectedInstalledKey
+                        ? installed.find(m => m.key === selectedInstalledKey)
+                        : null
+                      if (!sel) return null
+                      return (
+                        <div style={{
+                          fontSize: 11, color: '#999',
+                          padding: '6px 8px', borderRadius: 4,
+                          background: '#0f0f0f', marginBottom: 6,
+                        }}>
+                          {editingAlias === sel.key ? (
+                            <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
+                              <input
+                                autoFocus
+                                value={aliasInput}
+                                onChange={e => setAliasInput(e.target.value)}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') handleSaveAlias(sel.key)
+                                  if (e.key === 'Escape') setEditingAlias(null)
+                                }}
+                                onBlur={() => handleSaveAlias(sel.key)}
+                                style={{
+                                  flex: 1, background: '#1a1a1a', border: '1px solid #555',
+                                  borderRadius: 4, color: '#ccc', padding: '2px 6px',
+                                  fontSize: 11, outline: 'none',
+                                }}
+                              />
+                              <button onClick={() => setEditingAlias(null)}
+                                style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: 11 }}>
+                                ✕
+                              </button>
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
+                              <span style={{ fontWeight: 600, color: '#eee' }}>
+                                {sel.alias || sel.name}
+                              </span>
+                              <span onClick={() => startAliasEdit(sel)}
+                                style={{ cursor: 'pointer', color: '#666', fontSize: 10 }}>
+                                rename
+                              </span>
+                              {sel.loaded && <span style={{ fontSize: 10, color: '#4ade80' }}>Loaded</span>}
+                            </div>
+                          )}
+                          <div style={{ fontSize: 10, lineHeight: 1.6 }}>
+                            {sel.schedulers.length > 0 && (
+                              <span>{sel.schedulers.length} scheduler{sel.schedulers.length !== 1 ? 's' : ''}: {sel.schedulers.join(', ')}</span>
+                            )}
+                            {sel.pipeline_class && (
+                              <span style={{ display: 'block', opacity: 0.7 }}>
+                                {sel.pipeline_class}
+                              </span>
+                            )}
                           </div>
+                        </div>
+                      )
+                    })()}
+                  </>
+                )
+              )}
+
+              {modelTab === 'builtin' && (
+                <>
+                  {builtin.filter(m => m.cached).length === 0 ? (
+                    <div style={{ fontSize: 11, color: '#666', padding: '8px', textAlign: 'center' }}>
+                      {builtin.filter(m => !m.cached).length > 0
+                        ? `${builtin.filter(m => !m.cached).map(m => m.name).join(', ')} — not cached`
+                        : 'No built-in models'}
+                    </div>
+                  ) : (
+                    builtin.filter(m => m.cached).map(m => (
+                      <div key={m.key} style={{
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        padding: '6px 8px', borderRadius: 6, fontSize: 12,
+                        background: m.loaded ? '#0a1a0a' : 'transparent',
+                      }}>
+                        <span style={{ fontWeight: 600, minWidth: 110 }}>{m.name}</span>
+                        {m.schedulers.length > 0 && (
+                          <span style={{ fontSize: 10, color: '#666' }}>{m.schedulers.join(', ')}</span>
                         )}
-                        <div style={{ fontSize: 10, lineHeight: 1.6 }}>
-                          {sel.schedulers.length > 0 && (
-                            <span>{sel.schedulers.length} scheduler{sel.schedulers.length !== 1 ? 's' : ''}: {sel.schedulers.join(', ')}</span>
-                          )}
-                          {sel.pipeline_class && (
-                            <span style={{ display: 'block', opacity: 0.7 }}>
-                              {sel.pipeline_class}
-                            </span>
-                          )}
+                        <div style={{ marginLeft: 'auto', display: 'flex', gap: 4, alignItems: 'center' }}>
+                          {m.loaded && <span style={{ fontSize: 10, color: '#4ade80' }}>Loaded</span>}
                         </div>
                       </div>
-                    )
-                  })()}
+                    ))
+                  )}
+                  {builtin.filter(m => !m.cached).length > 0 && (
+                    <div style={{ fontSize: 11, color: '#666', padding: '4px 8px' }}>
+                      {builtin.filter(m => !m.cached).map(m => m.name).join(', ')} — not cached
+                    </div>
+                  )}
                 </>
               )}
 
-              {/* Built-in cached models */}
-              <div style={sectionTitle}>Built-in Models</div>
-              {builtin.filter(m => m.cached).map(m => (
-                <div key={m.key} style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '6px 8px', borderRadius: 6, fontSize: 12,
-                  background: m.loaded ? '#0a1a0a' : 'transparent',
-                }}>
-                  <span style={{ fontWeight: 600, minWidth: 110 }}>{m.name}</span>
-                  {m.schedulers.length > 0 && (
-                    <span style={{ fontSize: 10, color: '#666' }}>{m.schedulers.join(', ')}</span>
-                  )}
-                  <div style={{ marginLeft: 'auto', display: 'flex', gap: 4, alignItems: 'center' }}>
-                    {m.loaded && <span style={{ fontSize: 10, color: '#4ade80' }}>Loaded</span>}
+              {modelTab === 'other' && (
+                other.length === 0 ? (
+                  <div style={{ fontSize: 11, color: '#666', padding: '8px', textAlign: 'center' }}>
+                    No API or pending models
                   </div>
-                </div>
-              ))}
-              {builtin.filter(m => !m.cached).length > 0 && (
-                <div style={{ fontSize: 11, color: '#666', padding: '4px 8px' }}>
-                  {builtin.filter(m => !m.cached).map(m => m.name).join(', ')} — not cached
-                </div>
-              )}
-
-              {/* Other models */}
-              {other.length > 0 && (
-                <>
-                  <div style={sectionTitle}>Coming Soon / API</div>
-                  {other.map(m => (
+                ) : (
+                  other.map(m => (
                     <div key={m.key} style={{ display: 'flex', gap: 6, padding: '4px 8px', fontSize: 12, opacity: 0.5 }}>
                       <span style={{ fontWeight: 600 }}>{m.name}</span>
                       <span style={{ fontSize: 10, color: '#666', marginLeft: 'auto' }}>
                         {m.type === 'api' ? 'API' : 'Pending integration'}
                       </span>
                     </div>
-                  ))}
-                </>
+                  ))
+                )
               )}
 
               {/* Actions */}
