@@ -56,8 +56,8 @@ function SamplingParamsNode(props: NodeProps) {
   }, [props.id, updateNodeData])
 
   return (
-    <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, minWidth: 220, minHeight: 80, position: 'relative' }}>
-      {props.selected && <NodeResizer minWidth={180} minHeight={80} handleStyle={{ width: 8, height: 8, borderRadius: '50%', background: '#888', zIndex: 10 }} />}
+    <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, position: 'relative' }}>
+      {props.selected && <NodeResizer handleStyle={{ width: 8, height: 8, borderRadius: '50%', background: '#888', zIndex: 10 }} />}
       <div style={{ background: def.color, padding: '6px 10px', fontSize: 12, fontWeight: 600, display: 'flex', justifyContent: 'space-between', borderRadius: '8px 8px 0 0', overflow: 'hidden' }}>
         <span>{def.label}</span>
       </div>

@@ -18,7 +18,6 @@ const schedLabels: Record<string, string> = {
   cogvideox_ddim: 'DDIM',
   cogvideox_dpm: 'DPM',
   flow_match_euler: 'Flow Euler',
-  flow_match_heun: 'Flow Heun',
   ltx_euler_ancestral_rf: 'Euler Anc RF',
   scheduler: 'Auto-detect',
 }

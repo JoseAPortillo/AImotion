@@ -5,13 +5,18 @@ import { NODE_DEFINITIONS, PORT_COLORS, getHandleColor, type NodeType, type Gene
 import { useGraphStore } from '../../store/graph'
 import { startGeneration, pollTask, type TaskStatus } from '../../api/backend'
 
-const inputHandles = ['video_in', 'audio_in', 'prompt_pos', 'prompt_neg', 'params', 'strength']
+const ALL_INPUT_HANDLES = ['video_in', 'audio_in', 'prompt_pos', 'prompt_neg', 'params', 'strength']
+
+const INPUTS_BY_PIPELINE: Record<string, string[]> = {
+  LTXPipeline: ['prompt_pos', 'prompt_neg', 'params'],
+  CogVideoXPipeline: ['prompt_pos', 'prompt_neg', 'params'],
+  CogVideoXImageToVideoPipeline: ['video_in', 'prompt_pos', 'prompt_neg', 'params', 'strength'],
+}
 
 const schedLabels: Record<string, string> = {
   cogvideox_ddim: 'DDIM',
   cogvideox_dpm: 'DPM',
   flow_match_euler: 'Flow Euler',
-  flow_match_heun: 'Flow Heun',
   ltx_euler_ancestral_rf: 'Euler Anc RF',
   scheduler: 'Auto-detect',
 }
@@ -22,6 +27,7 @@ interface ModelEntry {
   schedulers: string[]
   default_scheduler: string
   type: string
+  pipeline_class?: string
 }
 
 const selectStyle: React.CSSProperties = {
@@ -44,6 +50,7 @@ function GenerationNode(props: NodeProps) {
   const edges = useGraphStore((s) => s.edges)
   const setOutputUrl = useGraphStore((s) => s.setOutputUrl)
   const [genRunning, setGenRunning] = useState(false)
+  const [progress, setProgress] = useState(0)
   const [models, setModels] = useState<ModelEntry[]>([])
   const [modelsLoaded, setModelsLoaded] = useState(false)
 
@@ -63,6 +70,11 @@ function GenerationNode(props: NodeProps) {
   const modelConfig = models.find(m => m.key === data.model)
   const availableScheds = modelConfig?.schedulers || []
   const defaultSched = modelConfig?.default_scheduler || ''
+
+  const pipelineClass = modelConfig?.pipeline_class
+  const activeInputs = pipelineClass
+    ? (INPUTS_BY_PIPELINE[pipelineClass] || ALL_INPUT_HANDLES)
+    : ALL_INPUT_HANDLES
 
   const schedLabel = data.scheduler
     ? schedLabels[data.scheduler] || data.scheduler
@@ -100,6 +112,7 @@ function GenerationNode(props: NodeProps) {
     }
 
     setGenRunning(true)
+    setProgress(0)
     try {
       const task = await startGeneration(
         promptData.positive,
@@ -123,9 +136,16 @@ function GenerationNode(props: NodeProps) {
       do {
         await new Promise((r) => setTimeout(r, 2000))
         status = await pollTask(task.task_id)
+
+        if (status.current_step != null && status.total_steps != null && status.total_steps > 0) {
+          setProgress(Math.round((status.current_step / status.total_steps) * 100))
+        } else if (status.progress != null) {
+          setProgress(Math.round(status.progress * 100))
+        }
       } while (status.status === 'pending' || status.status === 'running')
 
       if (status.status === 'completed' && status.result_url) {
+        setProgress(100)
         setOutputUrl(status.result_url)
       } else {
         alert(`Workflow failed: ${status.error || 'unknown error'}`)
@@ -135,11 +155,11 @@ function GenerationNode(props: NodeProps) {
     } finally {
       setGenRunning(false)
     }
-  }, [props.id, data.scheduler, nodes, edges, setOutputUrl])
+  }, [props.id, data.scheduler, data.model, nodes, edges, setOutputUrl])
 
   return (
-    <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, minWidth: 240, minHeight: 260, position: 'relative', paddingBottom: 38 }}>
-      {props.selected && <NodeResizer minWidth={200} minHeight={180} handleStyle={{ width: 8, height: 8, borderRadius: '50%', background: '#888', zIndex: 10 }} />}
+    <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, position: 'relative', paddingBottom: 38 }}>
+      {props.selected && <NodeResizer handleStyle={{ width: 8, height: 8, borderRadius: '50%', background: '#888', zIndex: 10 }} />}
       <div style={{ background: def.color, padding: '6px 10px', fontSize: 12, fontWeight: 600, display: 'flex', justifyContent: 'space-between', borderRadius: '8px 8px 0 0', overflow: 'hidden' }}>
         <span>{def.label}</span>
       </div>
@@ -196,6 +216,18 @@ function GenerationNode(props: NodeProps) {
           )}
         </div>
       </div>
+
+      {genRunning && (
+        <div style={{ padding: '0 10px 4px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ flex: 1, height: 6, borderRadius: 3, background: '#2a2a2a', overflow: 'hidden' }}>
+              <div style={{ width: `${Math.min(progress, 100)}%`, height: '100%', borderRadius: 3, background: '#2563eb', transition: 'width 0.3s ease' }} />
+            </div>
+            <span style={{ fontSize: 10, color: '#999', minWidth: 28, textAlign: 'right' }}>{progress}%</span>
+          </div>
+        </div>
+      )}
+
       <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, borderTop: '1px solid #2a2a2a', padding: '6px 10px', background: '#1a1a1a' }}>
         <button
           onClick={handleGenWorkflow}
@@ -215,7 +247,8 @@ function GenerationNode(props: NodeProps) {
           {genRunning ? 'Generating...' : 'Generate ▶'}
         </button>
       </div>
-      {inputHandles.map((id, i) => {
+
+      {activeInputs.map((id, i) => {
         const inp = def.inputs.find((p) => p.id === id)
         const portType = inp?.type || 'params'
         const color = getHandleColor(id, portType)
@@ -225,7 +258,7 @@ function GenerationNode(props: NodeProps) {
             type="target"
             position={Position.Left}
             id={id}
-            style={{ top: `${((i + 1) / (inputHandles.length + 1)) * 100}%`, background: color }}
+            style={{ top: `${((i + 1) / (activeInputs.length + 1)) * 100}%`, background: color }}
           >
             <div style={{ position: 'absolute', left: -8, top: -2, transform: 'translateX(-100%)', fontSize: 10, color, whiteSpace: 'nowrap' }}>
               {inp?.label || id}

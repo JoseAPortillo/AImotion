@@ -23,7 +23,6 @@ SUPPORTED_MODELS = {
         "needs_token": True,
         "schedulers": {
             "flow_match_euler": "FlowMatchEulerDiscreteScheduler",
-            "flow_match_heun": "FlowMatchHeunDiscreteScheduler",
             "ltx_euler_ancestral_rf": "LTXEulerAncestralRFScheduler",
         },
         "default_scheduler": "flow_match_euler",
@@ -283,13 +282,13 @@ class VideoGenerator:
             raise ValueError(f"Unsupported model: {model}")
 
         d = model_cfg["defaults"]
-        w = width or d["width"]
-        h = height or d["height"]
-        s = steps or d["steps"]
-        c = cfg or d["cfg"]
-        fps = d["fps"]
-        nf = d["num_frames"]
-        max_seq = d["max_seq"]
+        w = width or d.get("width", 704)
+        h = height or d.get("height", 480)
+        s = steps or d.get("steps", 50)
+        c = cfg or d.get("cfg", 6.0)
+        fps = d.get("fps", 8)
+        nf = d.get("num_frames", 49)
+        max_seq = d.get("max_seq", 226)
 
         cls_name = model_cfg["pipeline_class"]
         is_v2v = video_frames and cls_name in ("CogVideoXPipeline",)
@@ -334,7 +333,9 @@ class VideoGenerator:
             logger.info(f"Starting {'V2V' if is_v2v else 'T2V'} generation...")
             self._log_vram()
 
-            output = pipe(**pipe_kwargs)
+            import asyncio
+            loop = asyncio.get_running_loop()
+            output = await loop.run_in_executor(None, lambda: pipe(**pipe_kwargs))
 
             if progress_callback:
                 await progress_callback(s, s)

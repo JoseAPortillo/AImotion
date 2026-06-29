@@ -113,7 +113,6 @@ KNOWN_PIPELINES = {
     "LTXPipeline": {
         "schedulers": {
             "flow_match_euler": "FlowMatchEulerDiscreteScheduler",
-            "flow_match_heun": "FlowMatchHeunDiscreteScheduler",
             "ltx_euler_ancestral_rf": "LTXEulerAncestralRFScheduler",
         },
         "default_scheduler": "flow_match_euler",
