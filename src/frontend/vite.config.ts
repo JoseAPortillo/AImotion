@@ -10,6 +10,7 @@ export default defineConfig({
       '/generate': 'http://localhost:8001',
       '/results': 'http://localhost:8001',
       '/prompt': 'http://localhost:8001',
+      '/models': 'http://localhost:8001',
     },
   },
 })
