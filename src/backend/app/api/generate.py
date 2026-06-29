@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from app.config import settings
 from app.models.generate import TaskInfo, TaskStatus
 from app.services.task_manager import TaskManager
-from app.services.generator import VideoGenerator, SUPPORTED_MODELS, extract_frames
+from app.services.generator import VideoGenerator, SUPPORTED_MODELS, extract_frames, SCHEDULER_NAMES
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +63,24 @@ async def create_generation(
     cfg: float = Form(_defaults["cfg"], ge=1.0, le=20.0),
     seed: int = Form(0, ge=0),
     strength: float = Form(0.8, ge=0.0, le=1.0),
+    scheduler: str = Form(""),
+    model: str = Form(settings.model_type),
 ):
+    if model not in SUPPORTED_MODELS:
+        valid = ", ".join(SUPPORTED_MODELS)
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown model '{model}'. Valid: {valid}",
+        )
     _validate_dimensions(width, height)
+    model_cfg = SUPPORTED_MODELS[model]
+    model_schedulers = model_cfg.get("schedulers", {})
+    if scheduler and scheduler not in model_schedulers:
+        valid = ", ".join(model_schedulers)
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown scheduler '{scheduler}' for {model}. Valid: {valid}",
+        )
     video_path = None
     if video:
         _validate_video(video)
@@ -90,6 +106,8 @@ async def create_generation(
         "cfg": cfg,
         "seed": seed,
         "strength": strength,
+        "scheduler": scheduler or None,
+        "model": model,
     }
     task_id = await task_manager.create_task(params)
     _dispatch_generation(task_id, params)
@@ -109,10 +127,14 @@ async def _run_generation(task_id: str, params: dict):
         async def progress_callback(current: int, total: int):
             await task_manager.set_progress(task_id, current, total)
 
+        model = params.get("model", settings.model_type)
+        model_cfg = SUPPORTED_MODELS.get(model, {})
+        frames = model_cfg.get("defaults", {}).get("num_frames", 49)
+
         video_frames = None
         video_path = params.get("video_path")
         if video_path and os.path.exists(video_path):
-            video_frames = extract_frames(video_path, max_frames=_defaults["num_frames"])
+            video_frames = extract_frames(video_path, max_frames=frames)
             if not video_frames:
                 video_frames = None
 
@@ -126,6 +148,8 @@ async def _run_generation(task_id: str, params: dict):
             steps=params["steps"],
             cfg=params["cfg"],
             seed=params["seed"],
+            scheduler=params.get("scheduler"),
+            model=model,
             progress_callback=progress_callback,
         )
         await task_manager.complete_task(task_id, result_url)
