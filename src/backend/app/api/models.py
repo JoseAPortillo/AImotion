@@ -1,6 +1,7 @@
 import os
 import logging
 import threading
+from datetime import datetime
 from hashlib import md5
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -140,7 +141,7 @@ def _run_install(task_id: str, hf_name: str, alias: str):
             default_scheduler=discovered["default_scheduler"],
             needs_token=False,
             defaults=discovered["defaults"],
-            installed_at=__import__("datetime").datetime.now().isoformat(),
+            installed_at=datetime.now().isoformat(),
         )
         add_installed(model)
 
@@ -353,9 +354,13 @@ async def unload_models():
 
 @router.get("/status")
 async def models_status():
-    import torch
     gpu = {}
-    if torch.cuda.is_available():
+    try:
+        import torch
+        torch_ok = True
+    except ModuleNotFoundError:
+        torch_ok = False
+    if torch_ok and torch.cuda.is_available():
         device = torch.cuda.current_device()
         name = torch.cuda.get_device_name(device)
         props = torch.cuda.get_device_properties(device)
