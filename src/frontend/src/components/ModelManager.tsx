@@ -103,10 +103,12 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ hf_name: name, alias: name.split('/').pop() || name }),
       })
-      const data = await res.json()
+      const text = await res.text()
+      let data: any = {}
+      try { data = JSON.parse(text) } catch {}
       if (!res.ok) {
         setStatus('error')
-        setStatusMsg(data.detail || 'Install failed')
+        setStatusMsg(data.detail || text || `HTTP ${res.status} (empty response)`)
         return
       }
       if (data.status === 'already_installed') {
