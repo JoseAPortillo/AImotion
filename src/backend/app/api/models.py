@@ -148,13 +148,20 @@ async def install_model(req: InstallRequest):
     tok = settings.hf_token if discovered.get("needs_token") else None
 
     logger.info(f"Downloading {hf_name} (pipeline: {pipeline_class_name})...")
-    if pipeline_class_name == "CogVideoXPipeline":
-        from diffusers import CogVideoXPipeline
-        CogVideoXPipeline.from_pretrained(hf_name, torch_dtype=torch.float16, token=tok)
-    elif pipeline_class_name == "LTXPipeline":
-        from diffusers import LTXPipeline
-        tok = tok or settings.hf_token
-        LTXPipeline.from_pretrained(hf_name, torch_dtype=torch.bfloat16, token=tok)
+    try:
+        if pipeline_class_name == "CogVideoXPipeline":
+            from diffusers import CogVideoXPipeline
+            CogVideoXPipeline.from_pretrained(hf_name, torch_dtype=torch.float16, token=tok)
+        elif pipeline_class_name == "LTXPipeline":
+            from diffusers import LTXPipeline
+            tok = tok or settings.hf_token
+            LTXPipeline.from_pretrained(hf_name, torch_dtype=torch.bfloat16, token=tok)
+    except Exception as e:
+        logger.error(f"Failed to download {hf_name}: {e}")
+        raise HTTPException(
+            status_code=422,
+            detail=f"Failed to download model '{hf_name}': {e}",
+        )
     logger.info(f"Downloaded {hf_name}")
 
     key = generate_key(hf_name)

@@ -129,6 +129,31 @@ KNOWN_PIPELINES = {
 }
 
 
+def _read_hf_json(hf_name: str, filename: str) -> Optional[dict]:
+    try:
+        from huggingface_hub import HfApi
+        import requests
+        api = HfApi()
+        url = f"https://huggingface.co/{hf_name}/raw/main/{filename}"
+        resp = requests.get(url, timeout=10, headers={"User-Agent": "AImation/0.1"})
+        resp.raise_for_status()
+        return resp.json()
+    except Exception:
+        return None
+
+
+def _has_weight_files(hf_name: str) -> bool:
+    try:
+        from huggingface_hub import HfApi
+        api = HfApi()
+        for f in api.list_repo_files(hf_name):
+            if f.endswith((".safetensors", ".bin", ".pt", ".pth")):
+                return True
+        return False
+    except Exception:
+        return False
+
+
 def discover_pipeline(hf_name: str) -> Optional[dict]:
     try:
         from huggingface_hub import HfApi
@@ -139,16 +164,24 @@ def discover_pipeline(hf_name: str) -> Optional[dict]:
 
         logger.info(f"Model {hf_name}: pipeline_tag={pipeline_tag}, tags={tags}")
 
-        supported = {
-            "cogvideox": "CogVideoXPipeline",
-            "ltx": "LTXPipeline",
-        }
-
         cls_name = None
-        for keyword, klass in supported.items():
-            if keyword in tags or keyword in pipeline_tag:
-                cls_name = klass
-                break
+
+        model_index = _read_hf_json(hf_name, "model_index.json")
+        if model_index and "_class_name" in model_index:
+            cls_name = model_index["_class_name"]
+            if cls_name not in KNOWN_PIPELINES:
+                logger.info(f"Model {hf_name} uses unsupported pipeline {cls_name}")
+                return None
+
+        if not cls_name:
+            supported = {
+                "cogvideox": "CogVideoXPipeline",
+                "ltx": "LTXPipeline",
+            }
+            for keyword, klass in supported.items():
+                if keyword in tags or keyword in pipeline_tag:
+                    cls_name = klass
+                    break
 
         if not cls_name:
             for t in tags:
@@ -159,11 +192,19 @@ def discover_pipeline(hf_name: str) -> Optional[dict]:
         if not cls_name and "video" in pipeline_tag:
             cls_name = "CogVideoXPipeline"
 
-        if cls_name and cls_name in KNOWN_PIPELINES:
-            return {"pipeline_class": cls_name, **KNOWN_PIPELINES[cls_name]}
+        if not cls_name:
+            logger.warning(f"Unsupported model {hf_name}: pipeline={pipeline_tag}, tags={tags}")
+            return None
 
-        logger.warning(f"Unsupported model {hf_name}: pipeline={pipeline_tag}, tags={tags}")
-        return None
+        if cls_name not in KNOWN_PIPELINES:
+            logger.warning(f"Model {hf_name} resolved to unsupported pipeline {cls_name}")
+            return None
+
+        if not _has_weight_files(hf_name):
+            logger.warning(f"Model {hf_name} has no weight files — cannot install")
+            return None
+
+        return {"pipeline_class": cls_name, **KNOWN_PIPELINES[cls_name]}
 
     except Exception as e:
         logger.warning(f"Failed to discover {hf_name}: {e}")
