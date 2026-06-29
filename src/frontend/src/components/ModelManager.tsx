@@ -70,6 +70,7 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
   const [statusMsg, setStatusMsg] = useState('')
   const [editingAlias, setEditingAlias] = useState<string | null>(null)
   const [aliasInput, setAliasInput] = useState('')
+  const [selectedInstalledKey, setSelectedInstalledKey] = useState<string | null>(null)
   const [taskId, setTaskId] = useState<string | null>(null)
   const [progress, setProgress] = useState<InstallProgress | null>(null)
   const ref = useRef<HTMLDivElement>(null)
@@ -380,57 +381,115 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
                 </div>
               )}
 
-              {/* Installed models */}
+              {/* Installed models listbox */}
               {installed.length > 0 && (
                 <>
                   <div style={sectionTitle}>Installed Models</div>
-                  {installed.map(m => (
-                    <div key={m.key} style={{
-                      display: 'flex', alignItems: 'center', gap: 6,
-                      padding: '6px 8px', borderRadius: 6, fontSize: 12,
-                      background: m.loaded ? '#0a1a0a' : 'transparent',
-                    }}>
-                      {editingAlias === m.key ? (
-                        <input
-                          autoFocus
-                          value={aliasInput}
-                          onChange={e => setAliasInput(e.target.value)}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') handleSaveAlias(m.key)
-                            if (e.key === 'Escape') setEditingAlias(null)
-                          }}
-                          onBlur={() => handleSaveAlias(m.key)}
-                          style={{
-                            flex: 1, background: '#0f0f0f', border: '1px solid #555',
-                            borderRadius: 4, color: '#ccc', padding: '2px 6px',
-                            fontSize: 11, outline: 'none',
-                          }}
-                        />
-                      ) : (
-                        <span
-                          style={{ fontWeight: 600, cursor: 'pointer', flex: 1 }}
-                          onClick={() => startAliasEdit(m)}
-                          title="Click to rename"
-                        >
-                          {m.alias || m.name}
-                        </span>
-                      )}
-                      <span style={{ fontSize: 10, color: '#666' }}>
-                        {m.schedulers.length} sched{m.schedulers.length !== 1 ? 's' : ''}
-                      </span>
-                      {m.loaded && <span style={{ fontSize: 10, color: '#4ade80' }}>Loaded</span>}
-                      <button
-                        onClick={() => handleUninstall(m.key)}
+                  <select
+                    size={Math.min(installed.length, 5)}
+                    value={selectedInstalledKey ?? ''}
+                    onChange={e => {
+                      setSelectedInstalledKey(e.target.value || null)
+                      setEditingAlias(null)
+                    }}
+                    style={{
+                      width: '100%',
+                      background: '#0f0f0f',
+                      border: '1px solid #333',
+                      borderRadius: 4,
+                      color: '#ccc',
+                      fontSize: 11,
+                      padding: 2,
+                      outline: 'none',
+                      marginBottom: 6,
+                      minHeight: 60,
+                    }}
+                  >
+                    {installed.map(m => (
+                      <option
+                        key={m.key}
+                        value={m.key}
                         style={{
-                          padding: '2px 6px', borderRadius: 4, border: '1px solid #5a1a1a',
-                          background: 'transparent', color: '#f87171', fontSize: 10,
-                          cursor: 'pointer', whiteSpace: 'nowrap',
+                          padding: '3px 6px',
+                          background: m.loaded ? '#0a2e1a' : 'transparent',
+                          color: m.loaded ? '#4ade80' : '#ccc',
                         }}
                       >
-                        Uninstall
-                      </button>
-                    </div>
-                  ))}
+                        {m.alias || m.name}
+                        {m.loaded ? ' ●' : ''}
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* Selected model details + actions */}
+                  {(() => {
+                    const sel = selectedInstalledKey
+                      ? installed.find(m => m.key === selectedInstalledKey)
+                      : null
+                    if (!sel) return null
+                    return (
+                      <div style={{
+                        fontSize: 11, color: '#999',
+                        padding: '6px 8px', borderRadius: 4,
+                        background: '#0f0f0f', marginBottom: 6,
+                      }}>
+                        {editingAlias === sel.key ? (
+                          <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
+                            <input
+                              autoFocus
+                              value={aliasInput}
+                              onChange={e => setAliasInput(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') handleSaveAlias(sel.key)
+                                if (e.key === 'Escape') setEditingAlias(null)
+                              }}
+                              onBlur={() => handleSaveAlias(sel.key)}
+                              style={{
+                                flex: 1, background: '#1a1a1a', border: '1px solid #555',
+                                borderRadius: 4, color: '#ccc', padding: '2px 6px',
+                                fontSize: 11, outline: 'none',
+                              }}
+                            />
+                            <button onClick={() => setEditingAlias(null)}
+                              style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: 11 }}>
+                              ✕
+                            </button>
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
+                            <span style={{ fontWeight: 600, color: '#eee' }}>
+                              {sel.alias || sel.name}
+                            </span>
+                            <span onClick={() => startAliasEdit(sel)}
+                              style={{ cursor: 'pointer', color: '#666', fontSize: 10 }}>
+                              ✎ rename
+                            </span>
+                            {sel.loaded && <span style={{ fontSize: 10, color: '#4ade80' }}>● Loaded</span>}
+                          </div>
+                        )}
+                        <div style={{ fontSize: 10, lineHeight: 1.6 }}>
+                          {sel.schedulers.length > 0 && (
+                            <span>{sel.schedulers.length} scheduler{sel.schedulers.length !== 1 ? 's' : ''}: {sel.schedulers.join(', ')}</span>
+                          )}
+                          {sel.pipeline_class && (
+                            <span style={{ display: 'block', opacity: 0.7 }}>
+                              {sel.pipeline_class.replace('Pipeline', '')}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ marginTop: 4, display: 'flex', gap: 6 }}>
+                          <button onClick={() => handleUninstall(sel.key)}
+                            style={{
+                              padding: '3px 10px', borderRadius: 4, border: '1px solid #5a1a1a',
+                              background: 'transparent', color: '#f87171', fontSize: 10,
+                              cursor: 'pointer',
+                            }}>
+                            Uninstall
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })()}
                 </>
               )}
 
