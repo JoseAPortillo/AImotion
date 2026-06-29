@@ -55,7 +55,6 @@ export interface SamplingParamsData extends Record<string, unknown> {
   seed: number
   width: number
   height: number
-  scheduler: string
 }
 
 export interface DenoisingStrengthData extends Record<string, unknown> {
@@ -83,6 +82,21 @@ export type NodeData =
   | OutputData
 
 export type AppNode = Node<NodeData, NodeType>
+
+export const RESOLUTION_PRESETS: Record<string, { label: string; width: number; height: number }> = {
+  '720x480': { label: '720×480 (SD)', width: 720, height: 480 },
+  '704x512': { label: '704×512 (LTX)', width: 704, height: 512 },
+  '720x720': { label: '720×720 (Square)', width: 720, height: 720 },
+  '768x768': { label: '768×768 (Max)', width: 768, height: 768 },
+  '512x512': { label: '512×512 (Small)', width: 512, height: 512 },
+}
+
+export function getResolutionPresetKey(width: number, height: number): string | null {
+  for (const [key, p] of Object.entries(RESOLUTION_PRESETS)) {
+    if (p.width === width && p.height === height) return key
+  }
+  return null
+}
 
 export const PORT_COLORS: Record<PortType, string> = {
   video_tensor: '#ef4444',
@@ -162,7 +176,7 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
     description: 'Configure sampling parameters: number of steps, CFG scale, seed, and output resolution.',
     inputs: [],
     outputs: [{ id: 'params', label: 'Params', type: 'params' }],
-    defaultData: { steps: 50, cfg: 6, seed: 0, width: 720, height: 480, scheduler: '' },
+    defaultData: { steps: 50, cfg: 6, seed: 0, width: 720, height: 480 },
   },
   denoisingStrength: {
     type: 'denoisingStrength',

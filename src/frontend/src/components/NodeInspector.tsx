@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useGraphStore } from '../store/graph'
 import {
   NODE_DEFINITIONS,
+  RESOLUTION_PRESETS,
+  getResolutionPresetKey,
   type NodeData,
   type VideoInputData,
   type AudioInputData,
@@ -188,6 +190,7 @@ export default function NodeInspector() {
 
       case 'samplingParams': {
         const data = n.data as SamplingParamsData
+        const presetKey = getResolutionPresetKey(data.width, data.height)
         return (
           <>
             <FieldWrap>
@@ -231,45 +234,56 @@ export default function NodeInspector() {
             </FieldWrap>
             <FieldWrap>
               <Label>
-                Width
-                <input
-                  type="number"
+                Resolution
+                <select
                   style={inputStyle}
-                  min={128}
-                  max={768}
-                  step={8}
-                  value={data.width}
-                  onChange={(e) => handleChange('width', parseInt(e.target.value, 10) || 128)}
-                />
-              </Label>
-            </FieldWrap>
-            <FieldWrap>
-              <Label>
-                Height
-                <input
-                  type="number"
-                  style={inputStyle}
-                  min={128}
-                  max={768}
-                  step={8}
-                  value={data.height}
-                  onChange={(e) => handleChange('height', parseInt(e.target.value, 10) || 128)}
-                />
-              </Label>
-            </FieldWrap>
-            <FieldWrap>
-              <Label>
-                Scheduler
-                <select style={inputStyle} value={data.scheduler} onChange={(e) => handleChange('scheduler', e.target.value)}>
-                  <option value="">Default</option>
-                  <option value="cogvideox_ddim">DDIM (CogVideoX)</option>
-                  <option value="cogvideox_dpm">DPM (CogVideoX)</option>
-                  <option value="flow_match_euler">Flow Euler (LTX)</option>
-                  <option value="flow_match_heun">Flow Heun (LTX)</option>
-                  <option value="ltx_euler_ancestral_rf">Euler Ancestral RF (LTX)</option>
+                  value={presetKey || '__custom__'}
+                  onChange={(e) => {
+                    const p = RESOLUTION_PRESETS[e.target.value]
+                    if (p) {
+                      handleChange('width', p.width)
+                      handleChange('height', p.height)
+                    }
+                  }}
+                >
+                  {presetKey === null && <option value="__custom__">Custom</option>}
+                  {Object.entries(RESOLUTION_PRESETS).map(([key, p]) => (
+                    <option key={key} value={key}>{p.label}</option>
+                  ))}
+                  <option value="__custom__">Custom...</option>
                 </select>
               </Label>
             </FieldWrap>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <FieldWrap>
+                <Label>
+                  W
+                  <input
+                    type="number"
+                    style={inputStyle}
+                    min={128}
+                    max={768}
+                    step={8}
+                    value={data.width}
+                    onChange={(e) => handleChange('width', parseInt(e.target.value, 10) || 128)}
+                  />
+                </Label>
+              </FieldWrap>
+              <FieldWrap>
+                <Label>
+                  H
+                  <input
+                    type="number"
+                    style={inputStyle}
+                    min={128}
+                    max={768}
+                    step={8}
+                    value={data.height}
+                    onChange={(e) => handleChange('height', parseInt(e.target.value, 10) || 128)}
+                  />
+                </Label>
+              </FieldWrap>
+            </div>
           </>
         )
       }

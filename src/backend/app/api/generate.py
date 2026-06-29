@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from app.config import settings
 from app.models.generate import TaskInfo, TaskStatus
 from app.services.task_manager import TaskManager
-from app.services.generator import VideoGenerator, SUPPORTED_MODELS, extract_frames, SCHEDULER_NAMES
+from app.services.generator import VideoGenerator, SUPPORTED_MODELS, extract_frames
 
 logger = logging.getLogger(__name__)
 
@@ -63,26 +63,8 @@ async def create_generation(
     cfg: float = Form(_defaults["cfg"], ge=1.0, le=20.0),
     seed: int = Form(0, ge=0),
     strength: float = Form(0.8, ge=0.0, le=1.0),
-    scheduler: str = Form(""),
-    model: str = Form(settings.model_type),
-    vae_tiling: bool = Form(True),
-    vae_tile_overlap: float = Form(0.0),
 ):
-    if model not in SUPPORTED_MODELS:
-        valid = ", ".join(SUPPORTED_MODELS)
-        raise HTTPException(
-            status_code=422,
-            detail=f"Unknown model '{model}'. Valid: {valid}",
-        )
-    model_cfg = SUPPORTED_MODELS[model]
     _validate_dimensions(width, height)
-    model_schedulers = model_cfg.get("schedulers", {})
-    if scheduler and scheduler not in model_schedulers:
-        valid = ", ".join(model_schedulers)
-        raise HTTPException(
-            status_code=422,
-            detail=f"Unknown scheduler '{scheduler}' for {model}. Valid: {valid}",
-        )
     video_path = None
     if video:
         _validate_video(video)
@@ -108,10 +90,6 @@ async def create_generation(
         "cfg": cfg,
         "seed": seed,
         "strength": strength,
-        "scheduler": scheduler or None,
-        "model": model,
-        "vae_tiling": vae_tiling,
-        "vae_tile_overlap": vae_tile_overlap,
     }
     task_id = await task_manager.create_task(params)
     _dispatch_generation(task_id, params)
@@ -134,7 +112,7 @@ async def _run_generation(task_id: str, params: dict):
         video_frames = None
         video_path = params.get("video_path")
         if video_path and os.path.exists(video_path):
-            video_frames = extract_frames(video_path)
+            video_frames = extract_frames(video_path, max_frames=_defaults["num_frames"])
             if not video_frames:
                 video_frames = None
 
@@ -148,10 +126,6 @@ async def _run_generation(task_id: str, params: dict):
             steps=params["steps"],
             cfg=params["cfg"],
             seed=params["seed"],
-            scheduler=params.get("scheduler"),
-            model=params.get("model", settings.model_type),
-            vae_tiling=params.get("vae_tiling", True),
-            vae_tile_overlap=params.get("vae_tile_overlap", 0.0),
             progress_callback=progress_callback,
         )
         await task_manager.complete_task(task_id, result_url)
