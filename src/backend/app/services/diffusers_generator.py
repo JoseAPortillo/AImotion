@@ -84,8 +84,41 @@ class DiffusersGenerator:
             
             # Try SDXL first, then SD
             try:
+                # Load components from base SDXL model
+                logger.info("Loading SDXL components from base model...")
+                from diffusers import AutoencoderKL
+                from transformers import CLIPTextModel, CLIPTextModelWithProjection, CLIPTokenizer
+                
+                vae = AutoencoderKL.from_pretrained(
+                    "madebyollin/sdxl-vae-fp16-fix",
+                    torch_dtype=dtype,
+                )
+                text_encoder = CLIPTextModel.from_pretrained(
+                    "stabilityai/stable-diffusion-xl-base-1.0",
+                    subfolder="text_encoder",
+                    torch_dtype=dtype,
+                )
+                text_encoder_2 = CLIPTextModelWithProjection.from_pretrained(
+                    "stabilityai/stable-diffusion-xl-base-1.0",
+                    subfolder="text_encoder_2",
+                    torch_dtype=dtype,
+                )
+                tokenizer = CLIPTokenizer.from_pretrained(
+                    "stabilityai/stable-diffusion-xl-base-1.0",
+                    subfolder="tokenizer",
+                )
+                tokenizer_2 = CLIPTokenizer.from_pretrained(
+                    "stabilityai/stable-diffusion-xl-base-1.0",
+                    subfolder="tokenizer_2",
+                )
+                
                 pipe = StableDiffusionXLPipeline.from_single_file(
                     local_path,
+                    vae=vae,
+                    text_encoder=text_encoder,
+                    text_encoder_2=text_encoder_2,
+                    tokenizer=tokenizer,
+                    tokenizer_2=tokenizer_2,
                     torch_dtype=dtype,
                 )
                 logger.info(f"Loaded as SDXL single-file checkpoint")
