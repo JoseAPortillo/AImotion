@@ -123,6 +123,8 @@ export function getPortTypeFromHandle(handleId: string, nodeDef: NodeDefinition)
 export function getHandleColor(handleId: string, portType: PortType): string {
   if (handleId === 'negative' || handleId === 'prompt_neg') return '#86efac'
   if (handleId === 'strength') return '#a78bfa'
+  if (handleId === 'image_in') return '#f97316'
+  if (handleId === 'video_in') return '#ef4444'
   return PORT_COLORS[portType]
 }
 

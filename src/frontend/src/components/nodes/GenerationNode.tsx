@@ -106,17 +106,12 @@ function GenerationNode(props: NodeProps) {
   const defaultSched = modelConfig?.default_scheduler || ''
 
   const activeInputs = useMemo(() => {
-    const base = ['prompt_pos', 'prompt_neg', 'params']
-    if (!modelConfig?.accepts) return base
-    const showImage = modelConfig.accepts.image
-    const showVideo = modelConfig.accepts.video
-    const showStrength = modelConfig.accepts.strength
-    return [
-      ...(showImage ? ['image_in'] : []),
-      ...(showVideo ? ['video_in'] : []),
-      ...base,
-      ...(showStrength ? ['strength'] : []),
-    ]
+    const active = new Set<string>(['prompt_pos', 'prompt_neg', 'params'])
+    if (!modelConfig?.accepts) return active
+    if (modelConfig.accepts.image) active.add('image_in')
+    if (modelConfig.accepts.video) active.add('video_in')
+    if (modelConfig.accepts.strength) active.add('strength')
+    return active
   }, [modelConfig])
 
   const modelModality = useMemo(() => getModelModality(modelConfig), [modelConfig])
@@ -323,21 +318,30 @@ function GenerationNode(props: NodeProps) {
         </button>
       </div>
 
-      {activeInputs.map((id, i) => {
-        const inp = def.inputs.find((p) => p.id === id)
-        const portType = inp?.type || 'params'
-        const color = getHandleColor(id, portType)
+      {/* Render all possible handles — hide inactive ones so React Flow registers them all */}
+      {def.inputs.map((inp, i) => {
+        const isActive = activeInputs.has(inp.id)
+        const color = getHandleColor(inp.id, inp.type)
+        const activeIdx = [...activeInputs].indexOf(inp.id)
+        const top = activeIdx >= 0 ? `${((activeIdx + 1) / (activeInputs.size + 1)) * 100}%` : '50%'
         return (
           <Handle
-            key={id}
+            key={inp.id}
             type="target"
             position={Position.Left}
-            id={id}
-            style={{ top: `${((i + 1) / (activeInputs.length + 1)) * 100}%`, background: color }}
+            id={inp.id}
+            style={{
+              top,
+              background: color,
+              opacity: isActive ? 1 : 0,
+              pointerEvents: isActive ? 'auto' : 'none',
+            }}
           >
-            <div style={{ position: 'absolute', left: -8, top: -2, transform: 'translateX(-100%)', fontSize: 10, color, whiteSpace: 'nowrap' }}>
-              {inp?.label || id}
-            </div>
+            {isActive && (
+              <div style={{ position: 'absolute', left: -8, top: -2, transform: 'translateX(-100%)', fontSize: 10, color, whiteSpace: 'nowrap' }}>
+                {inp.label}
+              </div>
+            )}
           </Handle>
         )
       })}
