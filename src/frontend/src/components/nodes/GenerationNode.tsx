@@ -108,9 +108,11 @@ function GenerationNode(props: NodeProps) {
   const activeInputs = useMemo(() => {
     const base = ['prompt_pos', 'prompt_neg', 'params']
     if (!modelConfig?.accepts) return base
-    const showVideo = modelConfig.accepts.image || modelConfig.accepts.video
+    const showImage = modelConfig.accepts.image
+    const showVideo = modelConfig.accepts.video
     const showStrength = modelConfig.accepts.strength
     return [
+      ...(showImage ? ['image_in'] : []),
       ...(showVideo ? ['video_in'] : []),
       ...base,
       ...(showStrength ? ['strength'] : []),
@@ -147,11 +149,13 @@ function GenerationNode(props: NodeProps) {
     const paramsEdge = genEdges.find((e) => e.targetHandle === 'params')
     const strengthEdge = genEdges.find((e) => e.targetHandle === 'strength')
     const videoEdge = genEdges.find((e) => e.targetHandle === 'video_in')
+    const imageEdge = genEdges.find((e) => e.targetHandle === 'image_in')
 
     const promptData = promptEdgePos ? getNode(promptEdgePos)?.data as PromptData | undefined : undefined
     const paramsData = paramsEdge ? getNode(paramsEdge)?.data as SamplingParamsData | undefined : undefined
     const strengthData = strengthEdge ? getNode(strengthEdge)?.data as DenoisingStrengthData | undefined : undefined
     const videoNode = videoEdge ? getNode(videoEdge) : undefined
+    const imageNode = imageEdge ? getNode(imageEdge) : undefined
 
     if (!promptData?.positive || !paramsData) {
       addToast('Connect at least a Prompt and Sampling node to this Generation node', 'info')
@@ -179,6 +183,7 @@ function GenerationNode(props: NodeProps) {
           max_sequence_length: data.max_sequence_length,
         },
         videoNode?.data && 'file' in videoNode.data ? (videoNode.data as { file?: File }).file : undefined,
+        imageNode?.data && 'file' in imageNode.data ? (imageNode.data as { file?: File }).file : undefined,
       )
 
       let status: TaskStatus

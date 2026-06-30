@@ -56,6 +56,7 @@ def _validate_dimensions(width: int, height: int):
 
 @router.post("", status_code=202)
 async def create_generation(
+    image: Optional[UploadFile] = File(None),
     video: Optional[UploadFile] = File(None),
     prompt: str = Form(..., min_length=1, max_length=1000),
     negative_prompt: str = Form("", max_length=1000),
@@ -85,12 +86,26 @@ async def create_generation(
             status_code=422,
             detail=f"Unknown scheduler '{scheduler}' for {model}. Valid: {valid}",
         )
+    image_path = None
+    if image:
+        os.makedirs(settings.upload_dir, exist_ok=True)
+        file_ext = os.path.splitext(image.filename or "input.png")[1]
+        upload_path = os.path.join(settings.upload_dir, f"img_{seed}{file_ext}")
+        content = await image.read()
+        if len(content) > settings.max_upload_size_mb * 1024 * 1024:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File exceeds maximum size of {settings.max_upload_size_mb} MB",
+            )
+        with open(upload_path, "wb") as f:
+            f.write(content)
+        image_path = upload_path
     video_path = None
     if video:
         _validate_video(video)
         os.makedirs(settings.upload_dir, exist_ok=True)
         file_ext = os.path.splitext(video.filename or "input.mp4")[1]
-        upload_path = os.path.join(settings.upload_dir, f"input_{seed}{file_ext}")
+        upload_path = os.path.join(settings.upload_dir, f"video_{seed}{file_ext}")
         content = await video.read()
         if len(content) > settings.max_upload_size_mb * 1024 * 1024:
             raise HTTPException(
@@ -101,6 +116,7 @@ async def create_generation(
             f.write(content)
         video_path = upload_path
     params = {
+        "image_path": image_path,
         "video_path": video_path,
         "prompt": prompt,
         "negative_prompt": negative_prompt,
@@ -143,6 +159,11 @@ async def _run_generation(task_id: str, params: dict):
             video_frames = extract_frames(video_path, max_frames=frames)
             if not video_frames:
                 video_frames = None
+
+        image_path = params.get("image_path")
+        if image_path and os.path.exists(image_path) and not video_frames:
+            from PIL import Image as PILImage
+            video_frames = [PILImage.open(image_path).convert("RGB")]
 
         result_url = await video_generator.generate(
             prompt=params["prompt"],

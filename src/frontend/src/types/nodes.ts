@@ -3,6 +3,7 @@ import { Position } from '@xyflow/react'
 
 export type NodeType =
   | 'videoInput'
+  | 'imageInput'
   | 'audioInput'
   | 'prompt'
   | 'generation'
@@ -31,6 +32,12 @@ export interface NodeDefinition {
   inputs: PortDef[]
   outputs: PortDef[]
   defaultData?: Record<string, unknown>
+}
+
+export interface ImageInputData extends Record<string, unknown> {
+  file?: File
+  fileName?: string
+  fileUrl?: string
 }
 
 export interface VideoInputData extends Record<string, unknown> {
@@ -75,6 +82,7 @@ export interface OutputData extends Record<string, unknown> {
 }
 
 export type NodeData =
+  | ImageInputData
   | VideoInputData
   | AudioInputData
   | PromptData
@@ -134,6 +142,14 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
     inputs: [],
     outputs: [{ id: 'video', label: 'Video', type: 'video_tensor' }],
   },
+  imageInput: {
+    type: 'imageInput',
+    label: 'Image Input',
+    color: '#f97316',
+    description: 'Upload or drag an image file to use as input for image-to-video generation.',
+    inputs: [],
+    outputs: [{ id: 'image', label: 'Image', type: 'video_tensor' }],
+  },
   audioInput: {
     type: 'audioInput',
     label: 'Audio Input',
@@ -160,6 +176,7 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
     description: 'The core generation node. Connects prompts, parameters, and inputs to produce a video.',
     inputs: [
       { id: 'video_in', label: 'Video', type: 'video_tensor' },
+      { id: 'image_in', label: 'Image', type: 'video_tensor' },
       { id: 'audio_in', label: 'Audio', type: 'audio_features' },
       { id: 'prompt_pos', label: 'Positive Prompt', type: 'prompt' },
       { id: 'prompt_neg', label: 'Negative Prompt', type: 'prompt' },
