@@ -8,7 +8,8 @@ from fastapi.responses import FileResponse
 from app.config import settings
 from app.models.generate import TaskInfo, TaskStatus
 from app.services.task_manager import TaskManager
-from app.services.generator import VideoGenerator, SUPPORTED_MODELS, extract_frames, get_model_config
+from app.services.generator import VideoGenerator, extract_frames, get_model_config
+from app.services.model_catalog import catalog
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +17,8 @@ router = APIRouter(prefix="/generate", tags=["generate"])
 
 task_manager = TaskManager()
 video_generator = VideoGenerator()
-_defaults = SUPPORTED_MODELS[settings.model_type]["defaults"]
+_default_variant = catalog.get_variant(settings.model_type)
+_defaults = _default_variant.defaults if _default_variant else {"width": 720, "height": 480, "steps": 50, "cfg": 7.0}
 
 ALLOWED_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv"}
 
@@ -65,13 +67,15 @@ async def create_generation(
     strength: float = Form(0.8, ge=0.0, le=1.0),
     scheduler: str = Form(""),
     model: str = Form(settings.model_type),
+    num_frames: Optional[int] = Form(None),
+    max_sequence_length: Optional[int] = Form(None),
 ):
     model_cfg = get_model_config(model)
     if model_cfg is None:
-        valid = ", ".join(SUPPORTED_MODELS)
+        variants = [v.key for v in catalog.all_variants()]
         raise HTTPException(
             status_code=422,
-            detail=f"Unknown model '{model}'. Valid: {valid}",
+            detail=f"Unknown model '{model}'. Valid: {', '.join(variants)}",
         )
     _validate_dimensions(width, height)
     model_schedulers = model_cfg.get("schedulers", {})
@@ -108,6 +112,8 @@ async def create_generation(
         "strength": strength,
         "scheduler": scheduler or None,
         "model": model,
+        "num_frames": num_frames,
+        "max_sequence_length": max_sequence_length,
     }
     task_id = await task_manager.create_task(params)
     _dispatch_generation(task_id, params)
@@ -128,8 +134,8 @@ async def _run_generation(task_id: str, params: dict):
             await task_manager.set_progress(task_id, current, total)
 
         model = params.get("model", settings.model_type)
-        model_cfg = get_model_config(model) or SUPPORTED_MODELS.get(settings.model_type, {})
-        frames = model_cfg.get("defaults", {}).get("num_frames", 49)
+        variant = catalog.get_variant(model)
+        frames = variant.defaults.get("num_frames", 49) if variant else 49
 
         video_frames = None
         video_path = params.get("video_path")
@@ -150,9 +156,12 @@ async def _run_generation(task_id: str, params: dict):
             seed=params["seed"],
             scheduler=params.get("scheduler"),
             model=model,
+            num_frames=params.get("num_frames"),
+            max_sequence_length=params.get("max_sequence_length"),
             progress_callback=progress_callback,
         )
-        await task_manager.complete_task(task_id, result_url)
+        result_type = "image" if result_url.endswith(".png") else "video"
+        await task_manager.complete_task(task_id, result_url, result_type)
     except Exception as e:
         await task_manager.fail_task(task_id, str(e))
     finally:
@@ -175,4 +184,5 @@ async def get_result(filename: str):
     filepath = os.path.join(settings.results_dir, filename)
     if not os.path.exists(filepath):
         raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(filepath, media_type="video/mp4")
+    media_type = "image/png" if filename.endswith(".png") else "video/mp4"
+    return FileResponse(filepath, media_type=media_type)

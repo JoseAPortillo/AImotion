@@ -21,6 +21,7 @@ interface HealthInfo {
   vram_free_gb?: number
   current_model?: string | null
   current_v2v_model?: string | null
+  cache_dir?: string
 }
 
 interface InstallProgress {
@@ -30,6 +31,14 @@ interface InstallProgress {
   total_files: number
   downloaded_files: number
   error_msg: string
+  requirements?: Array<{
+    type: string
+    package?: string
+    name?: string
+    reason: string
+    optional: boolean
+  }>
+  waiting_for_confirmation?: boolean
 }
 
 const popover: React.CSSProperties = {
@@ -49,7 +58,7 @@ const popover: React.CSSProperties = {
   padding: 12,
 }
 
-type Status = 'idle' | 'checking' | 'installing' | 'cancelling' | 'error' | 'done'
+type Status = 'idle' | 'checking' | 'confirming' | 'installing' | 'cancelling' | 'error' | 'done'
 
 export default function ModelManager({ backendOk }: { backendOk: boolean }) {
   const [open, setOpen] = useState(false)
@@ -65,6 +74,7 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
   const [installingHfName, setInstallingHfName] = useState<string | null>(null)
   const [progress, setProgress] = useState<InstallProgress | null>(null)
   const [modelTab, setModelTab] = useState<'installed' | 'builtin' | 'other'>('installed')
+  const [customCacheDir, setCustomCacheDir] = useState('')
   const ref = useRef<HTMLDivElement>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const mountedRef = useRef(true)
@@ -162,6 +172,11 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
           setStatusMsg('')
           return
         }
+        if (p.waiting_for_confirmation) {
+          setStatus('confirming')
+          setStatusMsg('Waiting for confirmation...')
+          return
+        }
         setStatus(p.status === 'discovering' ? 'checking' : 'installing')
         const fname = p.current_file ? ` (${p.current_file})` : ''
         setStatusMsg(`${p.status} ${p.progress_pct.toFixed(0)}%${fname}`)
@@ -191,7 +206,11 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
       const res = await fetch('/models/install', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hf_name: name, alias: name.split('/').pop() || name }),
+        body: JSON.stringify({
+          hf_name: name,
+          alias: name.split('/').pop() || name,
+          cache_dir: customCacheDir.trim()
+        }),
       })
       const text = await res.text()
       let data: any = {}
@@ -230,6 +249,25 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
     try {
       await fetch(`/models/install/${taskId}`, { method: 'DELETE' })
     } catch { /* ignore */ }
+  }
+
+  const handleConfirm = async () => {
+    if (!taskId) return
+    setStatus('installing')
+    setStatusMsg('Installing requirements...')
+    try {
+      const res = await fetch(`/models/install/${taskId}/confirm`, { method: 'POST' })
+      if (!res.ok) {
+        const err = await res.json()
+        setStatus('error')
+        setStatusMsg(err.detail || 'Failed to confirm installation')
+        return
+      }
+      setStatusMsg('Installing requirements and downloading model...')
+    } catch (e: any) {
+      setStatus('error')
+      setStatusMsg(e.message || 'Failed to confirm installation')
+    }
   }
 
   const handleUninstall = async (modelKey: string) => {
@@ -326,6 +364,21 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
                     outline: 'none',
                   }}
                 />
+                <input
+                  value={customCacheDir}
+                  onChange={e => setCustomCacheDir(e.target.value)}
+                  placeholder={health?.cache_dir || 'Custom cache dir (optional)'}
+                  style={{
+                    flex: 1,
+                    background: '#0f0f0f',
+                    border: '1px solid #333',
+                    borderRadius: 4,
+                    color: '#ccc',
+                    padding: '6px 8px',
+                    fontSize: 11,
+                    outline: 'none',
+                  }}
+                />
                 <button
                   onClick={handleInstall}
                   disabled={status === 'checking' || status === 'installing' || status === 'cancelling' || !hfInput.trim()}
@@ -359,6 +412,64 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
                   {(status === 'error' || status === 'done') && (
                     <span onClick={() => { setStatus('idle'); setProgress(null) }} style={{ marginLeft: 8, cursor: 'pointer', opacity: 0.6 }}>✕</span>
                   )}
+                </div>
+              )}
+
+              {/* Requirements confirmation */}
+              {status === 'confirming' && progress?.requirements && (
+                <div style={{
+                  background: '#1a1a2e',
+                  border: '1px solid #333',
+                  borderRadius: 4,
+                  padding: 8,
+                  marginBottom: 8,
+                }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: '#8888ff', marginBottom: 6 }}>
+                    This model requires additional dependencies:
+                  </div>
+                  {progress.requirements.map((req, i) => (
+                    <div key={i} style={{ fontSize: 10, color: '#ccc', marginBottom: 4, paddingLeft: 8 }}>
+                      <div style={{ fontWeight: 600 }}>
+                        {req.type === 'python_package' ? `📦 ${req.package}` : `🔑 ${req.name}`}
+                        {req.optional && <span style={{ color: '#888', fontWeight: 400 }}> (optional)</span>}
+                      </div>
+                      <div style={{ color: '#888' }}>{req.reason}</div>
+                    </div>
+                  ))}
+                  <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                    <button
+                      onClick={handleConfirm}
+                      style={{
+                        flex: 1,
+                        padding: '6px 12px',
+                        borderRadius: 4,
+                        border: 'none',
+                        fontSize: 11,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        background: '#4ade80',
+                        color: '#0f0f0f',
+                      }}
+                    >
+                      Confirm & Install
+                    </button>
+                    <button
+                      onClick={handleCancel}
+                      style={{
+                        flex: 1,
+                        padding: '6px 12px',
+                        borderRadius: 4,
+                        border: '1px solid #5a1a1a',
+                        fontSize: 11,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        background: 'transparent',
+                        color: '#f87171',
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 </div>
               )}
 

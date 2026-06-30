@@ -1,0 +1,30 @@
+{
+  "family": "wan2.2",
+  "label": "Wan2.2",
+  "description": "Wan 2.2 video generation by Alibaba (needs custom runner)",
+  "runner": "custom",
+  "pipeline": null,
+  "schedulers": {},
+  "default_scheduler": null,
+  "defaults": {
+    "steps": 50,
+    "cfg": 5.0
+  },
+  "inputs": {
+    "prompt": { "required": true, "type": "text" },
+    "image": { "required": false, "type": "image" },
+    "strength": { "required": false, "type": "float", "default": 0.8, "min": 0, "max": 1 }
+  },
+  "output": { "type": "video", "mime": "video/mp4" },
+  "variants": [
+    {
+      "key": "wan2.2",
+      "name": "Wan2.2",
+      "hf_name": null,
+      "type": "future",
+      "size_gb": null,
+      "dtype": null,
+      "needs_token": false
+    }
+  ]
+}

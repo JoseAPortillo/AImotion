@@ -16,13 +16,14 @@ interface GraphState {
   edges: Edge[]
   selectedNode: string | null
   outputUrl: string | null
+  resultType: 'image' | 'video' | null
   addNode: (type: NodeType, position: { x: number; y: number }) => void
   onNodesChange: (changes: NodeChange<AppNode>[]) => void
   onEdgesChange: (changes: EdgeChange[]) => void
   onConnect: (connection: Connection) => void
   updateNodeData: (nodeId: string, data: Partial<NodeData>) => void
   selectNode: (nodeId: string | null) => void
-  setOutputUrl: (url: string | null) => void
+  setOutputUrl: (url: string | null, resultType?: 'image' | 'video' | null) => void
   removeNode: (nodeId: string) => void
 }
 
@@ -33,6 +34,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   edges: [],
   selectedNode: null,
   outputUrl: null,
+  resultType: null,
 
   addNode: (type, position) => {
     const def = NODE_DEFINITIONS[type]
@@ -89,12 +91,21 @@ export const useGraphStore = create<GraphState>((set, get) => ({
 
   selectNode: (nodeId) => set({ selectedNode: nodeId }),
 
-  setOutputUrl: (url) => set({ outputUrl: url }),
+  setOutputUrl: (url, resultType = null) => set({ outputUrl: url, resultType }),
 
   removeNode: (nodeId) => {
-    set((state) => ({
-      nodes: state.nodes.filter((n) => n.id !== nodeId),
-      edges: state.edges.filter((e) => e.source !== nodeId && e.target !== nodeId),
-    }))
+    set((state) => {
+      const node = state.nodes.find((n) => n.id === nodeId)
+      const remaining = state.nodes.filter((n) => n.id !== nodeId)
+      const updates: Partial<GraphState & { outputUrl: string | null; resultType: 'image' | 'video' | null }> = {
+        nodes: remaining,
+        edges: state.edges.filter((e) => e.source !== nodeId && e.target !== nodeId),
+      }
+      if (node?.type === 'preview' && !remaining.some((n) => n.type === 'preview')) {
+        updates.outputUrl = null
+        updates.resultType = null
+      }
+      return updates
+    })
   },
 }))

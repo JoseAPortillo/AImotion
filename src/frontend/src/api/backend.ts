@@ -15,6 +15,7 @@ export interface TaskStatus {
   current_step?: number
   total_steps?: number
   result_url?: string
+  result_type?: 'image' | 'video'
   error?: string
 }
 
@@ -38,6 +39,8 @@ export async function startGeneration(
     model: string
     vae_tiling: boolean
     vae_tile_overlap: number
+    num_frames?: number
+    max_sequence_length?: number
   },
   videoFile?: File,
 ): Promise<TaskResponse> {
@@ -55,6 +58,8 @@ export async function startGeneration(
   formData.append('model', params.model)
   formData.append('vae_tiling', String(params.vae_tiling))
   formData.append('vae_tile_overlap', String(params.vae_tile_overlap))
+  if (params.num_frames != null) formData.append('num_frames', String(params.num_frames))
+  if (params.max_sequence_length != null) formData.append('max_sequence_length', String(params.max_sequence_length))
 
   const r = await fetch('/generate', { method: 'POST', body: formData })
   if (!r.ok) {

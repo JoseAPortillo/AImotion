@@ -7,6 +7,9 @@ import { useGraphStore } from '../../store/graph'
 function PreviewNode(props: NodeProps) {
   const def = NODE_DEFINITIONS[props.type as NodeType]
   const outputUrl = useGraphStore((s) => s.outputUrl)
+  const resultType = useGraphStore((s) => s.resultType)
+
+  const isImage = resultType === 'image' || (!resultType && outputUrl?.endsWith('.png'))
 
   return (
     <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, position: 'relative' }}>
@@ -16,13 +19,17 @@ function PreviewNode(props: NodeProps) {
       </div>
       <div style={{ padding: 10, fontSize: 12, color: '#ccc' }}>
         {outputUrl ? (
-          <video src={outputUrl} controls autoPlay style={{ width: '100%', maxWidth: 320, maxHeight: 180, borderRadius: 4, display: 'block', margin: '0 auto' }} />
+          isImage ? (
+            <img src={outputUrl} alt="Generated" style={{ width: '100%', maxWidth: 320, maxHeight: 320, borderRadius: 4, display: 'block', margin: '0 auto' }} />
+          ) : (
+            <video src={outputUrl} controls autoPlay style={{ width: '100%', maxWidth: 320, maxHeight: 180, borderRadius: 4, display: 'block', margin: '0 auto' }} />
+          )
         ) : (
           <span style={{ color: '#888' }}>Connect to Generation node</span>
         )}
       </div>
       <Handle type="target" position={Position.Left} id="video_in" style={{ top: '50%', background: getHandleColor('video_in', 'video_tensor') }}>
-        <div style={{ position: 'absolute', left: -8, top: -2, transform: 'translateX(-100%)', fontSize: 10, color: getHandleColor('video_in', 'video_tensor'), whiteSpace: 'nowrap' }}>Video</div>
+        <div style={{ position: 'absolute', left: -8, top: -2, transform: 'translateX(-100%)', fontSize: 10, color: getHandleColor('video_in', 'video_tensor'), whiteSpace: 'nowrap' }}>Output</div>
       </Handle>
     </div>
   )

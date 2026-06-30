@@ -20,6 +20,7 @@ class GenerationTask:
         self.total_steps: Optional[int] = None
         self.eta_sec: Optional[float] = None
         self.result_url: Optional[str] = None
+        self.result_type: Optional[str] = None
         self.error: Optional[str] = None
         self.created_at = time.time()
 
@@ -32,6 +33,7 @@ class GenerationTask:
             "total_steps": self.total_steps,
             "eta_sec": self.eta_sec,
             "result_url": self.result_url,
+            "result_type": self.result_type,
             "error": self.error,
         }
 
@@ -74,13 +76,14 @@ class TaskManager:
                 task.total_steps = total_steps
                 task.progress = current_step / total_steps if total_steps > 0 else 0
 
-    async def complete_task(self, task_id: str, result_url: str):
+    async def complete_task(self, task_id: str, result_url: str, result_type: str = "video"):
         async with self._lock:
             task = self._tasks.get(task_id)
             if task:
                 task.status = TaskStatus.COMPLETED
                 task.progress = 1.0
                 task.result_url = result_url
+                task.result_type = result_type
 
     async def fail_task(self, task_id: str, error: str):
         async with self._lock:

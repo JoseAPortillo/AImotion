@@ -1,13 +1,16 @@
 import os
 import logging
 import threading
+import subprocess
+import sys
 from datetime import datetime
 from hashlib import md5
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from huggingface_hub import HfApi, hf_hub_download
 from app.config import settings
-from app.services.generator import VideoGenerator, SUPPORTED_MODELS
+from app.services.generator import VideoGenerator, get_model_config
+from app.services.model_catalog import catalog
 from app.services.model_registry import (
     list_installed, find_installed, add_installed, remove_installed,
     generate_key, is_model_cached, discover_pipeline,
@@ -33,6 +36,9 @@ class InstallTask:
         self.cancel_event = threading.Event()
         self.result_data: dict = {}
         self._thread: threading.Thread | None = None
+        self.requirements: list[dict] = []
+        self.waiting_for_confirmation = False
+        self.confirmation_event = threading.Event()
 
     def to_dict(self):
         d: dict = {
@@ -43,44 +49,170 @@ class InstallTask:
             "downloaded_files": self.downloaded_files,
             "error_msg": self.error_msg,
         }
+        if self.requirements:
+            d["requirements"] = self.requirements
+        if self.waiting_for_confirmation:
+            d["waiting_for_confirmation"] = True
         if self.status == "done":
             d.update(self.result_data)
         return d
+
+
+def detect_requirements(hf_name: str, discovered: dict) -> list[dict]:
+    """Detect requirements for a model based on its format and pipeline."""
+    requirements = []
+    
+    # Check if model has GGUF files
+    try:
+        api = HfApi()
+        files = api.list_repo_files(hf_name)
+        has_gguf = any(f.endswith('.gguf') or f.endswith('.ggufs') for f in files)
+        
+        if has_gguf:
+            # GGUF models need llama-cpp-python or similar
+            requirements.append({
+                "type": "python_package",
+                "package": "llama-cpp-python",
+                "reason": "Required for loading GGUF format models",
+                "optional": False,
+            })
+    except Exception as e:
+        logger.warning(f"Could not check files for requirements: {e}")
+    
+    # Check if model needs HF token (gated models)
+    try:
+        api = HfApi()
+        info = api.model_info(hf_name)
+        if getattr(info, 'private', False) or getattr(info, 'gated', False):
+            requirements.append({
+                "type": "env_var",
+                "name": "HF_TOKEN",
+                "reason": "Required for accessing gated/private models",
+                "optional": False,
+            })
+    except Exception as e:
+        logger.warning(f"Could not check model access requirements: {e}")
+    
+    # Check manifest for additional requirements
+    pipeline_class = discovered.get("pipeline_class", "")
+    for fam in catalog.families:
+        if fam.pipeline_class == pipeline_class:
+            # Add any requirements from manifest (future enhancement)
+            break
+    
+    return requirements
+
+
+def install_requirements(requirements: list[dict]) -> tuple[bool, str]:
+    """Install Python package requirements."""
+    for req in requirements:
+        if req["type"] == "python_package":
+            package = req["package"]
+            logger.info(f"Installing Python package: {package}")
+            try:
+                result = subprocess.run(
+                    [sys.executable, "-m", "pip", "install", package],
+                    capture_output=True,
+                    text=True,
+                    timeout=300,
+                )
+                if result.returncode != 0:
+                    return False, f"Failed to install {package}: {result.stderr}"
+                logger.info(f"Successfully installed {package}")
+            except subprocess.TimeoutExpired:
+                return False, f"Timeout installing {package}"
+            except Exception as e:
+                return False, f"Error installing {package}: {e}"
+        elif req["type"] == "env_var":
+            # Check if env var is set
+            name = req["name"]
+            if not os.environ.get(name):
+                return False, f"Environment variable {name} is not set. Please set it before installing."
+    
+    return True, "All requirements installed successfully"
 
 
 install_tasks: dict[str, InstallTask] = {}
 tasks_lock = threading.Lock()
 
 
-def _run_install(task_id: str, hf_name: str, alias: str):
+def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
     task = install_tasks.get(task_id)
     if not task:
         return
 
+    # Use provided cache_dir or fall back to settings
+    if not cache_dir:
+        cache_dir = settings.model_cache_dir
+
     try:
         task.status = "discovering"
         discovered = discover_pipeline(hf_name)
-        if discovered is None:
+        if "error" in discovered:
             task.status = "error"
-            task.error_msg = (
-                f"Model '{hf_name}' is not a valid or supported pipeline. "
-                f"Ensure it exists on HuggingFace and contains model weights."
+            reasons = {
+                "no_weights": (
+                    f"'{hf_name}' is not a standalone model — it has no weight files (.safetensors, .bin). "
+                    f"This is likely a LoRA, motion adapter, ControlNet, or other component meant to be "
+                    f"used with another model. You cannot install it alone."
+                ),
+                "no_class_name": (
+                    f"'{hf_name}' has a model_index.json but no _class_name field, "
+                    f"so the pipeline type can't be identified. It may be a component "
+                    f"rather than a standalone model."
+                ),
+                "unsupported_pipeline": (
+                    f"'{hf_name}' is not a supported model type. "
+                    f"Only image and video generation pipelines are supported."
+                ),
+            }
+            task.error_msg = reasons.get(
+                discovered["error"],
+                f"'{hf_name}' cannot be installed: {discovered['error']}"
             )
             return
 
         pipeline_class_name = discovered["pipeline_class"]
         tok = settings.hf_token or None
 
+        # Detect requirements and wait for user confirmation
+        task.requirements = detect_requirements(hf_name, discovered)
+        if task.requirements:
+            task.status = "waiting_for_confirmation"
+            task.waiting_for_confirmation = True
+            logger.info(f"Waiting for user confirmation to install {len(task.requirements)} requirement(s)")
+            
+            # Wait for confirmation (or cancellation)
+            task.confirmation_event.wait()
+            
+            if task.cancel_event.is_set():
+                task.status = "cancelled"
+                return
+            
+            # Install requirements
+            task.status = "installing_requirements"
+            task.waiting_for_confirmation = False
+            logger.info(f"Installing {len(task.requirements)} requirement(s)")
+            
+            success, msg = install_requirements(task.requirements)
+            if not success:
+                task.status = "error"
+                task.error_msg = f"Failed to install requirements: {msg}"
+                return
+            
+            logger.info("All requirements installed successfully")
+
         task.status = "downloading"
 
         api = HfApi()
         files = api.list_repo_files(hf_name)
-        weight_exts = (".safetensors", ".bin", ".pt", ".pth")
+        weight_exts = (".safetensors", ".bin", ".pt", ".pth", ".gguf", ".ggufs")
         weight_files = [f for f in files if f.endswith(weight_exts)]
 
         if not weight_files:
             task.status = "error"
             task.error_msg = f"Model '{hf_name}' has no weight files"
+            logger.info(f"Install task {task_id} stopped: no weight files found")
             return
 
         def _get_file_size(filename: str) -> int:
@@ -94,6 +226,21 @@ def _run_install(task_id: str, hf_name: str, alias: str):
             return 0
 
         total_size = sum(_get_file_size(f) for f in weight_files)
+        if total_size > 0:
+            import shutil
+            os.makedirs(cache_dir, exist_ok=True)
+            free_bytes = shutil.disk_usage(cache_dir).free
+            needed = total_size + (1024 ** 3)
+            if free_bytes < needed:
+                free_gb = free_bytes / (1024 ** 3)
+                needed_gb = needed / (1024 ** 3)
+                task.status = "error"
+                task.error_msg = (
+                    f"Not enough disk space. Need ~{needed_gb:.1f} GB free, "
+                    f"but only {free_gb:.1f} GB available. "
+                    f"Free up space or choose a smaller model."
+                )
+                return
         downloaded_size = 0
         task.total_files = len(weight_files)
 
@@ -111,6 +258,7 @@ def _run_install(task_id: str, hf_name: str, alias: str):
                     filename=fname,
                     token=tok,
                     resume_download=True,
+                    cache_dir=cache_dir,
                 )
             except Exception as e:
                 if task.cancel_event.is_set():
@@ -160,96 +308,35 @@ def _run_install(task_id: str, hf_name: str, alias: str):
         task.error_msg = str(e)
 
 
-BUILTIN_CATALOG: list[dict] = [
-    {
-        "key": "cogvideox-2b",
-        "name": "CogVideoX-2b",
-        "hf_name": "THUDM/CogVideoX-2b",
-        "type": "builtin",
-        "size_gb": 5.2,
-        "cached": False,
-        "loaded": False,
-        "pipeline_class": SUPPORTED_MODELS["cogvideox-2b"]["pipeline_class"],
-        "schedulers": list(SUPPORTED_MODELS["cogvideox-2b"].get("schedulers", {}).keys()),
-        "default_scheduler": SUPPORTED_MODELS["cogvideox-2b"].get("default_scheduler", ""),
-    },
-    {
-        "key": "cogvideox-5b",
-        "name": "CogVideoX-5b",
-        "hf_name": "THUDM/CogVideoX-5b",
-        "type": "builtin",
-        "size_gb": 10.0,
-        "cached": False,
-        "loaded": False,
-        "pipeline_class": SUPPORTED_MODELS["cogvideox-5b"]["pipeline_class"],
-        "schedulers": list(SUPPORTED_MODELS["cogvideox-5b"].get("schedulers", {}).keys()),
-        "default_scheduler": SUPPORTED_MODELS["cogvideox-5b"].get("default_scheduler", ""),
-    },
-    {
-        "key": "ltx-video",
-        "name": "LTX-Video",
-        "hf_name": "Lightricks/LTX-Video",
-        "type": "builtin",
-        "size_gb": 8.0,
-        "cached": False,
-        "loaded": False,
-        "pipeline_class": SUPPORTED_MODELS["ltx-video"]["pipeline_class"],
-        "schedulers": list(SUPPORTED_MODELS["ltx-video"].get("schedulers", {}).keys()),
-        "default_scheduler": SUPPORTED_MODELS["ltx-video"].get("default_scheduler", ""),
-    },
-    {
-        "key": "wan2.2",
-        "name": "Wan2.2",
-        "hf_name": None,
-        "type": "future",
-        "size_gb": None,
-        "cached": False,
-        "loaded": False,
-        "schedulers": [],
-        "default_scheduler": None,
-    },
-    {
-        "key": "seedance",
-        "name": "Seedance",
-        "hf_name": None,
-        "type": "api",
-        "size_gb": None,
-        "cached": False,
-        "loaded": False,
-        "schedulers": [],
-        "default_scheduler": None,
-    },
-    {
-        "key": "kling",
-        "name": "Kling",
-        "hf_name": None,
-        "type": "api",
-        "size_gb": None,
-        "cached": False,
-        "loaded": False,
-        "schedulers": [],
-        "default_scheduler": None,
-    },
-]
-
-
-def _build_model_entry(m: dict) -> dict:
-    entry = dict(m)
-    if m["hf_name"]:
-        entry["cached"] = is_model_cached(m["hf_name"])
-    entry["loaded"] = (
-        _video_generator._current_model_key == m["key"]
-        or _video_generator._current_v2v_model_key == m["key"]
-    )
-    return entry
+def _build_variant_entry(variant) -> dict:
+    hf_name = variant.hf_name
+    return {
+        "key": variant.key,
+        "name": variant.name,
+        "hf_name": hf_name,
+        "type": variant.type,
+        "size_gb": variant.size_gb,
+        "cached": is_model_cached(hf_name) if hf_name else False,
+        "loaded": _video_generator._current_model_key == variant.key,
+        "pipeline_class": variant.pipeline_class,
+        "schedulers": list(variant.schedulers.keys()),
+        "default_scheduler": variant.default_scheduler,
+        "accepts": variant.accepts(),
+        "defaults": variant.defaults,
+        "inputs": variant.inputs,
+    }
 
 
 @router.get("")
 async def list_models():
     results = []
-    for m in BUILTIN_CATALOG:
-        results.append(_build_model_entry(m))
+    for v in catalog.all_variants():
+        if v.type in ("builtin", "future", "api"):
+            results.append(_build_variant_entry(v))
     for inst in list_installed():
+        variant = catalog.get_variant(inst.key)
+        if variant and variant.type == "builtin":
+            continue
         results.append({
             "key": inst.key,
             "name": inst.alias or inst.hf_name,
@@ -262,6 +349,9 @@ async def list_models():
             "default_scheduler": inst.default_scheduler,
             "alias": inst.alias,
             "pipeline_class": inst.pipeline_class,
+            "accepts": variant.accepts() if variant else {},
+            "defaults": variant.defaults if variant else {"steps": 50, "cfg": 7.0},
+            "inputs": variant.inputs if variant else {},
         })
     return {"models": results}
 
@@ -269,6 +359,7 @@ async def list_models():
 class InstallRequest(BaseModel):
     hf_name: str
     alias: str = ""
+    cache_dir: str = ""
 
 
 @router.post("/install")
@@ -284,7 +375,7 @@ async def install_model(req: InstallRequest):
 
     with tasks_lock:
         for tid, t in install_tasks.items():
-            if t.hf_name == hf_name and t.status in ("pending", "discovering", "downloading"):
+            if t.hf_name == hf_name and t.status in ("pending", "discovering", "downloading", "waiting_for_confirmation", "installing_requirements"):
                 return {"status": "already_in_progress", "task_id": tid}
 
     task_id = md5(hf_name.encode()).hexdigest()[:12]
@@ -292,9 +383,11 @@ async def install_model(req: InstallRequest):
     with tasks_lock:
         install_tasks[task_id] = task
 
+    cache_dir = req.cache_dir.strip() if req.cache_dir else settings.model_cache_dir
+
     thread = threading.Thread(
         target=_run_install,
-        args=(task_id, hf_name, req.alias),
+        args=(task_id, hf_name, req.alias, cache_dir),
         daemon=True,
     )
     task._thread = thread
@@ -312,6 +405,19 @@ async def install_progress(task_id: str):
     return task.to_dict()
 
 
+@router.post("/install/{task_id}/confirm")
+async def confirm_install(task_id: str):
+    with tasks_lock:
+        task = install_tasks.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if task.status != "waiting_for_confirmation":
+        raise HTTPException(status_code=400, detail=f"Task is not waiting for confirmation (current status: {task.status})")
+    
+    task.confirmation_event.set()
+    return {"status": "confirmed", "message": "Installation will continue"}
+
+
 @router.delete("/install/{task_id}")
 async def cancel_install(task_id: str):
     with tasks_lock:
@@ -326,6 +432,21 @@ async def cancel_install(task_id: str):
 
 class UpdateAliasRequest(BaseModel):
     alias: str
+
+
+@router.get("/{model_key}/signature")
+async def model_signature(model_key: str):
+    variant = catalog.get_variant(model_key)
+    if variant is None:
+        raise HTTPException(status_code=404, detail="Model not found")
+    inputs = variant.inputs
+    return {
+        pname: {
+            "has_default": "default" in pinfo,
+            "default": pinfo.get("default"),
+        }
+        for pname, pinfo in inputs.items()
+    }
 
 
 @router.put("/{model_key}")
@@ -385,4 +506,5 @@ async def models_status():
         **gpu,
         "current_model": _video_generator._current_model_key,
         "current_v2v_model": _video_generator._current_v2v_model_key,
+        "cache_dir": settings.model_cache_dir,
     }

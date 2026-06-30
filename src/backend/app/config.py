@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     max_height: int = 768
     model_name: str = "THUDM/CogVideoX-2b"
     model_type: str = "cogvideox-2b"
+    model_cache_dir: str = "D:\\AImation\\models"
     device: str = "cuda"
     dtype: str = "bfloat16"
     offload_text_encoder: bool = True
@@ -28,3 +29,8 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# Configure HuggingFace cache directories
+import os
+os.environ["HF_HOME"] = settings.model_cache_dir
+os.environ["HF_HUB_CACHE"] = settings.model_cache_dir

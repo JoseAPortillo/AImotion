@@ -96,40 +96,18 @@ def is_model_cached(hf_name: str) -> bool:
     return len(glob.glob(os.path.join(cache_dir, pattern))) > 0
 
 
-KNOWN_PIPELINES = {
-    "CogVideoXPipeline": {
-        "schedulers": {
-            "cogvideox_ddim": "CogVideoXDDIMScheduler",
-            "cogvideox_dpm": "CogVideoXDPMScheduler",
-        },
-        "default_scheduler": "cogvideox_ddim",
-        "defaults": {
-            "width": 720, "height": 480,
-            "steps": 50, "cfg": 6.0,
-            "num_frames": 49, "fps": 8,
-            "max_seq": 226,
-        },
-    },
-    "LTXPipeline": {
-        "schedulers": {
-            "flow_match_euler": "FlowMatchEulerDiscreteScheduler",
-            "ltx_euler_ancestral_rf": "LTXEulerAncestralRFScheduler",
-        },
-        "default_scheduler": "flow_match_euler",
-        "defaults": {
-            "width": 704, "height": 512,
-            "steps": 50, "cfg": 3.0,
-            "num_frames": 97, "fps": 24,
-            "max_seq": 256,
-        },
-    },
-}
+def _catalog_families():
+    from app.services.model_catalog import catalog
+    return catalog.families
 
-_VIDEO_PIPELINES = {
-    "CogVideoXPipeline", "CogVideoXImageToVideoPipeline", "CogVideoXVideoToVideoPipeline",
-    "LTXPipeline", "I2VGenXLPipeline", "StableVideoDiffusionPipeline",
-    "AnimateDiffPipeline", "VideoToVideoPipeline", "TextToVideoSDPipeline",
-}
+
+def _catalog_family_for_pipeline(pipeline_class: str):
+    for fam in _catalog_families():
+        if fam.pipeline_class == pipeline_class:
+            return fam
+    return None
+
+
 
 
 def _read_hf_json(hf_name: str, filename: str) -> Optional[dict]:
@@ -164,7 +142,7 @@ def _list_hf_files(hf_name: str) -> list[str]:
         return []
 
 
-def discover_pipeline(hf_name: str) -> Optional[dict]:
+def discover_pipeline(hf_name: str) -> dict:
     try:
         from huggingface_hub import HfApi
         api = HfApi()
@@ -175,11 +153,11 @@ def discover_pipeline(hf_name: str) -> Optional[dict]:
         logger.info(f"Model {hf_name}: pipeline_tag={pipeline_tag}, tags={tags}")
 
         files = _list_hf_files(hf_name)
-        weight_exts = (".safetensors", ".bin", ".pt", ".pth")
+        weight_exts = (".safetensors", ".bin", ".pt", ".pth", ".gguf", ".ggufs")
         has_weights = any(f.endswith(weight_exts) for f in files)
         if not has_weights:
-            logger.warning(f"Model {hf_name} has no weight files")
-            return None
+            logger.warning(f"Model {hf_name} has no weight files (non-model repo)")
+            return {"error": "no_weights"}
 
         pipeline_class = None
         schedulers: dict[str, str] = {}
@@ -189,7 +167,7 @@ def discover_pipeline(hf_name: str) -> Optional[dict]:
             pipeline_class = model_index.get("_class_name", "")
             if not pipeline_class:
                 logger.warning(f"Model {hf_name} has model_index.json but no _class_name")
-                return None
+                return {"error": "no_class_name"}
 
             for comp_name, comp_info in model_index.items():
                 if comp_name.startswith("_"):
@@ -205,27 +183,43 @@ def discover_pipeline(hf_name: str) -> Optional[dict]:
                         schedulers[comp_name] = cfg["_class_name"]
 
         if not pipeline_class:
-            supported_keywords = {
-                "cogvideox": "CogVideoXPipeline",
-                "ltx": "LTXPipeline",
-            }
-            for keyword, klass in supported_keywords.items():
-                if keyword in tags or keyword in pipeline_tag:
-                    pipeline_class = klass
-                    break
+            config = _read_hf_json(hf_name, "config.json")
+            if config:
+                pipeline_class = config.get("_class_name", "")
             if not pipeline_class:
-                for t in tags:
-                    if t in supported_keywords:
-                        pipeline_class = supported_keywords[t]
+                supported_keywords = {}
+                for fam in _catalog_families():
+                    pc = fam.pipeline_class
+                    if pc:
+                        supported_keywords[fam.family] = pc
+                supported_keywords.setdefault("cogvideox", "CogVideoXPipeline")
+                supported_keywords.setdefault("ltx", "LTXPipeline")
+                for keyword, klass in supported_keywords.items():
+                    if keyword in tags or keyword in pipeline_tag:
+                        pipeline_class = klass
                         break
+                if not pipeline_class:
+                    for t in tags:
+                        if t in supported_keywords:
+                            pipeline_class = supported_keywords[t]
+                            break
             if not pipeline_class and "video" in pipeline_tag:
                 pipeline_class = "CogVideoXPipeline"
+            if not pipeline_class and "image" in pipeline_tag:
+                pipeline_class = "StableDiffusionXLPipeline"
 
         if not pipeline_class:
             logger.warning(f"Unsupported model {hf_name}: pipeline={pipeline_tag}, tags={tags}")
-            return None
+            return {"error": "unsupported_pipeline"}
 
-        known = KNOWN_PIPELINES.get(pipeline_class, {})
+        fam = _catalog_family_for_pipeline(pipeline_class)
+        known = {}
+        if fam:
+            known = {
+                "schedulers": fam.schedulers,
+                "default_scheduler": fam.default_scheduler,
+                "defaults": fam.defaults,
+            }
         if not schedulers:
             schedulers = dict(known.get("schedulers", {}))
 
@@ -233,7 +227,7 @@ def discover_pipeline(hf_name: str) -> Optional[dict]:
         if not default_scheduler and schedulers:
             default_scheduler = list(schedulers.keys())[0]
 
-        is_video = pipeline_class in _VIDEO_PIPELINES or "video" in pipeline_tag
+        is_video = (fam.is_video if fam else False) or "video" in pipeline_tag
         dtype = "bfloat16" if is_video else "float16"
 
         return {
@@ -246,4 +240,4 @@ def discover_pipeline(hf_name: str) -> Optional[dict]:
 
     except Exception as e:
         logger.warning(f"Failed to discover {hf_name}: {e}")
-        return None
+        return {"error": f"discovery failed: {e}"}

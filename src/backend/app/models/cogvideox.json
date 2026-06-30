@@ -1,0 +1,61 @@
+{
+  "family": "cogvideox",
+  "label": "CogVideoX",
+  "description": "CogVideoX text-to-video generation model by THUDM",
+  "runner": "diffusers",
+  "pipeline": {
+    "class": "CogVideoXPipeline",
+    "video_pipeline": true
+  },
+  "schedulers": {
+    "cogvideox_ddim": "CogVideoXDDIMScheduler",
+    "cogvideox_dpm": "CogVideoXDPMScheduler"
+  },
+  "default_scheduler": "cogvideox_ddim",
+  "defaults": {
+    "width": 720,
+    "height": 480,
+    "steps": 50,
+    "cfg": 6.0,
+    "num_frames": 49,
+    "fps": 8,
+    "max_seq": 226
+  },
+  "inputs": {
+    "prompt": { "required": true, "type": "text" },
+    "num_frames": { "required": false, "type": "int", "default": 49 },
+    "max_sequence_length": { "required": false, "type": "int", "default": 226 },
+    "width": { "required": false, "type": "int", "default": 720, "hidden": true },
+    "height": { "required": false, "type": "int", "default": 480, "hidden": true }
+  },
+  "output": { "type": "video", "mime": "video/mp4" },
+  "variants": [
+    {
+      "key": "cogvideox",
+      "name": "CogVideoX-2b",
+      "hf_name": "THUDM/CogVideoX-2b",
+      "type": "builtin",
+      "size_gb": 5.2,
+      "dtype": "bfloat16",
+      "needs_token": false
+    },
+    {
+      "key": "cogvideox-2b",
+      "name": "CogVideoX-2b",
+      "hf_name": "THUDM/CogVideoX-2b",
+      "type": "builtin",
+      "size_gb": 5.2,
+      "dtype": "float16",
+      "needs_token": false
+    },
+    {
+      "key": "cogvideox-5b",
+      "name": "CogVideoX-5b",
+      "hf_name": "THUDM/CogVideoX-5b",
+      "type": "builtin",
+      "size_gb": 10.0,
+      "dtype": "float16",
+      "needs_token": false
+    }
+  ]
+}

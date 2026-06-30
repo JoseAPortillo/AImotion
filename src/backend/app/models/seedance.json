@@ -1,0 +1,25 @@
+{
+  "family": "seedance",
+  "label": "Seedance",
+  "description": "Seedance video generation via API",
+  "runner": "api",
+  "pipeline": null,
+  "schedulers": {},
+  "default_scheduler": null,
+  "defaults": {},
+  "inputs": {
+    "prompt": { "required": true, "type": "text" }
+  },
+  "output": { "type": "video", "mime": "video/mp4" },
+  "variants": [
+    {
+      "key": "seedance",
+      "name": "Seedance",
+      "hf_name": null,
+      "type": "api",
+      "size_gb": null,
+      "dtype": null,
+      "needs_token": false
+    }
+  ]
+}

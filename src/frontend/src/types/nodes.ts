@@ -66,6 +66,8 @@ export interface GenerationData extends Record<string, unknown> {
   scheduler: string
   vae_tiling: boolean
   vae_tile_overlap: number
+  num_frames?: number
+  max_sequence_length?: number
 }
 
 export interface OutputData extends Record<string, unknown> {

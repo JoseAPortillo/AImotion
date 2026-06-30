@@ -1,0 +1,43 @@
+{
+  "family": "ltx-video",
+  "label": "LTX-Video",
+  "description": "LTX-Video text-to-video generation model by Lightricks",
+  "runner": "diffusers",
+  "pipeline": {
+    "class": "LTXPipeline",
+    "video_pipeline": true
+  },
+  "schedulers": {
+    "flow_match_euler": "FlowMatchEulerDiscreteScheduler",
+    "ltx_euler_ancestral_rf": "LTXEulerAncestralRFScheduler"
+  },
+  "default_scheduler": "flow_match_euler",
+  "defaults": {
+    "width": 704,
+    "height": 512,
+    "steps": 50,
+    "cfg": 3.0,
+    "num_frames": 97,
+    "fps": 24,
+    "max_seq": 256
+  },
+  "inputs": {
+    "prompt": { "required": true, "type": "text" },
+    "num_frames": { "required": false, "type": "int", "default": 97 },
+    "max_sequence_length": { "required": false, "type": "int", "default": 256 },
+    "width": { "required": false, "type": "int", "default": 704, "hidden": true },
+    "height": { "required": false, "type": "int", "default": 512, "hidden": true }
+  },
+  "output": { "type": "video", "mime": "video/mp4" },
+  "variants": [
+    {
+      "key": "ltx-video",
+      "name": "LTX-Video",
+      "hf_name": "Lightricks/LTX-Video",
+      "type": "builtin",
+      "size_gb": 8.0,
+      "dtype": "bfloat16",
+      "needs_token": true
+    }
+  ]
+}

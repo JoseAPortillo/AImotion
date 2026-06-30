@@ -1,18 +1,9 @@
-import { memo, useCallback, useState, useEffect } from 'react'
+import { memo, useCallback, useMemo, useState, useEffect } from 'react'
 import type { NodeProps } from '@xyflow/react'
 import { Handle, Position, NodeResizer } from '@xyflow/react'
 import { NODE_DEFINITIONS, PORT_COLORS, getHandleColor, type NodeType, type GenerationData, type PromptData, type SamplingParamsData, type DenoisingStrengthData } from '../../types/nodes'
 import { useGraphStore } from '../../store/graph'
 import { startGeneration, pollTask, type TaskStatus } from '../../api/backend'
-
-const INPUT_FALLBACK = ['prompt_pos', 'prompt_neg', 'params']
-
-const INPUTS_BY_PIPELINE: Record<string, string[]> = {
-  LTXPipeline: ['prompt_pos', 'prompt_neg', 'params'],
-  CogVideoXPipeline: ['prompt_pos', 'prompt_neg', 'params'],
-  CogVideoXImageToVideoPipeline: ['video_in', 'prompt_pos', 'prompt_neg', 'params', 'strength'],
-  StableDiffusionXLPipeline: ['prompt_pos', 'prompt_neg', 'params'],
-}
 
 const schedLabels: Record<string, string> = {
   cogvideox_ddim: 'DDIM',
@@ -29,6 +20,20 @@ interface ModelEntry {
   default_scheduler: string
   type: string
   pipeline_class?: string
+  accepts?: {
+    image: boolean
+    video: boolean
+    strength: boolean
+  }
+  defaults?: Record<string, unknown>
+  inputs?: Record<string, {
+    required: boolean
+    type: string
+    default?: unknown
+    hidden?: boolean
+    min?: number
+    max?: number
+  }>
 }
 
 const selectStyle: React.CSSProperties = {
@@ -55,7 +60,7 @@ function GenerationNode(props: NodeProps) {
   const [models, setModels] = useState<ModelEntry[]>([])
   const [modelsLoaded, setModelsLoaded] = useState(false)
 
-  useEffect(() => {
+  const fetchModels = useCallback(() => {
     fetch('/models')
       .then(r => r.json())
       .then(data => {
@@ -68,14 +73,25 @@ function GenerationNode(props: NodeProps) {
       .catch(() => setModelsLoaded(true))
   }, [])
 
+  useEffect(() => {
+    fetchModels()
+  }, [fetchModels])
+
   const modelConfig = models.find(m => m.key === data.model)
   const availableScheds = modelConfig?.schedulers || []
   const defaultSched = modelConfig?.default_scheduler || ''
 
-  const pipelineClass = modelConfig?.pipeline_class
-  const activeInputs = pipelineClass
-    ? (INPUTS_BY_PIPELINE[pipelineClass] || INPUT_FALLBACK)
-    : INPUT_FALLBACK
+  const activeInputs = useMemo(() => {
+    const base = ['prompt_pos', 'prompt_neg', 'params']
+    if (!modelConfig?.accepts) return base
+    const showVideo = modelConfig.accepts.image || modelConfig.accepts.video
+    const showStrength = modelConfig.accepts.strength
+    return [
+      ...(showVideo ? ['video_in'] : []),
+      ...base,
+      ...(showStrength ? ['strength'] : []),
+    ]
+  }, [modelConfig])
 
   const schedLabel = data.scheduler
     ? schedLabels[data.scheduler] || data.scheduler
@@ -86,10 +102,15 @@ function GenerationNode(props: NodeProps) {
   const handleModelChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
     const key = e.target.value
     const cfg = models.find(m => m.key === key)
-    updateNodeData(props.id, {
+    const defs = cfg?.defaults || {}
+    const inputs = cfg?.inputs || {}
+    const update: Partial<GenerationData> = {
       model: key,
       scheduler: cfg?.default_scheduler || '',
-    } as Partial<GenerationData>)
+    }
+    if (inputs.num_frames && defs.num_frames != null) update.num_frames = defs.num_frames as number
+    if (inputs.max_sequence_length && defs.max_seq != null) update.max_sequence_length = defs.max_seq as number
+    updateNodeData(props.id, update)
   }, [props.id, models, updateNodeData])
 
   const handleGenWorkflow = useCallback(async () => {
@@ -129,6 +150,8 @@ function GenerationNode(props: NodeProps) {
           model: data.model || 'cogvideox-2b',
           vae_tiling: data.vae_tiling ?? true,
           vae_tile_overlap: data.vae_tile_overlap ?? 0.0,
+          num_frames: data.num_frames,
+          max_sequence_length: data.max_sequence_length,
         },
         videoNode?.data && 'file' in videoNode.data ? (videoNode.data as { file?: File }).file : undefined,
       )
@@ -147,7 +170,7 @@ function GenerationNode(props: NodeProps) {
 
       if (status.status === 'completed' && status.result_url) {
         setProgress(100)
-        setOutputUrl(status.result_url)
+        setOutputUrl(status.result_url, status.result_type)
       } else {
         alert(`Workflow failed: ${status.error || 'unknown error'}`)
       }
@@ -168,6 +191,7 @@ function GenerationNode(props: NodeProps) {
         <select
           value={data.model}
           onChange={handleModelChange}
+          onFocus={fetchModels}
           style={selectStyle}
         >
           {!modelsLoaded && <option value="">Loading...</option>}
@@ -216,6 +240,21 @@ function GenerationNode(props: NodeProps) {
             </div>
           )}
         </div>
+        {modelConfig?.inputs && Object.entries(modelConfig.inputs)
+          .filter(([, inp]) => !inp.hidden && inp.type === 'int' && inp.default != null)
+          .map(([name, inp]) => (
+            <div key={name} style={{ marginTop: 6 }}>
+              <label style={{ fontSize: 10, color: '#888', display: 'block', marginBottom: 2 }}>{name.replace(/_/g, ' ')}</label>
+              <input
+                type="number"
+                value={(data[name as keyof GenerationData] ?? inp.default) as number}
+                onChange={(e) => updateNodeData(props.id, { [name]: parseInt(e.target.value, 10) } as Partial<GenerationData>)}
+                min={inp.min}
+                max={inp.max}
+                style={{ ...selectStyle, width: '100%' }}
+              />
+            </div>
+          ))}
       </div>
 
       {genRunning && (
