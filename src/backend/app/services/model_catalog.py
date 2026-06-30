@@ -75,33 +75,53 @@ class ModelVariant:
         self.dtype: Optional[str] = data.get("dtype")
         self.needs_token: bool = data.get("needs_token", False)
         self._family = family
+        self._data = data
+
+    def _pipe_data(self) -> dict:
+        return self._data.get("pipeline") or {}
 
     @property
     def pipeline_class(self) -> Optional[str]:
+        p = self._pipe_data()
+        if p:
+            return p.get("class")
         return self._family.pipeline_class
 
     @property
     def is_video(self) -> bool:
+        p = self._pipe_data()
+        if p:
+            return p.get("video_pipeline", False)
         return self._family.is_video
 
     @property
     def schedulers(self) -> dict[str, str]:
-        return self._family.schedulers
+        return self._data.get("schedulers") or self._family.schedulers
 
     @property
     def default_scheduler(self) -> Optional[str]:
-        return self._family.default_scheduler
+        return self._data.get("default_scheduler") or self._family.default_scheduler
 
     @property
     def defaults(self) -> dict:
-        return self._family.defaults
+        return self._data.get("defaults") or self._family.defaults
 
     @property
     def inputs(self) -> dict:
-        return self._family.inputs
+        family_inputs = self._family.inputs
+        variant_inputs = self._data.get("inputs") or {}
+        if not variant_inputs:
+            return family_inputs
+        merged = {**family_inputs, **variant_inputs}
+        return merged
 
     def accepts(self) -> dict:
-        return self._family.accepts()
+        inputs = self.inputs
+        return {
+            "image": "image" in inputs,
+            "video": "video" in inputs,
+            "strength": "strength" in inputs,
+        }
 
     def to_entry(self, cached: bool = False, loaded: bool = False) -> dict:
         return {

@@ -56,6 +56,31 @@
       "size_gb": 10.0,
       "dtype": "float16",
       "needs_token": false
+    },
+    {
+      "key": "cogvideox-5b-i2v",
+      "name": "CogVideoX-5b-I2V",
+      "hf_name": "THUDM/CogVideoX-5b-I2V",
+      "type": "builtin",
+      "size_gb": 10.0,
+      "dtype": "bfloat16",
+      "needs_token": false,
+      "pipeline": {
+        "class": "CogVideoXImageToVideoPipeline",
+        "video_pipeline": true
+      },
+      "defaults": {
+        "steps": 50,
+        "cfg": 6.0,
+        "num_frames": 49,
+        "fps": 8,
+        "max_seq": 226,
+        "strength": 0.8
+      },
+      "inputs": {
+        "image": { "required": true, "type": "image" },
+        "strength": { "required": false, "type": "float", "default": 0.8, "min": 0, "max": 1 }
+      }
     }
   ]
 }
