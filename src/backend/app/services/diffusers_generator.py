@@ -103,9 +103,9 @@ class DiffusersGenerator:
             except Exception:
                 logger.info(f"{pipe_cls.__name__} vanilla load failed, will retry with components")
 
-        # Slow path — checkpoint has only UNet weights; load components from base models
-        logger.info("Loading missing components from base models...")
-        from diffusers import AutoencoderKL
+        # Slow path — checkpoint is missing one or more subcomponents; load everything from base models
+        logger.info("Loading all components from base models...")
+        from diffusers import AutoencoderKL, UNet2DConditionModel
         from transformers import CLIPTextModel, CLIPTextModelWithProjection, CLIPTokenizer
 
         try:
@@ -114,6 +114,9 @@ class DiffusersGenerator:
             vae = AutoencoderKL.from_pretrained("stabilityai/stable-diffusion-xl-base-1.0", subfolder="vae", torch_dtype=dtype)
 
         try:
+            unet = UNet2DConditionModel.from_pretrained(
+                "stabilityai/stable-diffusion-xl-base-1.0", subfolder="unet", torch_dtype=dtype,
+            )
             text_encoder = CLIPTextModel.from_pretrained(
                 "stabilityai/stable-diffusion-xl-base-1.0", subfolder="text_encoder", torch_dtype=dtype,
             )
@@ -125,14 +128,18 @@ class DiffusersGenerator:
 
             pipe = StableDiffusionXLPipeline.from_single_file(
                 local_path,
-                vae=vae, text_encoder=text_encoder, text_encoder_2=text_encoder_2,
+                unet=unet, vae=vae,
+                text_encoder=text_encoder, text_encoder_2=text_encoder_2,
                 tokenizer=tokenizer, tokenizer_2=tokenizer_2,
                 torch_dtype=dtype,
             )
-            logger.info("Loaded as SDXL single-file checkpoint with components")
+            logger.info("Loaded as SDXL single-file checkpoint with all components")
         except Exception as e:
             logger.warning(f"SDXL with components failed: {e}, trying SD with components")
             try:
+                unet = UNet2DConditionModel.from_pretrained(
+                    "runwayml/stable-diffusion-v1-5", subfolder="unet", torch_dtype=dtype,
+                )
                 text_encoder = CLIPTextModel.from_pretrained(
                     "runwayml/stable-diffusion-v1-5", subfolder="text_encoder", torch_dtype=dtype,
                 )
@@ -140,13 +147,14 @@ class DiffusersGenerator:
 
                 pipe = StableDiffusionPipeline.from_single_file(
                     local_path,
-                    vae=vae, text_encoder=text_encoder, tokenizer=tokenizer,
+                    unet=unet, vae=vae,
+                    text_encoder=text_encoder, tokenizer=tokenizer,
                     torch_dtype=dtype,
                 )
-                logger.info("Loaded as SD single-file checkpoint with components")
+                logger.info("Loaded as SD single-file checkpoint with all components")
             except Exception as e2:
                 raise ValueError(
-                    f"Could not load {model_name} — tried vanilla SDXL/SD and with components. "
+                    f"Could not load {model_name} — tried vanilla SDXL/SD and with all components. "
                     f"SDXL error: {e}. SD error: {e2}"
                 )
 
