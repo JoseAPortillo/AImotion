@@ -3,6 +3,7 @@ import type { NodeProps } from '@xyflow/react'
 import { Handle, Position, NodeResizer } from '@xyflow/react'
 import { NODE_DEFINITIONS, PORT_COLORS, getHandleColor, type NodeType, type GenerationData, type PromptData, type SamplingParamsData, type DenoisingStrengthData } from '../../types/nodes'
 import { useGraphStore } from '../../store/graph'
+import { useToastStore } from '../../store/toast'
 import { startGeneration, pollTask, type TaskStatus } from '../../api/backend'
 
 const schedLabels: Record<string, string> = {
@@ -55,6 +56,7 @@ function GenerationNode(props: NodeProps) {
   const nodes = useGraphStore((s) => s.nodes)
   const edges = useGraphStore((s) => s.edges)
   const setOutputUrl = useGraphStore((s) => s.setOutputUrl)
+  const addToast = useToastStore((s) => s.addToast)
   const [genRunning, setGenRunning] = useState(false)
   const [progress, setProgress] = useState(0)
   const [models, setModels] = useState<ModelEntry[]>([])
@@ -129,7 +131,7 @@ function GenerationNode(props: NodeProps) {
     const videoNode = videoEdge ? getNode(videoEdge) : undefined
 
     if (!promptData?.positive || !paramsData) {
-      alert('Connect at least a Prompt and Sampling node to this Generation node')
+      addToast('Connect at least a Prompt and Sampling node to this Generation node', 'info')
       return
     }
 
@@ -172,10 +174,10 @@ function GenerationNode(props: NodeProps) {
         setProgress(100)
         setOutputUrl(status.result_url, status.result_type)
       } else {
-        alert(`Workflow failed: ${status.error || 'unknown error'}`)
+        addToast(`Workflow failed: ${status.error || 'unknown error'}`, 'error')
       }
     } catch (err: any) {
-      alert(`Error: ${err.message}`)
+      addToast(`Error: ${err.message}`, 'error')
     } finally {
       setGenRunning(false)
     }

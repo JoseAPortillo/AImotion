@@ -22,6 +22,8 @@ import ModelManager from './components/ModelManager'
 import { useCallback, useEffect, useState, type DragEvent } from 'react'
 import { checkHealth, startGeneration, pollTask, type TaskStatus } from './api/backend'
 import type { PromptData, SamplingParamsData, DenoisingStrengthData, VideoInputData, GenerationData } from './types/nodes'
+import ToastContainer from './components/Toast'
+import { useToastStore } from './store/toast'
 import VideoInputNode from './components/nodes/VideoInputNode'
 import AudioInputNode from './components/nodes/AudioInputNode'
 import PromptNode from './components/nodes/PromptNode'
@@ -102,6 +104,7 @@ function AppInner() {
 
   const [generating, setGenerating] = useState(false)
   const setOutputUrl = useGraphStore((s) => s.setOutputUrl)
+  const addToast = useToastStore((s) => s.addToast)
 
   const handleGenerate = useCallback(async () => {
     const promptNode = nodes.find((n) => n.type === 'prompt')?.data as PromptData | undefined
@@ -111,7 +114,7 @@ function AppInner() {
     const videoNode = nodes.find((n) => n.type === 'videoInput')?.data as VideoInputData | undefined
 
     if (!promptNode?.positive || !samplingNode) {
-      alert('Add at least a Prompt and Sampling node to the graph')
+      addToast('Add at least a Prompt and Sampling node to the graph', 'info')
       return
     }
 
@@ -139,10 +142,10 @@ function AppInner() {
       if (status.status === 'completed' && status.result_url) {
         setOutputUrl(status.result_url)
       } else {
-        alert(`Generation failed: ${status.error || 'unknown error'}`)
+        addToast(`Generation failed: ${status.error || 'unknown error'}`, 'error')
       }
     } catch (err: any) {
-      alert(`Error: ${err.message}`)
+      addToast(`Error: ${err.message}`, 'error')
     } finally {
       setGenerating(false)
     }
@@ -201,6 +204,7 @@ function AppInner() {
             <ModelManager backendOk={backendOk} />
           </Panel>
         </ReactFlow>
+        <ToastContainer />
       </div>
       <NodeInspector />
     </div>
