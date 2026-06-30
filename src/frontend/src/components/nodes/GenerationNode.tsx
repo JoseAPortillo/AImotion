@@ -21,6 +21,7 @@ interface ModelEntry {
   default_scheduler: string
   type: string
   pipeline_class?: string
+  is_video?: boolean
   accepts?: {
     image: boolean
     video: boolean
@@ -40,7 +41,7 @@ interface ModelEntry {
 function getModelModality(cfg: ModelEntry | undefined): { label: string; outputLabel: string; outputColor: string } {
   if (!cfg) return { label: 'Unknown', outputLabel: 'Video', outputColor: '#888' }
 
-  const isVideo = cfg.pipeline_class?.includes('Video') ?? false
+  const isVideo = cfg.is_video ?? cfg.pipeline_class?.includes('Video') ?? false
   const a = cfg.accepts ?? { image: false, video: false, strength: false }
 
   let label: string

@@ -324,6 +324,7 @@ def _build_variant_entry(variant) -> dict:
         "accepts": variant.accepts(),
         "defaults": variant.defaults,
         "inputs": variant.inputs,
+        "is_video": variant.is_video,
     }
 
 
@@ -352,6 +353,7 @@ async def list_models():
             "accepts": variant.accepts() if variant else {},
             "defaults": variant.defaults if variant else {"steps": 50, "cfg": 7.0},
             "inputs": variant.inputs if variant else {},
+            "is_video": variant.is_video if variant else False,
         })
     return {"models": results}
 

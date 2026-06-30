@@ -25,6 +25,8 @@ interface GraphState {
   selectNode: (nodeId: string | null) => void
   setOutputUrl: (url: string | null, resultType?: 'image' | 'video' | null) => void
   removeNode: (nodeId: string) => void
+  clearAll: () => void
+  loadWorkflow: (wfNodes: AppNode[], wfEdges: Edge[]) => void
 }
 
 let nodeCounter = 0
@@ -107,5 +109,16 @@ export const useGraphStore = create<GraphState>((set, get) => ({
       }
       return updates
     })
+  },
+
+  clearAll: () => set({ nodes: [], edges: [], selectedNode: null, outputUrl: null, resultType: null }),
+
+  loadWorkflow: (wfNodes, wfEdges) => {
+    const maxNum = wfNodes.reduce((max, n) => {
+      const m = n.id.match(/_(\d+)$/)
+      return m ? Math.max(max, parseInt(m[1], 10)) : max
+    }, 0)
+    nodeCounter = maxNum
+    set({ nodes: wfNodes, edges: wfEdges, selectedNode: null, outputUrl: null, resultType: null })
   },
 }))

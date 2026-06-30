@@ -3,7 +3,7 @@
   "label": "Wan2.2",
   "description": "Wan 2.2 video generation by Alibaba (needs custom runner)",
   "runner": "custom",
-  "pipeline": null,
+  "pipeline": { "video_pipeline": true },
   "schedulers": {},
   "default_scheduler": null,
   "defaults": {
