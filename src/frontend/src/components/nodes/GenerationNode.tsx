@@ -37,6 +37,28 @@ interface ModelEntry {
   }>
 }
 
+function getModelModality(cfg: ModelEntry | undefined): { label: string; outputLabel: string; outputColor: string } {
+  if (!cfg) return { label: 'Unknown', outputLabel: 'Video', outputColor: '#888' }
+
+  const isVideo = cfg.pipeline_class?.includes('Video') ?? false
+  const a = cfg.accepts ?? { image: false, video: false, strength: false }
+
+  let label: string
+  if (a.image) {
+    label = isVideo ? 'Image-to-Video' : 'Image-to-Image'
+  } else if (a.video) {
+    label = 'Video-to-Video'
+  } else {
+    label = isVideo ? 'Text-to-Video' : 'Text-to-Image'
+  }
+
+  return {
+    label,
+    outputLabel: isVideo ? 'Video' : 'Image',
+    outputColor: isVideo ? '#4ade80' : '#f97316',
+  }
+}
+
 const selectStyle: React.CSSProperties = {
   background: '#0f0f0f',
   border: '1px solid #333',
@@ -95,6 +117,7 @@ function GenerationNode(props: NodeProps) {
     ]
   }, [modelConfig])
 
+  const modelModality = useMemo(() => getModelModality(modelConfig), [modelConfig])
   const schedLabel = data.scheduler
     ? schedLabels[data.scheduler] || data.scheduler
     : defaultSched
@@ -186,8 +209,13 @@ function GenerationNode(props: NodeProps) {
   return (
     <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, position: 'relative', paddingBottom: 38 }}>
       {props.selected && <NodeResizer handleStyle={{ width: 8, height: 8, borderRadius: '50%', background: '#888', zIndex: 10 }} />}
-      <div style={{ background: def.color, padding: '6px 10px', fontSize: 12, fontWeight: 600, display: 'flex', justifyContent: 'space-between', borderRadius: '8px 8px 0 0', overflow: 'hidden' }}>
+      <div style={{ background: def.color, padding: '6px 10px', fontSize: 12, fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderRadius: '8px 8px 0 0', overflow: 'hidden' }}>
         <span>{def.label}</span>
+        {modelConfig && (
+          <span style={{ fontSize: 9, opacity: 0.8, background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: 4 }}>
+            {modelModality.label}
+          </span>
+        )}
       </div>
       <div style={{ padding: '6px 10px', fontSize: 12, color: '#ccc' }}>
         <select
@@ -308,8 +336,10 @@ function GenerationNode(props: NodeProps) {
           </Handle>
         )
       })}
-      <Handle type="source" position={Position.Right} id="video_out" style={{ top: '50%', background: getHandleColor('video_out', 'video_tensor') }}>
-        <div style={{ position: 'absolute', right: -8, top: -2, transform: 'translateX(100%)', fontSize: 10, color: getHandleColor('video_out', 'video_tensor'), whiteSpace: 'nowrap' }}>Video</div>
+      <Handle type="source" position={Position.Right} id="video_out" style={{ top: '50%', background: modelModality.outputColor }}>
+        <div style={{ position: 'absolute', right: -8, top: -2, transform: 'translateX(100%)', fontSize: 10, color: modelModality.outputColor, whiteSpace: 'nowrap' }}>
+          {modelModality.outputLabel}
+        </div>
       </Handle>
     </div>
   )
