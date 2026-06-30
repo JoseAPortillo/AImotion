@@ -3,7 +3,7 @@ import logging
 import os
 from typing import Optional
 
-from app.services.model_registry import find_installed, is_model_cached
+from app.services.model_registry import find_installed
 from app.services.diffusers_generator import infer_pipeline_params
 
 logger = logging.getLogger(__name__)
@@ -152,7 +152,7 @@ class ModelCatalog:
         if v:
             return v
         inst = find_installed(key)
-        if inst and is_model_cached(inst.hf_name):
+        if inst:
             return self._make_installed_variant(inst)
         return None
 
