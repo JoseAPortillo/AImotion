@@ -63,78 +63,93 @@ class DiffusersGenerator:
         from diffusers import DiffusionPipeline, StableDiffusionXLPipeline, StableDiffusionPipeline
         from huggingface_hub import HfApi, hf_hub_download
         
-        # Check if this is a single-file checkpoint
         api = HfApi()
         files = api.list_repo_files(model_name)
         weight_files = [f for f in files if f.endswith(('.safetensors', '.ckpt'))]
         has_model_index = 'model_index.json' in files
         
-        if not has_model_index and weight_files:
-            # Single-file checkpoint - download and use from_single_file
-            checkpoint_file = weight_files[0]
-            logger.info(f"Detected single-file checkpoint: {checkpoint_file}")
-            
-            # Download the checkpoint file
-            local_path = hf_hub_download(
-                repo_id=model_name,
-                filename=checkpoint_file,
-                token=token,
-            )
-            logger.info(f"Downloaded checkpoint to: {local_path}")
-            
-            # Try SDXL first, then SD
-            try:
-                # Load components from base SDXL model
-                logger.info("Loading SDXL components from base model...")
-                from diffusers import AutoencoderKL
-                from transformers import CLIPTextModel, CLIPTextModelWithProjection, CLIPTokenizer
-                
-                vae = AutoencoderKL.from_pretrained(
-                    "madebyollin/sdxl-vae-fp16-fix",
-                    torch_dtype=dtype,
-                )
-                text_encoder = CLIPTextModel.from_pretrained(
-                    "stabilityai/stable-diffusion-xl-base-1.0",
-                    subfolder="text_encoder",
-                    torch_dtype=dtype,
-                )
-                text_encoder_2 = CLIPTextModelWithProjection.from_pretrained(
-                    "stabilityai/stable-diffusion-xl-base-1.0",
-                    subfolder="text_encoder_2",
-                    torch_dtype=dtype,
-                )
-                tokenizer = CLIPTokenizer.from_pretrained(
-                    "stabilityai/stable-diffusion-xl-base-1.0",
-                    subfolder="tokenizer",
-                )
-                tokenizer_2 = CLIPTokenizer.from_pretrained(
-                    "stabilityai/stable-diffusion-xl-base-1.0",
-                    subfolder="tokenizer_2",
-                )
-                
-                pipe = StableDiffusionXLPipeline.from_single_file(
-                    local_path,
-                    vae=vae,
-                    text_encoder=text_encoder,
-                    text_encoder_2=text_encoder_2,
-                    tokenizer=tokenizer,
-                    tokenizer_2=tokenizer_2,
-                    torch_dtype=dtype,
-                )
-                logger.info(f"Loaded as SDXL single-file checkpoint")
-            except Exception as e:
-                logger.warning(f"Failed to load as SDXL: {e}, trying SD")
-                pipe = StableDiffusionPipeline.from_single_file(
-                    local_path,
-                    torch_dtype=dtype,
-                )
-                logger.info(f"Loaded as SD single-file checkpoint")
-        else:
-            # Standard diffusers model
+        if has_model_index or not weight_files:
             pipe = DiffusionPipeline.from_pretrained(
                 model_name, torch_dtype=dtype, token=token,
             )
-        
+            pipe.enable_model_cpu_offload()
+            if hasattr(pipe, "vae") and hasattr(pipe.vae, "enable_tiling"):
+                pipe.vae.enable_tiling()
+            self._log_vram()
+            logger.info(f"Pipeline loaded: {type(pipe).__name__}({model_name})")
+            return pipe
+
+        # Single-file checkpoint
+        checkpoint_file = weight_files[0]
+        logger.info(f"Detected single-file checkpoint: {checkpoint_file}")
+        local_path = hf_hub_download(
+            repo_id=model_name,
+            filename=checkpoint_file,
+            token=token,
+        )
+        logger.info(f"Downloaded checkpoint to: {local_path}")
+
+        # Fast path — try vanilla load first (checkpoint may have all components)
+        for pipe_cls in (StableDiffusionXLPipeline, StableDiffusionPipeline):
+            try:
+                pipe = pipe_cls.from_single_file(local_path, torch_dtype=dtype)
+                logger.info(f"Loaded as {pipe_cls.__name__} from single file (full checkpoint)")
+                pipe.enable_model_cpu_offload()
+                if hasattr(pipe, "vae") and hasattr(pipe.vae, "enable_tiling"):
+                    pipe.vae.enable_tiling()
+                self._log_vram()
+                logger.info(f"Pipeline loaded: {type(pipe).__name__}({model_name})")
+                return pipe
+            except Exception:
+                logger.info(f"{pipe_cls.__name__} vanilla load failed, will retry with components")
+
+        # Slow path — checkpoint has only UNet weights; load components from base models
+        logger.info("Loading missing components from base models...")
+        from diffusers import AutoencoderKL
+        from transformers import CLIPTextModel, CLIPTextModelWithProjection, CLIPTokenizer
+
+        try:
+            vae = AutoencoderKL.from_pretrained("madebyollin/sdxl-vae-fp16-fix", torch_dtype=dtype)
+        except Exception:
+            vae = AutoencoderKL.from_pretrained("stabilityai/stable-diffusion-xl-base-1.0", subfolder="vae", torch_dtype=dtype)
+
+        try:
+            text_encoder = CLIPTextModel.from_pretrained(
+                "stabilityai/stable-diffusion-xl-base-1.0", subfolder="text_encoder", torch_dtype=dtype,
+            )
+            text_encoder_2 = CLIPTextModelWithProjection.from_pretrained(
+                "stabilityai/stable-diffusion-xl-base-1.0", subfolder="text_encoder_2", torch_dtype=dtype,
+            )
+            tokenizer = CLIPTokenizer.from_pretrained("stabilityai/stable-diffusion-xl-base-1.0", subfolder="tokenizer")
+            tokenizer_2 = CLIPTokenizer.from_pretrained("stabilityai/stable-diffusion-xl-base-1.0", subfolder="tokenizer_2")
+
+            pipe = StableDiffusionXLPipeline.from_single_file(
+                local_path,
+                vae=vae, text_encoder=text_encoder, text_encoder_2=text_encoder_2,
+                tokenizer=tokenizer, tokenizer_2=tokenizer_2,
+                torch_dtype=dtype,
+            )
+            logger.info("Loaded as SDXL single-file checkpoint with components")
+        except Exception as e:
+            logger.warning(f"SDXL with components failed: {e}, trying SD with components")
+            try:
+                text_encoder = CLIPTextModel.from_pretrained(
+                    "runwayml/stable-diffusion-v1-5", subfolder="text_encoder", torch_dtype=dtype,
+                )
+                tokenizer = CLIPTokenizer.from_pretrained("runwayml/stable-diffusion-v1-5", subfolder="tokenizer")
+
+                pipe = StableDiffusionPipeline.from_single_file(
+                    local_path,
+                    vae=vae, text_encoder=text_encoder, tokenizer=tokenizer,
+                    torch_dtype=dtype,
+                )
+                logger.info("Loaded as SD single-file checkpoint with components")
+            except Exception as e2:
+                raise ValueError(
+                    f"Could not load {model_name} — tried vanilla SDXL/SD and with components. "
+                    f"SDXL error: {e}. SD error: {e2}"
+                )
+
         pipe.enable_model_cpu_offload()
         if hasattr(pipe, "vae") and hasattr(pipe.vae, "enable_tiling"):
             pipe.vae.enable_tiling()
