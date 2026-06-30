@@ -61,7 +61,7 @@ class DiffusersGenerator:
 
     def _load_pipe(self, model_name: str, dtype, token=None):
         from diffusers import DiffusionPipeline, StableDiffusionXLPipeline, StableDiffusionPipeline
-        from huggingface_hub import HfApi
+        from huggingface_hub import HfApi, hf_hub_download
         
         # Check if this is a single-file checkpoint
         api = HfApi()
@@ -70,24 +70,30 @@ class DiffusersGenerator:
         has_model_index = 'model_index.json' in files
         
         if not has_model_index and weight_files:
-            # Single-file checkpoint - use from_single_file
-            logger.info(f"Detected single-file checkpoint: {weight_files[0]}")
-            checkpoint_path = weight_files[0]
+            # Single-file checkpoint - download and use from_single_file
+            checkpoint_file = weight_files[0]
+            logger.info(f"Detected single-file checkpoint: {checkpoint_file}")
+            
+            # Download the checkpoint file
+            local_path = hf_hub_download(
+                repo_id=model_name,
+                filename=checkpoint_file,
+                token=token,
+            )
+            logger.info(f"Downloaded checkpoint to: {local_path}")
             
             # Try SDXL first, then SD
             try:
                 pipe = StableDiffusionXLPipeline.from_single_file(
-                    checkpoint_path,
+                    local_path,
                     torch_dtype=dtype,
-                    token=token,
                 )
                 logger.info(f"Loaded as SDXL single-file checkpoint")
             except Exception as e:
                 logger.warning(f"Failed to load as SDXL: {e}, trying SD")
                 pipe = StableDiffusionPipeline.from_single_file(
-                    checkpoint_path,
+                    local_path,
                     torch_dtype=dtype,
-                    token=token,
                 )
                 logger.info(f"Loaded as SD single-file checkpoint")
         else:
