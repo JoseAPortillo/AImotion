@@ -43,8 +43,10 @@ export async function startGeneration(
     max_sequence_length?: number
   },
   videoFile?: File,
+  imageFile?: File,
 ): Promise<TaskResponse> {
   const formData = new FormData()
+  if (imageFile) formData.append('image', imageFile)
   if (videoFile) formData.append('video', videoFile)
   formData.append('prompt', prompt)
   formData.append('negative_prompt', negativePrompt)

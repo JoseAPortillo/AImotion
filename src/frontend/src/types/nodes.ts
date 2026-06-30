@@ -3,6 +3,7 @@ import { Position } from '@xyflow/react'
 
 export type NodeType =
   | 'videoInput'
+  | 'imageInput'
   | 'audioInput'
   | 'prompt'
   | 'generation'
@@ -31,6 +32,12 @@ export interface NodeDefinition {
   inputs: PortDef[]
   outputs: PortDef[]
   defaultData?: Record<string, unknown>
+}
+
+export interface ImageInputData extends Record<string, unknown> {
+  file?: File
+  fileName?: string
+  fileUrl?: string
 }
 
 export interface VideoInputData extends Record<string, unknown> {
@@ -75,6 +82,7 @@ export interface OutputData extends Record<string, unknown> {
 }
 
 export type NodeData =
+  | ImageInputData
   | VideoInputData
   | AudioInputData
   | PromptData
@@ -115,6 +123,8 @@ export function getPortTypeFromHandle(handleId: string, nodeDef: NodeDefinition)
 export function getHandleColor(handleId: string, portType: PortType): string {
   if (handleId === 'negative' || handleId === 'prompt_neg') return '#86efac'
   if (handleId === 'strength') return '#a78bfa'
+  if (handleId === 'image_in') return '#f97316'
+  if (handleId === 'video_in') return '#ef4444'
   return PORT_COLORS[portType]
 }
 
@@ -133,6 +143,14 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
     description: 'Upload or drag a video file to use as input for video-to-video generation.',
     inputs: [],
     outputs: [{ id: 'video', label: 'Video', type: 'video_tensor' }],
+  },
+  imageInput: {
+    type: 'imageInput',
+    label: 'Image Input',
+    color: '#f97316',
+    description: 'Upload or drag an image file to use as input for image-to-video generation.',
+    inputs: [],
+    outputs: [{ id: 'image', label: 'Image', type: 'video_tensor' }],
   },
   audioInput: {
     type: 'audioInput',
@@ -160,6 +178,7 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
     description: 'The core generation node. Connects prompts, parameters, and inputs to produce a video.',
     inputs: [
       { id: 'video_in', label: 'Video', type: 'video_tensor' },
+      { id: 'image_in', label: 'Image', type: 'video_tensor' },
       { id: 'audio_in', label: 'Audio', type: 'audio_features' },
       { id: 'prompt_pos', label: 'Positive Prompt', type: 'prompt' },
       { id: 'prompt_neg', label: 'Negative Prompt', type: 'prompt' },

@@ -106,15 +106,12 @@ function GenerationNode(props: NodeProps) {
   const defaultSched = modelConfig?.default_scheduler || ''
 
   const activeInputs = useMemo(() => {
-    const base = ['prompt_pos', 'prompt_neg', 'params']
-    if (!modelConfig?.accepts) return base
-    const showVideo = modelConfig.accepts.image || modelConfig.accepts.video
-    const showStrength = modelConfig.accepts.strength
-    return [
-      ...(showVideo ? ['video_in'] : []),
-      ...base,
-      ...(showStrength ? ['strength'] : []),
-    ]
+    const active = new Set<string>(['prompt_pos', 'prompt_neg', 'params'])
+    if (!modelConfig?.accepts) return active
+    if (modelConfig.accepts.image) active.add('image_in')
+    if (modelConfig.accepts.video) active.add('video_in')
+    if (modelConfig.accepts.strength) active.add('strength')
+    return active
   }, [modelConfig])
 
   const modelModality = useMemo(() => getModelModality(modelConfig), [modelConfig])
@@ -147,11 +144,13 @@ function GenerationNode(props: NodeProps) {
     const paramsEdge = genEdges.find((e) => e.targetHandle === 'params')
     const strengthEdge = genEdges.find((e) => e.targetHandle === 'strength')
     const videoEdge = genEdges.find((e) => e.targetHandle === 'video_in')
+    const imageEdge = genEdges.find((e) => e.targetHandle === 'image_in')
 
     const promptData = promptEdgePos ? getNode(promptEdgePos)?.data as PromptData | undefined : undefined
     const paramsData = paramsEdge ? getNode(paramsEdge)?.data as SamplingParamsData | undefined : undefined
     const strengthData = strengthEdge ? getNode(strengthEdge)?.data as DenoisingStrengthData | undefined : undefined
     const videoNode = videoEdge ? getNode(videoEdge) : undefined
+    const imageNode = imageEdge ? getNode(imageEdge) : undefined
 
     if (!promptData?.positive || !paramsData) {
       addToast('Connect at least a Prompt and Sampling node to this Generation node', 'info')
@@ -179,6 +178,7 @@ function GenerationNode(props: NodeProps) {
           max_sequence_length: data.max_sequence_length,
         },
         videoNode?.data && 'file' in videoNode.data ? (videoNode.data as { file?: File }).file : undefined,
+        imageNode?.data && 'file' in imageNode.data ? (imageNode.data as { file?: File }).file : undefined,
       )
 
       let status: TaskStatus
@@ -318,21 +318,30 @@ function GenerationNode(props: NodeProps) {
         </button>
       </div>
 
-      {activeInputs.map((id, i) => {
-        const inp = def.inputs.find((p) => p.id === id)
-        const portType = inp?.type || 'params'
-        const color = getHandleColor(id, portType)
+      {/* Render all possible handles — hide inactive ones so React Flow registers them all */}
+      {def.inputs.map((inp, i) => {
+        const isActive = activeInputs.has(inp.id)
+        const color = getHandleColor(inp.id, inp.type)
+        const activeIdx = [...activeInputs].indexOf(inp.id)
+        const top = activeIdx >= 0 ? `${((activeIdx + 1) / (activeInputs.size + 1)) * 100}%` : '50%'
         return (
           <Handle
-            key={id}
+            key={inp.id}
             type="target"
             position={Position.Left}
-            id={id}
-            style={{ top: `${((i + 1) / (activeInputs.length + 1)) * 100}%`, background: color }}
+            id={inp.id}
+            style={{
+              top,
+              background: color,
+              opacity: isActive ? 1 : 0,
+              pointerEvents: isActive ? 'auto' : 'none',
+            }}
           >
-            <div style={{ position: 'absolute', left: -8, top: -2, transform: 'translateX(-100%)', fontSize: 10, color, whiteSpace: 'nowrap' }}>
-              {inp?.label || id}
-            </div>
+            {isActive && (
+              <div style={{ position: 'absolute', left: -8, top: -2, transform: 'translateX(-100%)', fontSize: 10, color, whiteSpace: 'nowrap' }}>
+                {inp.label}
+              </div>
+            )}
           </Handle>
         )
       })}

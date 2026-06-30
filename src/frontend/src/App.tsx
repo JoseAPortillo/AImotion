@@ -21,9 +21,10 @@ import NodeInspector from './components/NodeInspector'
 import ModelManager from './components/ModelManager'
 import { useCallback, useEffect, useState, type DragEvent } from 'react'
 import { checkHealth, startGeneration, pollTask, type TaskStatus } from './api/backend'
-import type { PromptData, SamplingParamsData, DenoisingStrengthData, VideoInputData, GenerationData } from './types/nodes'
+import type { PromptData, SamplingParamsData, DenoisingStrengthData, ImageInputData, VideoInputData, GenerationData } from './types/nodes'
 import ToastContainer from './components/Toast'
 import { useToastStore } from './store/toast'
+import ImageInputNode from './components/nodes/ImageInputNode'
 import VideoInputNode from './components/nodes/VideoInputNode'
 import AudioInputNode from './components/nodes/AudioInputNode'
 import PromptNode from './components/nodes/PromptNode'
@@ -35,6 +36,7 @@ import PreviewNode from './components/nodes/PreviewNode'
 
 const nodeTypes: NodeTypes = {
   videoInput: VideoInputNode,
+  imageInput: ImageInputNode,
   audioInput: AudioInputNode,
   prompt: PromptNode,
   generation: GenerationNode,
