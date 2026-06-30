@@ -60,10 +60,42 @@ class DiffusersGenerator:
     # ---- loading ----
 
     def _load_pipe(self, model_name: str, dtype, token=None):
-        from diffusers import DiffusionPipeline
-        pipe = DiffusionPipeline.from_pretrained(
-            model_name, torch_dtype=dtype, token=token,
-        )
+        from diffusers import DiffusionPipeline, StableDiffusionXLPipeline, StableDiffusionPipeline
+        from huggingface_hub import HfApi
+        
+        # Check if this is a single-file checkpoint
+        api = HfApi()
+        files = api.list_repo_files(model_name)
+        weight_files = [f for f in files if f.endswith(('.safetensors', '.ckpt'))]
+        has_model_index = 'model_index.json' in files
+        
+        if not has_model_index and weight_files:
+            # Single-file checkpoint - use from_single_file
+            logger.info(f"Detected single-file checkpoint: {weight_files[0]}")
+            checkpoint_path = weight_files[0]
+            
+            # Try SDXL first, then SD
+            try:
+                pipe = StableDiffusionXLPipeline.from_single_file(
+                    checkpoint_path,
+                    torch_dtype=dtype,
+                    token=token,
+                )
+                logger.info(f"Loaded as SDXL single-file checkpoint")
+            except Exception as e:
+                logger.warning(f"Failed to load as SDXL: {e}, trying SD")
+                pipe = StableDiffusionPipeline.from_single_file(
+                    checkpoint_path,
+                    torch_dtype=dtype,
+                    token=token,
+                )
+                logger.info(f"Loaded as SD single-file checkpoint")
+        else:
+            # Standard diffusers model
+            pipe = DiffusionPipeline.from_pretrained(
+                model_name, torch_dtype=dtype, token=token,
+            )
+        
         pipe.enable_model_cpu_offload()
         if hasattr(pipe, "vae") and hasattr(pipe.vae, "enable_tiling"):
             pipe.vae.enable_tiling()
