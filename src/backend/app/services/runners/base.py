@@ -36,7 +36,6 @@ class BaseRunner(ABC):
         self,
         params: GenerateParams,
         progress_callback: Optional[Callable[[int, int], Awaitable[None]]] = None,
-        cancel_check: Optional[Callable[[], bool]] = None,
     ) -> GenerateResult:
         ...
 

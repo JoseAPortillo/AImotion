@@ -168,17 +168,9 @@ def _dispatch_generation(task_id: str, params: dict):
 async def _run_generation(task_id: str, params: dict):
     runner = None
     try:
-        if await task_manager.was_cancelled(task_id):
-            return
-
         await task_manager.set_running(task_id, params["steps"])
 
-        def cancel_check():
-            return task_manager.is_cancelled_sync(task_id)
-
         async def progress_callback(current: int, total: int):
-            if await task_manager.was_cancelled(task_id):
-                raise asyncio.CancelledError("Task was cancelled")
             await task_manager.set_progress(task_id, current, total)
 
         model = params.get("model", settings.model_type)
@@ -214,29 +206,14 @@ async def _run_generation(task_id: str, params: dict):
         )
 
         runner = _get_runner(model)
-        result = await runner.generate(gen_params, progress_callback, cancel_check)
-        if await task_manager.was_cancelled(task_id):
-            return
+        result = await runner.generate(gen_params, progress_callback)
         result_type = "image" if result.url.endswith(".png") else "video"
         await task_manager.complete_task(task_id, result.url, result_type)
-    except asyncio.CancelledError:
-        logger.info("Task %s cancelled during generation", task_id)
     except Exception as e:
         await task_manager.fail_task(task_id, str(e))
     finally:
         if runner:
             runner.unload()
-
-
-@router.post("/{task_id}/cancel")
-async def cancel_generation(task_id: str):
-    ok = await task_manager.cancel_task(task_id)
-    if not ok:
-        raise HTTPException(
-            status_code=404,
-            detail="Task not found or already finished",
-        )
-    return {"task_id": task_id, "status": "cancelled"}
 
 
 @router.get("/{task_id}")

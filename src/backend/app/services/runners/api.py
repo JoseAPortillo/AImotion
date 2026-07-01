@@ -16,7 +16,6 @@ class APIRunner(BaseRunner):
         self,
         params: GenerateParams,
         progress_callback: Optional[Callable[[int, int], Awaitable[None]]] = None,
-        cancel_check: Optional[Callable[[], bool]] = None,
     ) -> GenerateResult:
         raise NotImplementedError(
             f"API runner for '{params.model}' is not yet implemented. "

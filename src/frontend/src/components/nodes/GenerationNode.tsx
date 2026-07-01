@@ -1,19 +1,10 @@
-import { memo, useCallback, useMemo, useState, useEffect, useRef } from 'react'
+import { memo, useCallback, useMemo, useState, useEffect } from 'react'
 import type { NodeProps } from '@xyflow/react'
 import { Handle, Position, NodeResizer } from '@xyflow/react'
 import { NODE_DEFINITIONS, PORT_COLORS, getHandleColor, type NodeType, type GenerationData, type PromptData, type SamplingParamsData, type DenoisingStrengthData } from '../../types/nodes'
 import { useGraphStore } from '../../store/graph'
 import { useToastStore } from '../../store/toast'
-import { startGeneration, pollTask, cancelTask, type TaskStatus } from '../../api/backend'
-
-function formatTime(seconds: number): string {
-  if (seconds < 60) return `${Math.floor(seconds)}s`
-  const m = Math.floor(seconds / 60)
-  const s = Math.floor(seconds % 60)
-  if (m < 60) return `${m}:${String(s).padStart(2, '0')}`
-  const h = Math.floor(m / 60)
-  return `${h}:${String(m % 60).padStart(2, '0')}:${String(s).padStart(2, '0')}`
-}
+import { startGeneration, pollTask, type TaskStatus } from '../../api/backend'
 
 const schedLabels: Record<string, string> = {
   cogvideox_ddim: 'DDIM',
@@ -93,9 +84,6 @@ function GenerationNode(props: NodeProps) {
   const [progress, setProgress] = useState(0)
   const [models, setModels] = useState<ModelEntry[]>([])
   const [modelsLoaded, setModelsLoaded] = useState(false)
-  const [timeInfo, setTimeInfo] = useState<{ elapsed_sec: number; eta_sec: number | null; avg_time_per_step: number | null } | null>(null)
-  const [cancelling, setCancelling] = useState(false)
-  const taskIdRef = useRef<string | null>(null)
 
   const fetchModels = useCallback(() => {
     fetch('/models')
@@ -148,18 +136,6 @@ function GenerationNode(props: NodeProps) {
     updateNodeData(props.id, update)
   }, [props.id, models, updateNodeData])
 
-  const handleCancel = useCallback(async () => {
-    const tid = taskIdRef.current
-    if (!tid) return
-    setCancelling(true)
-    try {
-      await cancelTask(tid)
-    } catch {
-      addToast('Failed to cancel', 'error')
-      setCancelling(false)
-    }
-  }, [])
-
   const handleGenWorkflow = useCallback(async () => {
     const genEdges = edges.filter((e) => e.target === props.id)
     const getNode = (edge: typeof genEdges[0]) => nodes.find((n) => n.id === edge.source)
@@ -184,8 +160,6 @@ function GenerationNode(props: NodeProps) {
 
     setGenRunning(true)
     setProgress(0)
-    setTimeInfo(null)
-    setCancelling(false)
     try {
       const task = await startGeneration(
         promptData.positive,
@@ -207,7 +181,6 @@ function GenerationNode(props: NodeProps) {
         (videoNode?.data && 'file' in videoNode.data && (videoNode.data as { file?: File }).file instanceof File) ? (videoNode.data as { file?: unknown }).file as File : undefined,
         (imageNode?.data && 'file' in imageNode.data && (imageNode.data as { file?: File }).file instanceof File) ? (imageNode.data as { file?: unknown }).file as File : undefined,
       )
-      taskIdRef.current = task.task_id
 
       let status: TaskStatus
       do {
@@ -219,20 +192,11 @@ function GenerationNode(props: NodeProps) {
         } else if (status.progress != null) {
           setProgress(Math.round(status.progress * 100))
         }
-        if (status.time) {
-          setTimeInfo({
-            elapsed_sec: status.time.elapsed_sec,
-            eta_sec: status.time.eta_sec,
-            avg_time_per_step: status.time.avg_time_per_step,
-          })
-        }
       } while (status.status === 'pending' || status.status === 'running')
 
       if (status.status === 'completed' && status.result_url) {
         setProgress(100)
         setOutputUrl(status.result_url, status.result_type)
-      } else if (status.status === 'cancelled') {
-        addToast('Generation cancelled', 'info')
       } else {
         addToast(`Workflow failed: ${status.error || 'unknown error'}`, 'error')
       }
@@ -240,7 +204,6 @@ function GenerationNode(props: NodeProps) {
       addToast(`Error: ${err.message}`, 'error')
     } finally {
       setGenRunning(false)
-      setTimeInfo(null)
     }
   }, [props.id, data.scheduler, data.model, nodes, edges, setOutputUrl])
 
@@ -327,36 +290,12 @@ function GenerationNode(props: NodeProps) {
 
       {genRunning && (
         <div style={{ padding: '0 10px 4px' }}>
-          {timeInfo && timeInfo.avg_time_per_step != null && (
-            <div style={{ fontSize: 10, color: '#4ade80', marginBottom: 4 }}>
-              Estimated time/frame: {formatTime(timeInfo.avg_time_per_step)}
-              {' -- '}whole process: {timeInfo.eta_sec != null ? formatTime(timeInfo.eta_sec) : '--'}
-            </div>
-          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <div style={{ flex: 1, height: 6, borderRadius: 3, background: '#2a2a2a', overflow: 'hidden' }}>
               <div style={{ width: `${Math.min(progress, 100)}%`, height: '100%', borderRadius: 3, background: '#2563eb', transition: 'width 0.3s ease' }} />
             </div>
             <span style={{ fontSize: 10, color: '#999', minWidth: 28, textAlign: 'right' }}>{progress}%</span>
           </div>
-          <button
-            onClick={handleCancel}
-            disabled={cancelling}
-            style={{
-              marginTop: 4,
-              width: '100%',
-              padding: '3px 0',
-              borderRadius: 4,
-              border: '1px solid #ef4444',
-              fontSize: 10,
-              fontWeight: 600,
-              cursor: cancelling ? 'not-allowed' : 'pointer',
-              background: cancelling ? '#2a1a1a' : 'transparent',
-              color: cancelling ? '#666' : '#ef4444',
-            }}
-          >
-            {cancelling ? 'Cancelling...' : 'Cancel'}
-          </button>
         </div>
       )}
 

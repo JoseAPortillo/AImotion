@@ -17,7 +17,6 @@ class GGUFRunner(BaseRunner):
         self,
         params: GenerateParams,
         progress_callback: Optional[Callable[[int, int], Awaitable[None]]] = None,
-        cancel_check: Optional[Callable[[], bool]] = None,
     ) -> GenerateResult:
         raise NotImplementedError(
             f"GGUF runner does not support generation yet. "

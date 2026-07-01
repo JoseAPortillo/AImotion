@@ -10,18 +10,13 @@ export interface TaskResponse {
 }
 
 export interface TaskStatus {
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+  status: 'pending' | 'running' | 'completed' | 'failed'
   progress?: number
   current_step?: number
   total_steps?: number
   result_url?: string
   result_type?: 'image' | 'video'
   error?: string
-  time?: {
-    elapsed_sec: number
-    avg_time_per_step: number | null
-    eta_sec: number | null
-  }
 }
 
 export async function checkHealth(): Promise<HealthResponse> {
@@ -81,14 +76,6 @@ export async function pollTask(taskId: string): Promise<TaskStatus> {
   const r = await fetch(`/generate/${taskId}`)
   if (!r.ok) throw new Error('Failed to poll task')
   return r.json()
-}
-
-export async function cancelTask(taskId: string): Promise<void> {
-  const r = await fetch(`/generate/${taskId}/cancel`, { method: 'POST' })
-  if (!r.ok) {
-    const err = await r.json()
-    throw new Error(err.detail || 'Failed to cancel task')
-  }
 }
 
 export async function improvePrompt(prompt: string): Promise<string> {

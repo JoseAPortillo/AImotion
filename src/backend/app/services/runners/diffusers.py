@@ -17,7 +17,6 @@ class DiffusersRunner(BaseRunner):
         self,
         params: GenerateParams,
         progress_callback: Optional[Callable[[int, int], Awaitable[None]]] = None,
-        cancel_check: Optional[Callable[[], bool]] = None,
     ) -> GenerateResult:
         url = await self._gen.generate(
             prompt=params.prompt,
@@ -34,7 +33,6 @@ class DiffusersRunner(BaseRunner):
             num_frames=params.num_frames,
             max_sequence_length=params.max_sequence_length,
             progress_callback=progress_callback,
-            cancel_check=cancel_check,
         )
         media_type = "image/png" if url.endswith(".png") else "video/mp4"
         return GenerateResult(url=url, media_type=media_type)

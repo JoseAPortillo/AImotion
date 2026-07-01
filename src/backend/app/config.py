@@ -33,3 +33,4 @@ settings = Settings()
 # Configure HuggingFace cache directories
 import os
 os.environ["HF_HOME"] = settings.model_cache_dir
+os.environ["HF_HUB_CACHE"] = settings.model_cache_dir
