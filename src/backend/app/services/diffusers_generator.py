@@ -72,11 +72,11 @@ class DiffusersGenerator:
             pipe = DiffusionPipeline.from_pretrained(
                 model_name, torch_dtype=dtype, token=token,
             )
-            pipe.enable_model_cpu_offload()
+            pipe.to(self.device)
             if hasattr(pipe, "vae") and hasattr(pipe.vae, "enable_tiling"):
                 pipe.vae.enable_tiling()
             self._log_vram()
-            logger.info(f"Pipeline loaded: {type(pipe).__name__}({model_name})")
+            logger.info(f"Pipeline loaded on {self.device}: {type(pipe).__name__}({model_name})")
             return pipe
 
         # Single-file checkpoint
@@ -94,11 +94,11 @@ class DiffusersGenerator:
             try:
                 pipe = pipe_cls.from_single_file(local_path, torch_dtype=dtype)
                 logger.info(f"Loaded as {pipe_cls.__name__} from single file (full checkpoint)")
-                pipe.enable_model_cpu_offload()
+                pipe.to(self.device)
                 if hasattr(pipe, "vae") and hasattr(pipe.vae, "enable_tiling"):
                     pipe.vae.enable_tiling()
                 self._log_vram()
-                logger.info(f"Pipeline loaded: {type(pipe).__name__}({model_name})")
+                logger.info(f"Pipeline loaded on {self.device}: {type(pipe).__name__}({model_name})")
                 return pipe
             except Exception:
                 logger.info(f"{pipe_cls.__name__} vanilla load failed, will retry with components")
@@ -158,11 +158,11 @@ class DiffusersGenerator:
                     f"SDXL error: {e}. SD error: {e2}"
                 )
 
-        pipe.enable_model_cpu_offload()
+        pipe.to(self.device)
         if hasattr(pipe, "vae") and hasattr(pipe.vae, "enable_tiling"):
             pipe.vae.enable_tiling()
         self._log_vram()
-        logger.info(f"Pipeline loaded: {type(pipe).__name__}({model_name})")
+        logger.info(f"Pipeline loaded on {self.device}: {type(pipe).__name__}({model_name})")
         return pipe
 
     def _ensure_pipe(self, model_key: str):

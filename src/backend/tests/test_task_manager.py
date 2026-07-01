@@ -93,4 +93,5 @@ async def test_to_dict_includes_all_fields(manager):
     assert set(d.keys()) == {
         "task_id", "status", "progress", "current_step",
         "total_steps", "eta_sec", "result_url", "error",
+        "result_type",
     }

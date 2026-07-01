@@ -9,7 +9,7 @@ import { generateLLM } from '../../../api/backend'
 interface ModelEntry {
   key: string
   name: string
-  type: string
+  runner: string
 }
 
 const selectStyle: React.CSSProperties = {
@@ -45,7 +45,7 @@ function TransformersGeneratorNode(props: NodeProps) {
       .then(r => r.json())
       .then(d => {
         const filtered = (d.models || []).filter(
-          (m: ModelEntry) => m.type !== 'diffusers' && m.type !== 'api'
+          (m: ModelEntry) => m.runner === 'gguf'
         )
         setModels(filtered)
         setModelsLoaded(true)

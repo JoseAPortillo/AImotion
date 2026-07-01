@@ -14,9 +14,9 @@ def test_generate_accepts_valid_request(client, sample_video):
     assert data["status"] in ("pending", "running")
 
 
-def test_generate_rejects_missing_video(client):
+def test_generate_accepts_without_video(client):
     resp = client.post("/generate", data={"prompt": "test"})
-    assert resp.status_code == 422
+    assert resp.status_code == 202
 
 
 def test_generate_rejects_missing_prompt(client, sample_video):

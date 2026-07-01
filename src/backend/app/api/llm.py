@@ -2,7 +2,7 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from ollama import AsyncClient
 
 logger = logging.getLogger(__name__)
@@ -14,14 +14,14 @@ FALLBACK_MODELS = ["hermes3:latest", "qwen2.5-coder:14b", "qwen3.6:latest"]
 
 
 class LLMGenerateRequest(BaseModel):
-    prompt: str
+    prompt: str = Field(..., min_length=1)
     system_prompt: str = ""
     model: str = ""
-    temperature: float = 0.7
-    max_tokens: int = 2048
-    top_p: float = 0.9
-    top_k: int = 40
-    seed: int = 0
+    temperature: float = Field(default=0.7, ge=0.0, le=2.0)
+    max_tokens: int = Field(default=2048, ge=1, le=65536)
+    top_p: float = Field(default=0.9, ge=0.0, le=1.0)
+    top_k: int = Field(default=40, ge=0, le=100)
+    seed: int = Field(default=0, ge=0)
 
 
 class LLMGenerateResponse(BaseModel):

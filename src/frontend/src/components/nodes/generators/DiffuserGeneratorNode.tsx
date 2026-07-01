@@ -17,6 +17,7 @@ const schedLabels: Record<string, string> = {
 interface ModelEntry {
   key: string
   name: string
+  runner: string
   schedulers: string[]
   default_scheduler: string
   type: string
@@ -90,7 +91,7 @@ function DiffuserGeneratorNode(props: NodeProps) {
       .then(r => r.json())
       .then(data => {
         const filtered = (data.models || []).filter(
-          (m: ModelEntry) => m.type !== 'future' && m.type !== 'api'
+          (m: ModelEntry) => m.runner === 'diffusers'
         )
         setModels(filtered)
         setModelsLoaded(true)

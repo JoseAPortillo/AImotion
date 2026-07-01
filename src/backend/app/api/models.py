@@ -415,6 +415,7 @@ def _build_variant_entry(variant) -> dict:
         "defaults": variant.defaults,
         "inputs": variant.inputs,
         "is_video": variant.is_video,
+        "runner": variant.family.runner,
     }
 
 
