@@ -3,6 +3,7 @@ import logging
 import threading
 import subprocess
 import sys
+import importlib
 from datetime import datetime
 from hashlib import md5
 from fastapi import APIRouter, HTTPException
@@ -13,9 +14,10 @@ from app.services.generator import VideoGenerator, get_model_config
 from app.services.model_catalog import catalog
 from app.services.model_registry import (
     list_installed, find_installed, add_installed, remove_installed,
-    generate_key, is_model_cached, discover_pipeline,
+    remove_cached, generate_key, is_model_cached, discover_pipeline,
     InstalledModel,
 )
+from app.services.runners.registry import RunnerRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -58,18 +60,31 @@ class InstallTask:
         return d
 
 
+def _find_matching_family(hf_name: str):
+    """Find a catalog family whose name appears in the HuggingFace repo name."""
+    hf_lower = hf_name.lower()
+    for fam in catalog.families:
+        if fam.runner == "diffusers":
+            continue
+        if fam.family.lower() in hf_lower:
+            return fam
+        label_lower = fam.label.lower()
+        if label_lower != fam.family.lower() and label_lower in hf_lower:
+            return fam
+    return None
+
+
 def detect_requirements(hf_name: str, discovered: dict) -> list[dict]:
     """Detect requirements for a model based on its format and pipeline."""
     requirements = []
-    
+
     # Check if model has GGUF files
     try:
         api = HfApi()
         files = api.list_repo_files(hf_name)
         has_gguf = any(f.endswith('.gguf') or f.endswith('.ggufs') for f in files)
-        
+
         if has_gguf:
-            # GGUF models need llama-cpp-python or similar
             requirements.append({
                 "type": "python_package",
                 "package": "llama-cpp-python",
@@ -78,7 +93,7 @@ def detect_requirements(hf_name: str, discovered: dict) -> list[dict]:
             })
     except Exception as e:
         logger.warning(f"Could not check files for requirements: {e}")
-    
+
     # Check if model needs HF token (gated models)
     try:
         api = HfApi()
@@ -92,19 +107,27 @@ def detect_requirements(hf_name: str, discovered: dict) -> list[dict]:
             })
     except Exception as e:
         logger.warning(f"Could not check model access requirements: {e}")
-    
-    # Check manifest for additional requirements
-    pipeline_class = discovered.get("pipeline_class", "")
-    for fam in catalog.families:
-        if fam.pipeline_class == pipeline_class:
-            # Add any requirements from manifest (future enhancement)
-            break
-    
+
+    # Check if the model's family needs a custom runner
+    family = _find_matching_family(hf_name)
+    if family and family.runner != "diffusers" and not RunnerRegistry.is_registered(family.runner):
+        ri = family.runner_install
+        if ri:
+            requirements.append({
+                "type": "runner",
+                "runner_key": family.runner,
+                "package": ri.get("package"),
+                "url": ri.get("url"),
+                "entry": ri.get("entry"),
+                "reason": f"Required runner for {family.label} models",
+                "optional": True,
+            })
+
     return requirements
 
 
 def install_requirements(requirements: list[dict]) -> tuple[bool, str]:
-    """Install Python package requirements."""
+    """Install Python package and runner requirements."""
     for req in requirements:
         if req["type"] == "python_package":
             package = req["package"]
@@ -124,12 +147,52 @@ def install_requirements(requirements: list[dict]) -> tuple[bool, str]:
             except Exception as e:
                 return False, f"Error installing {package}: {e}"
         elif req["type"] == "env_var":
-            # Check if env var is set
             name = req["name"]
             if not os.environ.get(name):
                 return False, f"Environment variable {name} is not set. Please set it before installing."
-    
+        elif req["type"] == "runner":
+            runner_key = req["runner_key"]
+            package = req.get("package")
+            url = req.get("url")
+            install_target = url or package
+            if install_target:
+                try:
+                    logger.info(f"Installing runner '{runner_key}' from {install_target}")
+                    result = subprocess.run(
+                        [sys.executable, "-m", "pip", "install", install_target],
+                        capture_output=True, text=True, timeout=300,
+                    )
+                    if result.returncode == 0:
+                        logger.info(f"Runner '{runner_key}' installed successfully")
+                        _register_runner_from_package(runner_key, req)
+                    else:
+                        logger.warning(
+                            f"Runner '{runner_key}' pip install failed (non-fatal): "
+                            f"{result.stderr[:200]}"
+                        )
+                except subprocess.TimeoutExpired:
+                    logger.warning(f"Runner '{runner_key}' pip install timed out (non-fatal)")
+                except Exception as e:
+                    logger.warning(f"Runner '{runner_key}' install error (non-fatal): {e}")
+            else:
+                _register_runner_from_package(runner_key, req)
+
     return True, "All requirements installed successfully"
+
+
+def _register_runner_from_package(runner_key: str, req: dict):
+    entry = req.get("entry")
+    if not entry:
+        return
+    try:
+        mod = importlib.import_module(entry)
+        get_runner = getattr(mod, "get_runner_class", None)
+        if get_runner:
+            runner_cls = get_runner()
+            RunnerRegistry.register(runner_key, runner_cls())
+            logger.info("Runner '%s' registered dynamically", runner_key)
+    except Exception as e:
+        logger.warning(f"Failed to auto-register runner '{runner_key}': {e}")
 
 
 install_tasks: dict[str, InstallTask] = {}
@@ -141,38 +204,54 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
     if not task:
         return
 
-    # Use provided cache_dir or fall back to settings
     if not cache_dir:
         cache_dir = settings.model_cache_dir
 
     try:
         task.status = "discovering"
         discovered = discover_pipeline(hf_name)
-        if "error" in discovered:
-            task.status = "error"
-            reasons = {
-                "no_weights": (
-                    f"'{hf_name}' is not a standalone model — it has no weight files (.safetensors, .bin). "
-                    f"This is likely a LoRA, motion adapter, ControlNet, or other component meant to be "
-                    f"used with another model. You cannot install it alone."
-                ),
-                "no_class_name": (
-                    f"'{hf_name}' has a model_index.json but no _class_name field, "
-                    f"so the pipeline type can't be identified. It may be a component "
-                    f"rather than a standalone model."
-                ),
-                "unsupported_pipeline": (
-                    f"'{hf_name}' is not a supported model type. "
-                    f"Only image and video generation pipelines are supported."
-                ),
-            }
-            task.error_msg = reasons.get(
-                discovered["error"],
-                f"'{hf_name}' cannot be installed: {discovered['error']}"
-            )
-            return
+        pipeline_class_name = None
+        schedulers: dict = {}
+        default_scheduler = ""
+        defaults: dict = {"steps": 50, "cfg": 7.0}
+        family = _find_matching_family(hf_name)
 
-        pipeline_class_name = discovered["pipeline_class"]
+        if "error" in discovered:
+            if family and family.runner != "diffusers":
+                logger.info(
+                    f"Pipeline discovery failed for '{hf_name}', but family "
+                    f"'{family.family}' matched. Proceeding with runner defaults."
+                )
+                defaults = family.defaults or defaults
+            else:
+                task.status = "error"
+                reasons = {
+                    "no_weights": (
+                        f"'{hf_name}' is not a standalone model — it has no weight files (.safetensors, .bin). "
+                        f"This is likely a LoRA, motion adapter, ControlNet, or other component meant to be "
+                        f"used with another model. You cannot install it alone."
+                    ),
+                    "no_class_name": (
+                        f"'{hf_name}' has a model_index.json but no _class_name field, "
+                        f"so the pipeline type can't be identified. It may be a component "
+                        f"rather than a standalone model."
+                    ),
+                    "unsupported_pipeline": (
+                        f"'{hf_name}' is not a supported model type. "
+                        f"Only image and video generation pipelines are supported."
+                    ),
+                }
+                task.error_msg = reasons.get(
+                    discovered["error"],
+                    f"'{hf_name}' cannot be installed: {discovered['error']}"
+                )
+                return
+        else:
+            pipeline_class_name = discovered["pipeline_class"]
+            schedulers = discovered["schedulers"]
+            default_scheduler = discovered["default_scheduler"]
+            defaults = discovered.get("defaults", defaults)
+
         tok = settings.hf_token or None
 
         # Detect requirements and wait for user confirmation
@@ -181,25 +260,23 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
             task.status = "waiting_for_confirmation"
             task.waiting_for_confirmation = True
             logger.info(f"Waiting for user confirmation to install {len(task.requirements)} requirement(s)")
-            
-            # Wait for confirmation (or cancellation)
+
             task.confirmation_event.wait()
-            
+
             if task.cancel_event.is_set():
                 task.status = "cancelled"
                 return
-            
-            # Install requirements
+
             task.status = "installing_requirements"
             task.waiting_for_confirmation = False
             logger.info(f"Installing {len(task.requirements)} requirement(s)")
-            
+
             success, msg = install_requirements(task.requirements)
             if not success:
                 task.status = "error"
                 task.error_msg = f"Failed to install requirements: {msg}"
                 return
-            
+
             logger.info("All requirements installed successfully")
 
         task.status = "downloading"
@@ -283,12 +360,12 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
             key=key,
             hf_name=hf_name,
             alias=final_alias,
-            pipeline_class=pipeline_class_name,
+            pipeline_class=pipeline_class_name or "",
             dtype=discovered.get("dtype", "float16"),
-            schedulers=discovered["schedulers"],
-            default_scheduler=discovered["default_scheduler"],
+            schedulers=schedulers,
+            default_scheduler=default_scheduler,
             needs_token=False,
-            defaults=discovered["defaults"],
+            defaults=defaults,
             installed_at=datetime.now().isoformat(),
         )
         add_installed(model)
@@ -298,7 +375,7 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
             "model_key": key,
             "alias": final_alias,
             "pipeline_class": pipeline_class_name,
-            "schedulers": model.schedulers,
+            "schedulers": schedulers,
         }
         task.progress_pct = 100.0
 
@@ -324,16 +401,21 @@ def _build_variant_entry(variant) -> dict:
         "accepts": variant.accepts(),
         "defaults": variant.defaults,
         "inputs": variant.inputs,
+        "is_video": variant.is_video,
     }
 
 
 @router.get("")
 async def list_models():
     results = []
+    installed_list = list_installed()
+    installed_hf = {inst.hf_name for inst in installed_list if inst.hf_name}
     for v in catalog.all_variants():
-        if v.type in ("builtin", "future", "api"):
+        if v.type in ("builtin", "future", "api", "installable"):
+            if v.hf_name and v.hf_name in installed_hf:
+                continue
             results.append(_build_variant_entry(v))
-    for inst in list_installed():
+    for inst in installed_list:
         variant = catalog.get_variant(inst.key)
         if variant and variant.type == "builtin":
             continue
@@ -352,6 +434,7 @@ async def list_models():
             "accepts": variant.accepts() if variant else {},
             "defaults": variant.defaults if variant else {"steps": 50, "cfg": 7.0},
             "inputs": variant.inputs if variant else {},
+            "is_video": variant.is_video if variant else False,
         })
     return {"models": results}
 
@@ -413,7 +496,7 @@ async def confirm_install(task_id: str):
         raise HTTPException(status_code=404, detail="Task not found")
     if task.status != "waiting_for_confirmation":
         raise HTTPException(status_code=400, detail=f"Task is not waiting for confirmation (current status: {task.status})")
-    
+
     task.confirmation_event.set()
     return {"status": "confirmed", "message": "Installation will continue"}
 
@@ -466,8 +549,11 @@ async def uninstall_model(model_key: str):
         raise HTTPException(status_code=404, detail="Model not found in registry")
     if _video_generator._current_model_key == model_key:
         _video_generator.unload()
+    hf_name = model.hf_name
     remove_installed(model_key)
-    return {"status": "uninstalled", "model_key": model_key}
+    if hf_name:
+        remove_cached(hf_name)
+    return {"status": "uninstalled", "model_key": model_key, "cleaned_cache": bool(hf_name)}
 
 
 @router.post("/unload")

@@ -97,6 +97,22 @@ def is_model_cached(hf_name: str) -> bool:
     return len(glob.glob(os.path.join(cache_dir, pattern))) > 0
 
 
+def remove_cached(hf_name: str):
+    import glob, shutil
+    safe = hf_name.replace("/", "--")
+    pattern = f"models--{safe}*"
+    cache_dir = hf_cache_path()
+    if not os.path.isdir(cache_dir):
+        return
+    for entry in glob.glob(os.path.join(cache_dir, pattern)):
+        if os.path.isdir(entry):
+            shutil.rmtree(entry, ignore_errors=True)
+            logger.info(f"Deleted cached model: {entry}")
+        elif os.path.isfile(entry):
+            os.remove(entry)
+            logger.info(f"Deleted cached file: {entry}")
+
+
 def _catalog_families():
     from app.services.model_catalog import catalog
     return catalog.families

@@ -35,6 +35,10 @@ class ModelFamily:
         return p.get("video_pipeline", False) if p else False
 
     @property
+    def runner_install(self) -> Optional[dict]:
+        return self._data.get("runner_install")
+
+    @property
     def schedulers(self) -> dict[str, str]:
         return self._data.get("schedulers", {})
 
@@ -76,6 +80,10 @@ class ModelVariant:
         self.needs_token: bool = data.get("needs_token", False)
         self._family = family
         self._data = data
+
+    @property
+    def family(self) -> ModelFamily:
+        return self._family
 
     def _pipe_data(self) -> dict:
         return self._data.get("pipeline") or {}
@@ -136,6 +144,7 @@ class ModelVariant:
             "schedulers": list(self.schedulers.keys()),
             "default_scheduler": self.default_scheduler,
             "accepts": self.accepts(),
+            "is_video": self.is_video,
         }
 
 
@@ -185,15 +194,35 @@ class ModelCatalog:
     def builtin_variants(self) -> list[ModelVariant]:
         return [v for v in self._by_key.values() if v.type == "builtin"]
 
+    def _find_family_for_installed(self, inst) -> Optional[ModelFamily]:
+        hf_lower = (inst.hf_name or "").lower()
+        key_lower = (inst.key or "").lower()
+        for fam in self._families.values():
+            fam_lower = fam.family.lower()
+            if fam_lower in hf_lower or fam_lower in key_lower:
+                return fam
+            label_lower = fam.label.lower()
+            if label_lower != fam_lower and (label_lower in hf_lower or label_lower in key_lower):
+                return fam
+        return None
+
     def _make_installed_variant(self, inst) -> ModelVariant:
+        family = self._find_family_for_installed(inst)
+        inputs = family.inputs if family else _infer_inputs(inst.pipeline_class)
+        defaults = inst.defaults or (family.defaults if family else {"steps": 50, "cfg": 7.0})
+        schedulers = inst.schedulers or (family.schedulers if family else {})
+        default_scheduler = inst.default_scheduler or (family.default_scheduler if family else "")
+        is_video = inst.pipeline_class in _INFERRED_VIDEO_PIPELINES or (family and family.is_video)
+        runner = family.runner if family else "diffusers"
         dummy_family = ModelFamily({
             "family": inst.key or inst.hf_name,
             "label": inst.alias or inst.hf_name,
-            "pipeline": {"class": inst.pipeline_class, "video_pipeline": inst.pipeline_class in _INFERRED_VIDEO_PIPELINES} if inst.pipeline_class else None,
-            "schedulers": inst.schedulers or {},
-            "default_scheduler": inst.default_scheduler,
-            "defaults": inst.defaults or {"steps": 50, "cfg": 7.0},
-            "inputs": _infer_inputs(inst.pipeline_class),
+            "runner": runner,
+            "pipeline": {"class": inst.pipeline_class, "video_pipeline": is_video} if inst.pipeline_class or is_video else None,
+            "schedulers": schedulers,
+            "default_scheduler": default_scheduler,
+            "defaults": defaults,
+            "inputs": inputs,
             "variants": [{
                 "key": inst.key,
                 "name": inst.alias or inst.hf_name,

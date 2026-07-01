@@ -19,7 +19,7 @@ import { NODE_DEFINITIONS, getPortTypeFromHandle } from './types/nodes'
 import Sidebar from './components/Sidebar'
 import NodeInspector from './components/NodeInspector'
 import ModelManager from './components/ModelManager'
-import { useCallback, useEffect, useState, type DragEvent } from 'react'
+import { useCallback, useEffect, useState, useRef, type DragEvent } from 'react'
 import { checkHealth, startGeneration, pollTask, type TaskStatus } from './api/backend'
 import type { PromptData, SamplingParamsData, DenoisingStrengthData, ImageInputData, VideoInputData, GenerationData } from './types/nodes'
 import ToastContainer from './components/Toast'
@@ -105,8 +105,63 @@ function AppInner() {
   }, [])
 
   const [generating, setGenerating] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
   const setOutputUrl = useGraphStore((s) => s.setOutputUrl)
   const addToast = useToastStore((s) => s.addToast)
+  const clearAll = useGraphStore((s) => s.clearAll)
+  const loadWorkflow = useGraphStore((s) => s.loadWorkflow)
+  const openRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const handleSave = useCallback(() => {
+    const workflow = {
+      version: 1,
+      nodes: nodes.map(({ id, type, position, data }) => ({ id, type, position, data })),
+      edges: edges.map(({ id, source, target, sourceHandle, targetHandle, style }) => ({ id, source, target, sourceHandle, targetHandle, style })),
+    }
+    const blob = new Blob([JSON.stringify(workflow, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `workflow-${Date.now()}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+    addToast('Workflow saved', 'success')
+  }, [nodes, edges])
+
+  const handleOpen = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      const text = await file.text()
+      const wf = JSON.parse(text)
+      if (!wf.nodes || !wf.edges) {
+        addToast('Invalid workflow file', 'error')
+        return
+      }
+      loadWorkflow(wf.nodes, wf.edges)
+      addToast(`Workflow loaded: ${file.name}`, 'success')
+    } catch {
+      addToast('Failed to load workflow file', 'error')
+    }
+    e.target.value = ''
+  }, [loadWorkflow])
+
+  const handleNew = useCallback(() => {
+    if (nodes.length === 0 && edges.length === 0) return
+    if (confirm('Clear the canvas? This cannot be undone.')) {
+      clearAll()
+      addToast('Canvas cleared', 'info')
+    }
+  }, [nodes, edges, clearAll])
 
   const handleGenerate = useCallback(async () => {
     const promptNode = nodes.find((n) => n.type === 'prompt')?.data as PromptData | undefined
@@ -181,6 +236,53 @@ function AppInner() {
             maskColor="rgba(0,0,0,0.7)"
           />
           <Panel position="top-left" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <div ref={menuRef} style={{ position: 'relative' }}>
+              <button
+                onClick={() => setMenuOpen((x) => !x)}
+                title="Workflow menu"
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: 6,
+                  border: '1px solid #444',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  background: '#1a1a1a',
+                  color: '#ccc',
+                  lineHeight: 1,
+                }}
+              >
+                ☰
+              </button>
+              {menuOpen && (
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  marginTop: 4,
+                  background: '#1a1a1a',
+                  border: '1px solid #333',
+                  borderRadius: 6,
+                  minWidth: 120,
+                  zIndex: 100,
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+                }}>
+                  <div
+                    onClick={() => { handleNew(); setMenuOpen(false) }}
+                    style={{ padding: '8px 14px', fontSize: 12, cursor: 'pointer', color: '#ccc', borderBottom: '1px solid #2a2a2a' }}
+                  >New</div>
+                  <div
+                    onClick={() => { handleSave(); setMenuOpen(false) }}
+                    style={{ padding: '8px 14px', fontSize: 12, cursor: 'pointer', color: '#ccc', borderBottom: '1px solid #2a2a2a' }}
+                  >Save</div>
+                  <div
+                    onClick={() => { openRef.current?.click(); setMenuOpen(false) }}
+                    style={{ padding: '8px 14px', fontSize: 12, cursor: 'pointer', color: '#ccc' }}
+                  >Open</div>
+                </div>
+              )}
+              <input ref={openRef} type="file" accept=".json" onChange={handleOpen} style={{ display: 'none' }} />
+            </div>
             <button
               onClick={handleGenerate}
               disabled={generating || !backendOk}

@@ -10,6 +10,10 @@ from app.api.generate import router as generate_router, results_router, task_man
 from app.api.prompt import router as prompt_router
 from app.api.models import router as models_router
 from app.config import settings
+from app.services.runners.registry import RunnerRegistry
+from app.services.runners.diffusers import DiffusersRunner
+from app.services.runners.gguf import GGUFRunner
+from app.services.runners.api import APIRunner
 
 logging.basicConfig(
     level=logging.INFO,
@@ -23,6 +27,13 @@ async def lifespan(app: FastAPI):
     os.makedirs(settings.upload_dir, exist_ok=True)
     os.makedirs(settings.results_dir, exist_ok=True)
     await task_manager.start_cleanup()
+
+    # Register built-in runners
+    RunnerRegistry.register("diffusers", DiffusersRunner())
+    RunnerRegistry.register("gguf", GGUFRunner())
+    RunnerRegistry.register("api", APIRunner())
+    logger.info("Built-in runners registered")
+
     logger.info("AImotion backend started")
     yield
     logger.info("AImotion backend shutting down")

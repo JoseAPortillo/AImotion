@@ -297,7 +297,7 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
 
   const installed = models.filter(m => m.type === 'installed')
   const builtin = models.filter(m => m.type === 'builtin')
-  const other = models.filter(m => m.type === 'future' || m.type === 'api')
+  const other = models.filter(m => m.type === 'future' || m.type === 'api' || m.type === 'installable')
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
@@ -710,8 +710,9 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
                   other.map(m => (
                     <div key={m.key} style={{ display: 'flex', gap: 6, padding: '4px 8px', fontSize: 12, opacity: 0.5 }}>
                       <span style={{ fontWeight: 600 }}>{m.name}</span>
-                      <span style={{ fontSize: 10, color: '#666', marginLeft: 'auto' }}>
-                        {m.type === 'api' ? 'API' : 'Pending integration'}
+                      <span style={{ fontSize: 10, color: '#666', marginLeft: 'auto', textAlign: 'right' }}>
+                        {m.type === 'api' ? 'API' : m.type === 'installable' ? 'Installable' : 'Pending integration'}
+                        {m.hf_name && <span style={{ display: 'block', fontSize: 9, color: '#555' }}>{m.hf_name}</span>}
                       </span>
                     </div>
                   ))
