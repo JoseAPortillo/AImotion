@@ -11,6 +11,8 @@ router = APIRouter(prefix="/prompt", tags=["prompt"])
 LOCAL_MODEL = "hermes3:latest"
 FALLBACK_MODEL = "llama3.1:8b"
 
+VLM_MODELS = ["llava", "llava:13b", "qwen2-vl", "minicpm-v"]
+
 SYSTEM_PROMPT = """You are a prompt engineer specialized in video generation AI. 
 Your task is to improve user prompts to get better results from video generation models.
 

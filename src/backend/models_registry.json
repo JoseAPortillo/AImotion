@@ -1,0 +1,128 @@
+[
+  {
+    "key": "stabilityai_stable_diffusion_xl_base_1.0",
+    "hf_name": "stabilityai/stable-diffusion-xl-base-1.0",
+    "alias": "stable-diffusion-xl-base-1.0",
+    "pipeline_class": "StableDiffusionXLPipeline",
+    "dtype": "float16",
+    "schedulers": {
+      "scheduler": "EulerDiscreteScheduler"
+    },
+    "default_scheduler": "scheduler",
+    "needs_token": false,
+    "defaults": {
+      "steps": 50,
+      "cfg": 7.0
+    },
+    "installed_at": "2026-06-29T11:54:53.719041"
+  },
+  {
+    "key": "frankjoshua_toonyou_beta6",
+    "hf_name": "frankjoshua/toonyou_beta6",
+    "alias": "toonyou_beta6",
+    "pipeline_class": "StableDiffusionPipeline",
+    "dtype": "float16",
+    "schedulers": {
+      "scheduler": "PNDMScheduler"
+    },
+    "default_scheduler": "scheduler",
+    "needs_token": false,
+    "defaults": {
+      "steps": 50,
+      "cfg": 7.0
+    },
+    "installed_at": "2026-06-30T10:32:42.279824"
+  },
+  {
+    "key": "alperkts_krea2_fp8",
+    "hf_name": "AlperKTS/Krea2_FP8",
+    "alias": "Krea2_FP8",
+    "pipeline_class": "StableDiffusionXLPipeline",
+    "dtype": "float16",
+    "schedulers": {},
+    "default_scheduler": "",
+    "needs_token": false,
+    "defaults": {
+      "steps": 50,
+      "cfg": 7.0
+    },
+    "installed_at": "2026-06-30T12:39:32.307387"
+  },
+  {
+    "key": "zai_org_cogvideox_2b",
+    "hf_name": "zai-org/CogVideoX-2b",
+    "alias": "CogVideoX-2b",
+    "pipeline_class": "CogVideoXPipeline",
+    "dtype": "bfloat16",
+    "schedulers": {
+      "scheduler": "CogVideoXDDIMScheduler"
+    },
+    "default_scheduler": "cogvideox_ddim",
+    "needs_token": false,
+    "defaults": {
+      "width": 720,
+      "height": 480,
+      "steps": 50,
+      "cfg": 6.0,
+      "num_frames": 49,
+      "fps": 8,
+      "max_seq": 226
+    },
+    "installed_at": "2026-06-30T12:45:35.783453"
+  },
+  {
+    "key": "thudm_cogvideox_5b_i2v",
+    "hf_name": "THUDM/CogVideoX-5b-I2V",
+    "alias": "CogVideoX-5b-I2V",
+    "pipeline_class": "CogVideoXImageToVideoPipeline",
+    "dtype": "bfloat16",
+    "schedulers": {
+      "scheduler": "CogVideoXDDIMScheduler"
+    },
+    "default_scheduler": "scheduler",
+    "needs_token": false,
+    "defaults": {
+      "steps": 50,
+      "cfg": 7.0
+    },
+    "installed_at": "2026-06-30T16:27:53.055380"
+  },
+  {
+    "key": "quantstack_wan2.2_ti2v_5b_gguf",
+    "hf_name": "QuantStack/Wan2.2-TI2V-5B-GGUF",
+    "alias": "Wan2.2-TI2V-5B-GGUF",
+    "pipeline_class": "CogVideoXPipeline",
+    "dtype": "bfloat16",
+    "schedulers": {
+      "cogvideox_ddim": "CogVideoXDDIMScheduler",
+      "cogvideox_dpm": "CogVideoXDPMScheduler"
+    },
+    "default_scheduler": "cogvideox_ddim",
+    "needs_token": false,
+    "defaults": {
+      "width": 720,
+      "height": 480,
+      "steps": 50,
+      "cfg": 6.0,
+      "num_frames": 49,
+      "fps": 8,
+      "max_seq": 226
+    },
+    "installed_at": "2026-07-01T09:30:30.230595"
+  },
+  {
+    "key": "wan_ai_wan2.2_animate_14b",
+    "hf_name": "Wan-AI/Wan2.2-Animate-14B",
+    "alias": "Wan2.2-Animate-14B",
+    "pipeline_class": "WanAnimateModel",
+    "dtype": "bfloat16",
+    "schedulers": {},
+    "default_scheduler": "",
+    "needs_token": false,
+    "defaults": {
+      "steps": 50,
+      "cfg": 7.0
+    },
+    "installed_at": "2026-07-01T12:01:16.210563"
+  }
+]

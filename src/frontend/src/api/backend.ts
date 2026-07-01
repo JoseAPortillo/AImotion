@@ -78,6 +78,24 @@ export async function pollTask(taskId: string): Promise<TaskStatus> {
   return r.json()
 }
 
+export interface VLMResponse {
+  result: string
+}
+
+export async function analyzeVLM(image: File, prompt: string): Promise<string> {
+  const formData = new FormData()
+  formData.append('image', image)
+  formData.append('prompt', prompt)
+
+  const r = await fetch('/vlm/analyze', { method: 'POST', body: formData })
+  if (!r.ok) {
+    const err = await r.json()
+    throw new Error(err.detail || 'VLM analysis failed')
+  }
+  const data: VLMResponse = await r.json()
+  return data.result
+}
+
 export async function improvePrompt(prompt: string): Promise<string> {
   const r = await fetch('/prompt/improve', {
     method: 'POST',

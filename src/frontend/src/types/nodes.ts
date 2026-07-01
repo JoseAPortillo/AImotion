@@ -93,6 +93,11 @@ export interface GenerationData extends Record<string, unknown> {
   max_sequence_length?: number
 }
 
+export interface VLMData extends Record<string, unknown> {
+  result: string
+  loading: boolean
+}
+
 export interface TransformersData extends Record<string, unknown> {
   model: string
   system_prompt: string
@@ -115,6 +120,7 @@ export type NodeData =
   | SamplingParamsData
   | DenoisingStrengthData
   | GenerationData
+  | VLMData
   | TransformersData
   | OutputData
 
@@ -241,6 +247,7 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
     outputs: [
       { id: 'text_out', label: 'Text', type: 'prompt' },
     ],
+    defaultData: { result: '', loading: false },
   },
   llmGenerator: {
     type: 'llmGenerator',
