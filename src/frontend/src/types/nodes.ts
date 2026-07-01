@@ -98,6 +98,19 @@ export interface VLMData extends Record<string, unknown> {
   loading: boolean
 }
 
+export interface LoRAData extends Record<string, unknown> {
+  loraFile: string
+  scale: number
+  model: string
+  active: boolean
+}
+
+export interface ControlNetData extends Record<string, unknown> {
+  model: string
+  controlnetModel: string
+  active: boolean
+}
+
 export interface TransformersData extends Record<string, unknown> {
   model: string
   system_prompt: string
@@ -122,6 +135,8 @@ export type NodeData =
   | DenoisingStrengthData
   | GenerationData
   | VLMData
+  | LoRAData
+  | ControlNetData
   | TransformersData
   | OutputData
 
@@ -285,6 +300,7 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
     outputs: [
       { id: 'model_out', label: 'Model + LoRA', type: 'params' },
     ],
+    defaultData: { loraFile: '', scale: 1.0, model: '', active: false },
   },
   applyControlNet: {
     type: 'applyControlNet',
@@ -298,6 +314,7 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
     outputs: [
       { id: 'model_out', label: 'Model + CN', type: 'params' },
     ],
+    defaultData: { model: '', controlnetModel: '', active: false },
   },
   generation: {
     type: 'generation',

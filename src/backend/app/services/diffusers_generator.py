@@ -315,6 +315,52 @@ class DiffusersGenerator:
             }
         return params
 
+    # ---- adapters (LoRA / ControlNet) ----
+
+    @property
+    def _active_lora(self) -> str | None:
+        return getattr(self, "_lora_path", None)
+
+    def apply_lora(self, lora_path: str, scale: float = 1.0) -> None:
+        if self._pipe is None:
+            raise RuntimeError("No pipeline loaded — load a model first")
+        import torch
+        logger.info(f"Applying LoRA from {lora_path} with scale {scale}")
+        self._pipe.load_lora_weights(lora_path, adapter_name="aimotion_lora")
+        self._pipe.set_adapters(["aimotion_lora"], adapter_weights=[scale])
+        self._lora_path = lora_path
+        self._lora_scale = scale
+        logger.info("LoRA applied and fused")
+
+    def unload_lora(self) -> None:
+        if self._pipe is None:
+            return
+        if not self._active_lora:
+            return
+        logger.info("Removing LoRA from pipeline")
+        try:
+            self._pipe.unload_lora_weights()
+        except Exception:
+            pass
+        try:
+            self._pipe.unfuse_lora()
+        except Exception:
+            pass
+        self._lora_path = None
+        self._lora_scale = 1.0
+        logger.info("LoRA removed")
+
+    def apply_controlnet(self, controlnet_path: str) -> None:
+        if self._pipe is None:
+            raise RuntimeError("No pipeline loaded — load a model first")
+        raise NotImplementedError(
+            "ControlNet requires pipeline reconstruction with ControlNetModel. "
+            "Not yet implemented."
+        )
+
+    def unload_controlnet(self) -> None:
+        pass
+
     # ---- lifecycle ----
 
     def unload(self):

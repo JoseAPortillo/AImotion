@@ -10,6 +10,7 @@ from app.api.generate import router as generate_router, results_router, task_man
 from app.api.prompt import router as prompt_router
 from app.api.vlm import router as vlm_router
 from app.api.llm import router as llm_router
+from app.api.adapters import router as adapters_router
 from app.api.models import router as models_router
 from app.config import settings
 from app.services.runners.registry import RunnerRegistry
@@ -48,6 +49,7 @@ app.include_router(results_router)
 app.include_router(prompt_router)
 app.include_router(vlm_router)
 app.include_router(llm_router)
+app.include_router(adapters_router)
 app.include_router(models_router)
 
 static_dir = os.path.join(os.path.dirname(__file__), "static")
