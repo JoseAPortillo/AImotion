@@ -7,20 +7,30 @@ import { useGraphStore } from '../../store/graph'
 function VideoInputNode(props: NodeProps) {
   const def = NODE_DEFINITIONS[props.type as NodeType]
   const inputRef = useRef<HTMLInputElement>(null)
-  const data = props.data as { file?: File; fileName?: string }
+  const data = props.data as { file?: File; fileName?: string; fileDataUrl?: string }
   const [objUrl, setObjUrl] = useState<string | null>(null)
 
   useEffect(() => {
-    if (data.file) {
+    if (data.file instanceof File) {
       const url = URL.createObjectURL(data.file)
       setObjUrl(url)
       return () => URL.revokeObjectURL(url)
+    } else if (data.fileDataUrl) {
+      setObjUrl(data.fileDataUrl)
     }
-  }, [data.file])
+  }, [data.file, data.fileDataUrl])
 
   const handleFile = useCallback(
     (file: File) => {
-      useGraphStore.getState().updateNodeData(props.id, { file, fileName: file.name })
+      const reader = new FileReader()
+      reader.onload = () => {
+        useGraphStore.getState().updateNodeData(props.id, {
+          file,
+          fileName: file.name,
+          fileDataUrl: reader.result as string,
+        })
+      }
+      reader.readAsDataURL(file)
     },
     [props.id]
   )

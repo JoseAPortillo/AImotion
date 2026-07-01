@@ -46,8 +46,8 @@ export async function startGeneration(
   imageFile?: File,
 ): Promise<TaskResponse> {
   const formData = new FormData()
-  if (imageFile) formData.append('image', imageFile)
-  if (videoFile) formData.append('video', videoFile)
+  if (imageFile instanceof File) formData.append('image', imageFile)
+  if (videoFile instanceof File) formData.append('video', videoFile)
   formData.append('prompt', prompt)
   formData.append('negative_prompt', negativePrompt)
   formData.append('width', String(params.width))
@@ -66,7 +66,8 @@ export async function startGeneration(
   const r = await fetch('/generate', { method: 'POST', body: formData })
   if (!r.ok) {
     const err = await r.json()
-    throw new Error(err.detail || 'Generation failed')
+    const msg = typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail)
+    throw new Error(msg || 'Generation failed')
   }
   return r.json()
 }

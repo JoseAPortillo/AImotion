@@ -5,9 +5,9 @@
   "runner": "wan2.2",
   "runner_install": {
     "source": "pip",
-    "package": "wan2-compat",
-    "url": "https://github.com/Wan-Video/Wan2.1",
-    "entry": "wan2_compat"
+    "package": "stable-diffusion-cpp-python",
+    "url": "https://github.com/leejet/stable-diffusion.cpp",
+    "entry": ""
   },
   "pipeline": { "video_pipeline": true },
   "schedulers": {},

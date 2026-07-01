@@ -23,6 +23,7 @@ import { useCallback, useEffect, useState, useRef, type DragEvent } from 'react'
 import { checkHealth, startGeneration, pollTask, type TaskStatus } from './api/backend'
 import type { PromptData, SamplingParamsData, DenoisingStrengthData, ImageInputData, VideoInputData, GenerationData } from './types/nodes'
 import ToastContainer from './components/Toast'
+import ErrorBoundary from './components/ErrorBoundary'
 import { useToastStore } from './store/toast'
 import ImageInputNode from './components/nodes/ImageInputNode'
 import VideoInputNode from './components/nodes/VideoInputNode'
@@ -48,9 +49,11 @@ const nodeTypes: NodeTypes = {
 
 export default function App() {
   return (
-    <ReactFlowProvider>
-      <AppInner />
-    </ReactFlowProvider>
+    <ErrorBoundary>
+      <ReactFlowProvider>
+        <AppInner />
+      </ReactFlowProvider>
+    </ErrorBoundary>
   )
 }
 

@@ -178,8 +178,8 @@ function GenerationNode(props: NodeProps) {
           num_frames: data.num_frames,
           max_sequence_length: data.max_sequence_length,
         },
-        videoNode?.data && 'file' in videoNode.data ? (videoNode.data as { file?: File }).file : undefined,
-        imageNode?.data && 'file' in imageNode.data ? (imageNode.data as { file?: File }).file : undefined,
+        (videoNode?.data && 'file' in videoNode.data && (videoNode.data as { file?: File }).file instanceof File) ? (videoNode.data as { file?: unknown }).file as File : undefined,
+        (imageNode?.data && 'file' in imageNode.data && (imageNode.data as { file?: File }).file instanceof File) ? (imageNode.data as { file?: unknown }).file as File : undefined,
       )
 
       let status: TaskStatus

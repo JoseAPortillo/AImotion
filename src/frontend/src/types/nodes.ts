@@ -38,12 +38,14 @@ export interface ImageInputData extends Record<string, unknown> {
   file?: File
   fileName?: string
   fileUrl?: string
+  fileDataUrl?: string
 }
 
 export interface VideoInputData extends Record<string, unknown> {
   file?: File
   fileName?: string
   fileUrl?: string
+  fileDataUrl?: string
 }
 
 export interface AudioInputData extends Record<string, unknown> {

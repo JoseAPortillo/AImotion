@@ -77,6 +77,7 @@ def _find_matching_family(hf_name: str):
 def detect_requirements(hf_name: str, discovered: dict) -> list[dict]:
     """Detect requirements for a model based on its format and pipeline."""
     requirements = []
+    family = _find_matching_family(hf_name)
 
     # Check if model has GGUF files
     try:
@@ -85,12 +86,16 @@ def detect_requirements(hf_name: str, discovered: dict) -> list[dict]:
         has_gguf = any(f.endswith('.gguf') or f.endswith('.ggufs') for f in files)
 
         if has_gguf:
-            requirements.append({
-                "type": "python_package",
-                "package": "llama-cpp-python",
-                "reason": "Required for loading GGUF format models",
-                "optional": False,
-            })
+            skip_gguf_reason = False
+            if family:
+                skip_gguf_reason = family.runner in ("gguf", "wan2.2")
+            if not skip_gguf_reason:
+                requirements.append({
+                    "type": "python_package",
+                    "package": "llama-cpp-python",
+                    "reason": "Required for loading GGUF format models",
+                    "optional": False,
+                })
     except Exception as e:
         logger.warning(f"Could not check files for requirements: {e}")
 
@@ -108,19 +113,27 @@ def detect_requirements(hf_name: str, discovered: dict) -> list[dict]:
     except Exception as e:
         logger.warning(f"Could not check model access requirements: {e}")
 
-    # Check if the model's family needs a custom runner
-    family = _find_matching_family(hf_name)
-    if family and family.runner != "diffusers" and not RunnerRegistry.is_registered(family.runner):
-        ri = family.runner_install
-        if ri:
+    # Check if the model's family needs a custom runner or pip deps
+    if family and family.runner not in ("diffusers",):
+        if not RunnerRegistry.is_registered(family.runner):
+            ri = family.runner_install
+            if ri:
+                requirements.append({
+                    "type": "runner",
+                    "runner_key": family.runner,
+                    "package": ri.get("package"),
+                    "url": ri.get("url"),
+                    "entry": ri.get("entry"),
+                    "reason": f"Required runner for {family.label} models",
+                    "optional": True,
+                })
+        # For wan2.2, always add stable-diffusion-cpp-python even if runner is built-in
+        if family.runner == "wan2.2":
             requirements.append({
-                "type": "runner",
-                "runner_key": family.runner,
-                "package": ri.get("package"),
-                "url": ri.get("url"),
-                "entry": ri.get("entry"),
-                "reason": f"Required runner for {family.label} models",
-                "optional": True,
+                "type": "python_package",
+                "package": "stable-diffusion-cpp-python",
+                "reason": "Required Python package for Wan2.2 GGUF video generation",
+                "optional": False,
             })
 
     return requirements
