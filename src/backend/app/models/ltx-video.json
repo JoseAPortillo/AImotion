@@ -23,10 +23,13 @@
   },
   "inputs": {
     "prompt": { "required": true, "type": "text" },
-    "num_frames": { "required": false, "type": "int", "default": 97 },
+    "steps": { "required": false, "type": "int", "default": 50, "min": 1, "max": 200 },
+    "cfg": { "required": false, "type": "float", "default": 3.0, "min": 1.0, "max": 30.0 },
+    "seed": { "required": false, "type": "int", "default": 0, "min": 0, "max": 2147483647 },
+    "num_frames": { "required": false, "type": "int", "default": 97, "min": 1, "max": 256 },
     "max_sequence_length": { "required": false, "type": "int", "default": 256 },
-    "width": { "required": false, "type": "int", "default": 704, "hidden": true },
-    "height": { "required": false, "type": "int", "default": 512, "hidden": true }
+    "width": { "required": false, "type": "int", "default": 704, "min": 64, "max": 4096 },
+    "height": { "required": false, "type": "int", "default": 512, "min": 64, "max": 4096 }
   },
   "output": { "type": "video", "mime": "video/mp4" },
   "variants": [

@@ -21,7 +21,7 @@ import NodeInspector from './components/NodeInspector'
 import ModelManager from './components/ModelManager'
 import { useCallback, useEffect, useState, useRef, type DragEvent } from 'react'
 import { checkHealth, startGeneration, pollTask, type TaskStatus } from './api/backend'
-import type { PromptData, SamplingParamsData, DenoisingStrengthData, ImageInputData, VideoInputData, GenerationData } from './types/nodes'
+import type { PromptData, ImageInputData, VideoInputData, GenerationData } from './types/nodes'
 import ToastContainer from './components/Toast'
 import ErrorBoundary from './components/ErrorBoundary'
 import { useToastStore } from './store/toast'
@@ -169,28 +169,26 @@ function AppInner() {
   const handleGenerate = useCallback(async () => {
     const promptNode = nodes.find((n) => n.type === 'prompt')?.data as PromptData | undefined
     const genNode = nodes.find((n) => n.type === 'generation')?.data as GenerationData | undefined
-    const samplingNode = nodes.find((n) => n.type === 'samplingParams')?.data as SamplingParamsData | undefined
-    const strengthNode = nodes.find((n) => n.type === 'denoisingStrength')?.data as DenoisingStrengthData | undefined
     const videoNode = nodes.find((n) => n.type === 'videoInput')?.data as VideoInputData | undefined
 
-    if (!promptNode?.positive || !samplingNode) {
-      addToast('Add at least a Prompt and Sampling node to the graph', 'info')
+    if (!promptNode?.positive || !genNode) {
+      addToast('Add at least a Prompt and a Generation node to the graph', 'info')
       return
     }
 
     setGenerating(true)
     try {
       const task = await startGeneration(promptNode.positive, promptNode.negative || '', {
-        width: samplingNode.width || 720,
-        height: samplingNode.height || 480,
-        steps: samplingNode.steps || 50,
-        cfg: samplingNode.cfg || 6,
-        strength: strengthNode?.strength ?? 0.8,
-        seed: samplingNode.seed || 0,
-        scheduler: genNode?.scheduler || '',
-        model: genNode?.model || 'cogvideox-2b',
-        vae_tiling: genNode?.vae_tiling ?? true,
-        vae_tile_overlap: genNode?.vae_tile_overlap ?? 0.0,
+        width: genNode.width ?? 720,
+        height: genNode.height ?? 480,
+        steps: genNode.steps ?? 50,
+        cfg: genNode.cfg ?? 6,
+        strength: genNode.strength ?? 0.8,
+        seed: genNode.seed ?? 0,
+        scheduler: genNode.scheduler || '',
+        model: genNode.model || 'cogvideox-2b',
+        vae_tiling: genNode.vae_tiling ?? true,
+        vae_tile_overlap: genNode.vae_tile_overlap ?? 0.0,
       }, videoNode?.file)
 
       let status: TaskStatus

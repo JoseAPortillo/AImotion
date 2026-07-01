@@ -32,6 +32,7 @@ export interface NodeDefinition {
   inputs: PortDef[]
   outputs: PortDef[]
   defaultData?: Record<string, unknown>
+  paletteHidden?: boolean
 }
 
 export interface ImageInputData extends Record<string, unknown> {
@@ -75,6 +76,12 @@ export interface GenerationData extends Record<string, unknown> {
   scheduler: string
   vae_tiling: boolean
   vae_tile_overlap: number
+  steps: number
+  cfg: number
+  seed: number
+  strength: number
+  width: number
+  height: number
   num_frames?: number
   max_sequence_length?: number
 }
@@ -177,20 +184,18 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
     type: 'generation',
     label: 'Generation',
     color: '#f59e0b',
-    description: 'The core generation node. Connects prompts, parameters, and inputs to produce a video.',
+    description: 'The core generation node. Connect prompts and inputs to produce a video.',
     inputs: [
       { id: 'video_in', label: 'Video', type: 'video_tensor' },
       { id: 'image_in', label: 'Image', type: 'video_tensor' },
       { id: 'audio_in', label: 'Audio', type: 'audio_features' },
       { id: 'prompt_pos', label: 'Positive Prompt', type: 'prompt' },
       { id: 'prompt_neg', label: 'Negative Prompt', type: 'prompt' },
-      { id: 'params', label: 'Params', type: 'params' },
-      { id: 'strength', label: 'Strength', type: 'params' },
     ],
     outputs: [
       { id: 'video_out', label: 'Video', type: 'video_tensor' },
     ],
-    defaultData: { model: 'cogvideox-2b', scheduler: '', vae_tiling: true, vae_tile_overlap: 0.0 },
+    defaultData: { model: 'cogvideox-2b', scheduler: '', vae_tiling: true, vae_tile_overlap: 0.0, steps: 50, cfg: 6, seed: 0, strength: 0.8, width: 720, height: 480 },
   },
   samplingParams: {
     type: 'samplingParams',
@@ -200,6 +205,7 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
     inputs: [],
     outputs: [{ id: 'params', label: 'Params', type: 'params' }],
     defaultData: { steps: 50, cfg: 6, seed: 0, width: 720, height: 480 },
+    paletteHidden: true,
   },
   denoisingStrength: {
     type: 'denoisingStrength',
@@ -209,6 +215,7 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
     inputs: [],
     outputs: [{ id: 'strength', label: 'Strength', type: 'params' }],
     defaultData: { strength: 0.8 },
+    paletteHidden: true,
   },
   output: {
     type: 'output',

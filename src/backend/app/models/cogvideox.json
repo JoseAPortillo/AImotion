@@ -23,10 +23,13 @@
   },
   "inputs": {
     "prompt": { "required": true, "type": "text" },
-    "num_frames": { "required": false, "type": "int", "default": 49 },
+    "steps": { "required": false, "type": "int", "default": 50, "min": 1, "max": 200 },
+    "cfg": { "required": false, "type": "float", "default": 6.0, "min": 1.0, "max": 30.0 },
+    "seed": { "required": false, "type": "int", "default": -1, "min": -1, "max": 2147483647 },
+    "num_frames": { "required": false, "type": "int", "default": 49, "min": 1, "max": 120 },
     "max_sequence_length": { "required": false, "type": "int", "default": 226 },
-    "width": { "required": false, "type": "int", "default": 720, "hidden": true },
-    "height": { "required": false, "type": "int", "default": 480, "hidden": true }
+    "width": { "required": false, "type": "int", "default": 720, "min": 64, "max": 4096 },
+    "height": { "required": false, "type": "int", "default": 480, "min": 64, "max": 4096 }
   },
   "output": { "type": "video", "mime": "video/mp4" },
   "variants": [
@@ -79,6 +82,9 @@
       },
       "inputs": {
         "image": { "required": true, "type": "image" },
+        "steps": { "required": false, "type": "int", "default": 50, "min": 1, "max": 200 },
+        "cfg": { "required": false, "type": "float", "default": 6.0, "min": 1.0, "max": 30.0 },
+"seed": { "required": false, "type": "int", "default": 0, "min": 0, "max": 2147483647 },
         "strength": { "required": false, "type": "float", "default": 0.8, "min": 0, "max": 1 }
       }
     }

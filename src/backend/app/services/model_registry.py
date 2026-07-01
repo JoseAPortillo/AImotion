@@ -83,8 +83,9 @@ def generate_key(hf_name: str) -> str:
 
 
 def hf_cache_path() -> str:
-    from app.config import settings
-    return os.path.join(settings.model_cache_dir, "hub")
+    return os.environ.get("HF_HUB_CACHE") or os.path.join(
+        os.environ.get("HF_HOME", ""), "hub"
+    )
 
 
 def is_model_cached(hf_name: str) -> bool:

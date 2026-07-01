@@ -1,7 +1,7 @@
 import { memo, useCallback, useMemo, useState, useEffect } from 'react'
 import type { NodeProps } from '@xyflow/react'
 import { Handle, Position, NodeResizer } from '@xyflow/react'
-import { NODE_DEFINITIONS, PORT_COLORS, getHandleColor, type NodeType, type GenerationData, type PromptData, type SamplingParamsData, type DenoisingStrengthData } from '../../types/nodes'
+import { NODE_DEFINITIONS, PORT_COLORS, getHandleColor, type NodeType, type GenerationData, type PromptData } from '../../types/nodes'
 import { useGraphStore } from '../../store/graph'
 import { useToastStore } from '../../store/toast'
 import { startGeneration, pollTask, type TaskStatus } from '../../api/backend'
@@ -107,11 +107,10 @@ function GenerationNode(props: NodeProps) {
   const defaultSched = modelConfig?.default_scheduler || ''
 
   const activeInputs = useMemo(() => {
-    const active = new Set<string>(['prompt_pos', 'prompt_neg', 'params'])
+    const active = new Set<string>(['prompt_pos', 'prompt_neg'])
     if (!modelConfig?.accepts) return active
     if (modelConfig.accepts.image) active.add('image_in')
     if (modelConfig.accepts.video) active.add('video_in')
-    if (modelConfig.accepts.strength) active.add('strength')
     return active
   }, [modelConfig])
 
@@ -131,6 +130,11 @@ function GenerationNode(props: NodeProps) {
       model: key,
       scheduler: cfg?.default_scheduler || '',
     }
+    if (inputs.steps && defs.steps != null) update.steps = defs.steps as number
+    if (inputs.cfg && defs.cfg != null) update.cfg = defs.cfg as number
+    if (inputs.strength && defs.strength != null) update.strength = defs.strength as number
+    if (inputs.width && defs.width != null) update.width = defs.width as number
+    if (inputs.height && defs.height != null) update.height = defs.height as number
     if (inputs.num_frames && defs.num_frames != null) update.num_frames = defs.num_frames as number
     if (inputs.max_sequence_length && defs.max_seq != null) update.max_sequence_length = defs.max_seq as number
     updateNodeData(props.id, update)
@@ -142,19 +146,15 @@ function GenerationNode(props: NodeProps) {
 
     const promptEdgePos = genEdges.find((e) => e.targetHandle === 'prompt_pos')
     const promptEdgeNeg = genEdges.find((e) => e.targetHandle === 'prompt_neg')
-    const paramsEdge = genEdges.find((e) => e.targetHandle === 'params')
-    const strengthEdge = genEdges.find((e) => e.targetHandle === 'strength')
     const videoEdge = genEdges.find((e) => e.targetHandle === 'video_in')
     const imageEdge = genEdges.find((e) => e.targetHandle === 'image_in')
 
     const promptData = promptEdgePos ? getNode(promptEdgePos)?.data as PromptData | undefined : undefined
-    const paramsData = paramsEdge ? getNode(paramsEdge)?.data as SamplingParamsData | undefined : undefined
-    const strengthData = strengthEdge ? getNode(strengthEdge)?.data as DenoisingStrengthData | undefined : undefined
     const videoNode = videoEdge ? getNode(videoEdge) : undefined
     const imageNode = imageEdge ? getNode(imageEdge) : undefined
 
-    if (!promptData?.positive || !paramsData) {
-      addToast('Connect at least a Prompt and Sampling node to this Generation node', 'info')
+    if (!promptData?.positive) {
+      addToast('Connect a Prompt node to this Generation node', 'info')
       return
     }
 
@@ -165,12 +165,12 @@ function GenerationNode(props: NodeProps) {
         promptData.positive,
         promptEdgeNeg ? (getNode(promptEdgeNeg)?.data as PromptData | undefined)?.negative || '' : '',
         {
-          width: paramsData.width || 720,
-          height: paramsData.height || 480,
-          steps: paramsData.steps || 50,
-          cfg: paramsData.cfg || 6,
-          strength: strengthData?.strength ?? 0.8,
-          seed: paramsData.seed || 0,
+          width: data.width ?? 720,
+          height: data.height ?? 480,
+          steps: data.steps ?? 50,
+          cfg: data.cfg ?? 6,
+          strength: data.strength ?? 0.8,
+          seed: data.seed ?? 0,
           scheduler: data.scheduler || '',
           model: data.model || 'cogvideox-2b',
           vae_tiling: data.vae_tiling ?? true,
@@ -205,7 +205,7 @@ function GenerationNode(props: NodeProps) {
     } finally {
       setGenRunning(false)
     }
-  }, [props.id, data.scheduler, data.model, nodes, edges, setOutputUrl])
+  }, [props.id, data, nodes, edges, setOutputUrl])
 
   return (
     <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, position: 'relative', paddingBottom: 38 }}>
@@ -272,20 +272,24 @@ function GenerationNode(props: NodeProps) {
           )}
         </div>
         {modelConfig?.inputs && Object.entries(modelConfig.inputs)
-          .filter(([, inp]) => !inp.hidden && inp.type === 'int' && inp.default != null)
-          .map(([name, inp]) => (
-            <div key={name} style={{ marginTop: 6 }}>
-              <label style={{ fontSize: 10, color: '#888', display: 'block', marginBottom: 2 }}>{name.replace(/_/g, ' ')}</label>
-              <input
-                type="number"
-                value={(data[name as keyof GenerationData] ?? inp.default) as number}
-                onChange={(e) => updateNodeData(props.id, { [name]: parseInt(e.target.value, 10) } as Partial<GenerationData>)}
-                min={inp.min}
-                max={inp.max}
-                style={{ ...selectStyle, width: '100%' }}
-              />
-            </div>
-          ))}
+          .filter(([, inp]) => !inp.hidden && (inp.type === 'int' || inp.type === 'float') && inp.default != null)
+          .map(([name, inp]) => {
+            const isFloat = inp.type === 'float'
+            return (
+              <div key={name} style={{ marginTop: 6 }}>
+                <label style={{ fontSize: 10, color: '#888', display: 'block', marginBottom: 2 }}>{name.replace(/_/g, ' ')}</label>
+                <input
+                  type="number"
+                  step={isFloat ? 'any' : 1}
+                  value={(data[name as keyof GenerationData] ?? inp.default) as number}
+                  onChange={(e) => updateNodeData(props.id, { [name]: isFloat ? parseFloat(e.target.value) : parseInt(e.target.value, 10) } as Partial<GenerationData>)}
+                  min={inp.min}
+                  max={inp.max}
+                  style={{ ...selectStyle, width: '100%' }}
+                />
+              </div>
+            )
+          })}
       </div>
 
       {genRunning && (

@@ -33,7 +33,7 @@ export default function Sidebar() {
       </h2>
 
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 0 }}>
-        {(Object.keys(NODE_DEFINITIONS) as NodeType[]).map((key) => {
+        {(Object.keys(NODE_DEFINITIONS) as NodeType[]).filter((key) => !NODE_DEFINITIONS[key].paletteHidden).map((key) => {
           const def = NODE_DEFINITIONS[key]
           return (
             <div
