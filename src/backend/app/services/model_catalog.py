@@ -35,6 +35,10 @@ class ModelFamily:
         return p.get("video_pipeline", False) if p else False
 
     @property
+    def runner_install(self) -> Optional[dict]:
+        return self._data.get("runner_install")
+
+    @property
     def schedulers(self) -> dict[str, str]:
         return self._data.get("schedulers", {})
 
@@ -76,6 +80,10 @@ class ModelVariant:
         self.needs_token: bool = data.get("needs_token", False)
         self._family = family
         self._data = data
+
+    @property
+    def family(self) -> ModelFamily:
+        return self._family
 
     def _pipe_data(self) -> dict:
         return self._data.get("pipeline") or {}
@@ -205,9 +213,11 @@ class ModelCatalog:
         schedulers = inst.schedulers or (family.schedulers if family else {})
         default_scheduler = inst.default_scheduler or (family.default_scheduler if family else "")
         is_video = inst.pipeline_class in _INFERRED_VIDEO_PIPELINES or (family and family.is_video)
+        runner = family.runner if family else "diffusers"
         dummy_family = ModelFamily({
             "family": inst.key or inst.hf_name,
             "label": inst.alias or inst.hf_name,
+            "runner": runner,
             "pipeline": {"class": inst.pipeline_class, "video_pipeline": is_video} if inst.pipeline_class or is_video else None,
             "schedulers": schedulers,
             "default_scheduler": default_scheduler,

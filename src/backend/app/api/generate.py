@@ -1,5 +1,6 @@
 import os
 import logging
+import asyncio
 from typing import Optional
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query
@@ -8,15 +9,17 @@ from fastapi.responses import FileResponse
 from app.config import settings
 from app.models.generate import TaskInfo, TaskStatus
 from app.services.task_manager import TaskManager
-from app.services.generator import VideoGenerator, extract_frames, get_model_config
+from app.services.generator import extract_frames, get_model_config
 from app.services.model_catalog import catalog
+from app.services.runners.base import GenerateParams
+from app.services.runners.registry import RunnerRegistry
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/generate", tags=["generate"])
 
 task_manager = TaskManager()
-video_generator = VideoGenerator()
+
 _default_variant = catalog.get_variant(settings.model_type)
 _defaults = _default_variant.defaults if _default_variant else {"width": 720, "height": 480, "steps": 50, "cfg": 7.0}
 
@@ -52,6 +55,28 @@ def _validate_dimensions(width: int, height: int):
             status_code=422,
             detail=f"Height exceeds maximum of {settings.max_height}",
         )
+
+
+def _get_runner(model_key: str):
+    variant = catalog.get_variant(model_key)
+    family = variant.family if variant else None
+    runner_key = family.runner if family else "diffusers"
+
+    runner = RunnerRegistry.get(runner_key)
+    if runner is not None:
+        return runner
+
+    if runner_key != "diffusers":
+        raise ValueError(
+            f"Runner '{runner_key}' is required for model '{model_key}' "
+            f"but is not installed or registered. Install the model again to "
+            f"set up the runner automatically, or install the runner package manually."
+        )
+
+    runner = RunnerRegistry.get("diffusers")
+    if runner is None:
+        raise ValueError("Default runner 'diffusers' is not registered. Cannot generate.")
+    return runner
 
 
 @router.post("", status_code=202)
@@ -137,12 +162,11 @@ async def create_generation(
 
 
 def _dispatch_generation(task_id: str, params: dict):
-    import asyncio
-
     asyncio.create_task(_run_generation(task_id, params))
 
 
 async def _run_generation(task_id: str, params: dict):
+    runner = None
     try:
         await task_manager.set_running(task_id, params["steps"])
 
@@ -165,7 +189,7 @@ async def _run_generation(task_id: str, params: dict):
             from PIL import Image as PILImage
             video_frames = [PILImage.open(image_path).convert("RGB")]
 
-        result_url = await video_generator.generate(
+        gen_params = GenerateParams(
             prompt=params["prompt"],
             negative_prompt=params.get("negative_prompt", ""),
             video_frames=video_frames,
@@ -179,14 +203,17 @@ async def _run_generation(task_id: str, params: dict):
             model=model,
             num_frames=params.get("num_frames"),
             max_sequence_length=params.get("max_sequence_length"),
-            progress_callback=progress_callback,
         )
-        result_type = "image" if result_url.endswith(".png") else "video"
-        await task_manager.complete_task(task_id, result_url, result_type)
+
+        runner = _get_runner(model)
+        result = await runner.generate(gen_params, progress_callback)
+        result_type = "image" if result.url.endswith(".png") else "video"
+        await task_manager.complete_task(task_id, result.url, result_type)
     except Exception as e:
         await task_manager.fail_task(task_id, str(e))
     finally:
-        video_generator.unload()
+        if runner:
+            runner.unload()
 
 
 @router.get("/{task_id}")
