@@ -1,9 +1,10 @@
 import { memo, useCallback, useState, useEffect } from 'react'
 import type { NodeProps } from '@xyflow/react'
 import { Handle, Position, NodeResizer } from '@xyflow/react'
-import { NODE_DEFINITIONS, PORT_COLORS, getHandleColor, type NodeType, type TransformersData } from '../../../types/nodes'
+import { NODE_DEFINITIONS, PORT_COLORS, getHandleColor, type NodeType, type TransformersData, type PromptData } from '../../../types/nodes'
 import { useGraphStore } from '../../../store/graph'
 import { useToastStore } from '../../../store/toast'
+import { generateLLM } from '../../../api/backend'
 
 interface ModelEntry {
   key: string
@@ -32,7 +33,10 @@ function TransformersGeneratorNode(props: NodeProps) {
   const def = NODE_DEFINITIONS[props.type as NodeType]
   const data = props.data as TransformersData
   const updateNodeData = useGraphStore((s) => s.updateNodeData)
+  const nodes = useGraphStore((s) => s.nodes)
+  const edges = useGraphStore((s) => s.edges)
   const addToast = useToastStore((s) => s.addToast)
+  const [generating, setGenerating] = useState(false)
   const [models, setModels] = useState<ModelEntry[]>([])
   const [modelsLoaded, setModelsLoaded] = useState(false)
 
@@ -53,21 +57,48 @@ function TransformersGeneratorNode(props: NodeProps) {
     fetchModels()
   }, [fetchModels])
 
-  const handleGenerate = useCallback(() => {
-    if (!data.model) {
-      addToast('Select a model first', 'info')
+  const handleGenerate = useCallback(async () => {
+    const inEdges = edges.filter((e) => e.target === props.id)
+    const getNode = (edge: typeof inEdges[0]) => nodes.find((n) => n.id === edge.source)
+
+    const promptEdge = inEdges.find((e) => e.targetHandle === 'prompt_pos')
+    const systemEdge = inEdges.find((e) => e.targetHandle === 'system_in')
+
+    const promptData = promptEdge ? getNode(promptEdge)?.data as PromptData | undefined : undefined
+    const systemData = systemEdge ? getNode(systemEdge)?.data as PromptData | undefined : undefined
+
+    if (!promptData?.positive) {
+      addToast('Connect a Prompt node', 'info')
       return
     }
-    addToast('Transformers generation — coming in next iteration', 'info')
-  }, [data.model, addToast])
+
+    setGenerating(true)
+    try {
+      const result = await generateLLM({
+        prompt: promptData.positive,
+        system_prompt: systemData?.positive || data.system_prompt || '',
+        model: data.model,
+        temperature: data.temperature ?? 0.7,
+        max_tokens: data.max_tokens ?? 2048,
+        top_p: data.top_p ?? 0.9,
+        top_k: data.top_k ?? 40,
+        seed: data.seed ?? 0,
+      })
+      updateNodeData(props.id, { result } as Partial<TransformersData>)
+    } catch (err: any) {
+      addToast(`Error: ${err.message}`, 'error')
+    } finally {
+      setGenerating(false)
+    }
+  }, [props.id, data, nodes, edges, updateNodeData])
 
   return (
-    <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, position: 'relative', paddingBottom: 38 }}>
+    <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, position: 'relative', paddingBottom: 38, minWidth: 200 }}>
       {props.selected && <NodeResizer handleStyle={{ width: 8, height: 8, borderRadius: '50%', background: '#888', zIndex: 10 }} />}
       <div style={{ background: def.color, padding: '6px 10px', fontSize: 12, fontWeight: 600, borderRadius: '8px 8px 0 0' }}>
         {def.label}
       </div>
-      <div style={{ padding: '6px 10px', fontSize: 12, color: '#ccc' }}>
+      <div style={{ padding: '6px 10px', fontSize: 12, color: '#ccc', maxHeight: 300, overflowY: 'auto' }}>
         <select
           value={data.model}
           onChange={(e) => updateNodeData(props.id, { model: e.target.value } as Partial<TransformersData>)}
@@ -75,22 +106,11 @@ function TransformersGeneratorNode(props: NodeProps) {
           style={selectStyle}
         >
           {!modelsLoaded && <option value="">Loading...</option>}
-          {modelsLoaded && models.length === 0 && <option value="">No models available</option>}
+          {modelsLoaded && models.length === 0 && <option value="">No models</option>}
           {models.map(m => (
             <option key={m.key} value={m.key}>{m.name}</option>
           ))}
         </select>
-
-        <div style={{ marginTop: 6 }}>
-          <label style={{ fontSize: 10, color: '#888', display: 'block', marginBottom: 2 }}>System Prompt</label>
-          <textarea
-            value={data.system_prompt}
-            onChange={(e) => updateNodeData(props.id, { system_prompt: e.target.value } as Partial<TransformersData>)}
-            rows={2}
-            style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
-            placeholder='Optional system prompt...'
-          />
-        </div>
 
         <div style={{ marginTop: 6 }}>
           <label style={{ fontSize: 10, color: '#888', display: 'block', marginBottom: 2 }}>Temperature</label>
@@ -154,11 +174,18 @@ function TransformersGeneratorNode(props: NodeProps) {
             style={inputStyle}
           />
         </div>
+
+        {data.result && (
+          <div style={{ marginTop: 8, padding: 6, background: '#0f0f0f', borderRadius: 4, maxHeight: 100, overflowY: 'auto' }}>
+            <div style={{ fontSize: 11, lineHeight: 1.4, color: '#e0e0e0', whiteSpace: 'pre-wrap' }}>{String(data.result)}</div>
+          </div>
+        )}
       </div>
 
       <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, borderTop: '1px solid #2a2a2a', padding: '6px 10px', background: '#1a1a1a' }}>
         <button
           onClick={handleGenerate}
+          disabled={generating}
           style={{
             width: '100%',
             padding: '6px 0',
@@ -166,12 +193,12 @@ function TransformersGeneratorNode(props: NodeProps) {
             border: 'none',
             fontSize: 12,
             fontWeight: 600,
-            cursor: 'pointer',
-            background: '#4ade80',
-            color: '#0f0f0f',
+            cursor: generating ? 'not-allowed' : 'pointer',
+            background: generating ? '#333' : '#06b6d4',
+            color: generating ? '#888' : '#0f0f0f',
           }}
         >
-          Generate ▶
+          {generating ? 'Generating...' : 'Generate ▶'}
         </button>
       </div>
 

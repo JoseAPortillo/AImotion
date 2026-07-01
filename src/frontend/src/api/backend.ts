@@ -96,6 +96,33 @@ export async function analyzeVLM(image: File, prompt: string): Promise<string> {
   return data.result
 }
 
+export interface LLMGenerateResponse {
+  result: string
+}
+
+export async function generateLLM(params: {
+  prompt: string
+  system_prompt?: string
+  model?: string
+  temperature: number
+  max_tokens: number
+  top_p: number
+  top_k: number
+  seed: number
+}): Promise<string> {
+  const r = await fetch('/llm/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  })
+  if (!r.ok) {
+    const err = await r.json()
+    throw new Error(err.detail || 'LLM generation failed')
+  }
+  const data: LLMGenerateResponse = await r.json()
+  return data.result
+}
+
 export async function improvePrompt(prompt: string): Promise<string> {
   const r = await fetch('/prompt/improve', {
     method: 'POST',

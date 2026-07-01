@@ -57,7 +57,7 @@ function VLMNode(props: NodeProps) {
           <span style={{ color: '#888' }}>Analyzing...</span>
         ) : data.result ? (
           <div style={{ fontSize: 11, lineHeight: 1.4, maxHeight: 120, overflowY: 'auto', color: '#e0e0e0', whiteSpace: 'pre-wrap' }}>
-            {data.result}
+            {String(data.result)}
           </div>
         ) : (
           <span style={{ color: '#888', fontSize: 11 }}>Connect Image + Prompt, then click Analyze</span>

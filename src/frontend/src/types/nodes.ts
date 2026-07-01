@@ -106,6 +106,7 @@ export interface TransformersData extends Record<string, unknown> {
   top_p: number
   top_k: number
   seed: number
+  result: string
 }
 
 export interface OutputData extends Record<string, unknown> {
@@ -233,7 +234,7 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
     outputs: [
       { id: 'text_out', label: 'Text', type: 'prompt' },
     ],
-    defaultData: { model: '', system_prompt: '', temperature: 0.7, max_tokens: 2048, top_p: 0.9, top_k: 40, seed: 0 },
+    defaultData: { model: '', system_prompt: '', temperature: 0.7, max_tokens: 2048, top_p: 0.9, top_k: 40, seed: 0, result: '' },
   },
   vlmNode: {
     type: 'vlmNode',
