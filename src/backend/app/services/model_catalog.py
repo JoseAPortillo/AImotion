@@ -256,9 +256,9 @@ def _infer_inputs(pipeline_class: str | None) -> dict:
     for pname, pinfo in params.items():
         if pname in ("prompt",):
             inputs[pname] = {"required": True, "type": "text"}
-        elif pname in ("num_frames", "width", "height", "max_sequence_length"):
+        elif pname in ("num_frames", "width", "height", "max_sequence_length", "decode_chunk_size", "fps", "motion_bucket_id"):
             inputs[pname] = {"required": False, "type": "int", "default": pinfo.get("default")}
-        elif pname in ("guidance_scale", "num_inference_steps"):
+        elif pname in ("guidance_scale", "num_inference_steps", "min_guidance_scale", "max_guidance_scale"):
             pass
         elif pname == "strength":
             inputs[pname] = {"required": False, "type": "float", "default": pinfo.get("default", 0.8), "min": 0, "max": 1}

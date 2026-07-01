@@ -20,6 +20,7 @@ class GenerateParams:
     model: str = ""
     num_frames: Optional[int] = None
     max_sequence_length: Optional[int] = None
+    decode_chunk_size: Optional[int] = None
 
 
 @dataclass

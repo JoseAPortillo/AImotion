@@ -124,5 +124,25 @@
       "cfg": 7.0
     },
     "installed_at": "2026-07-01T12:01:16.210563"
+  },
+  {
+    "key": "stabilityai_stable_video_diffusion_img2vid_xt",
+    "hf_name": "stabilityai/stable-video-diffusion-img2vid-xt",
+    "alias": "stable-video-diffusion-img2vid-xt",
+    "pipeline_class": "StableVideoDiffusionPipeline",
+    "dtype": "float16",
+    "schedulers": {
+      "scheduler": "EulerDiscreteScheduler"
+    },
+    "default_scheduler": "scheduler",
+    "needs_token": false,
+    "defaults": {
+      "steps": 25,
+      "cfg": 3.0,
+      "num_frames": 25,
+      "width": 1024,
+      "height": 576
+    },
+    "installed_at": "2026-07-01T20:11:48.600660"
   }
 ]

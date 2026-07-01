@@ -204,12 +204,39 @@ function DiffuserGeneratorNode(props: NodeProps) {
     const videoEdge = genEdges.find((e) => e.targetHandle === 'video_in')
     const imageEdge = genEdges.find((e) => e.targetHandle === 'image_in')
 
+    console.log('[DiffuserGen] Edges to this node:', genEdges.map(e => ({ source: e.source, targetHandle: e.targetHandle })))
+    console.log('[DiffuserGen] Image edge found:', imageEdge)
+
     const promptData = promptEdgePos ? getNode(promptEdgePos)?.data as PromptData | undefined : undefined
     const videoNode = videoEdge ? getNode(videoEdge) : undefined
     const imageNode = imageEdge ? getNode(imageEdge) : undefined
 
-    if (!promptData?.positive) {
+    console.log('[DiffuserGen] Image node:', imageNode)
+    console.log('[DiffuserGen] Image node data:', imageNode?.data)
+    
+    const getFileFromNodeData = async (nodeData: any): Promise<File | undefined> => {
+      if (!nodeData) return undefined
+      if (nodeData.file instanceof File) return nodeData.file
+      if (nodeData.fileDataUrl) {
+        const response = await fetch(nodeData.fileDataUrl)
+        const blob = await response.blob()
+        return new File([blob], nodeData.fileName || 'file', { type: blob.type })
+      }
+      return undefined
+    }
+    
+    const imageFile = await getFileFromNodeData(imageNode?.data)
+    const videoFile = await getFileFromNodeData(videoNode?.data)
+    console.log('[DiffuserGen] Image file to send:', imageFile)
+    console.log('[DiffuserGen] Video file to send:', videoFile)
+
+    const isSVD = data.model?.includes('stable_video_diffusion')
+    if (!isSVD && !promptData?.positive) {
       addToast('Connect a Prompt node to this node', 'info')
+      return
+    }
+    if (isSVD && !imageNode?.data) {
+      addToast('Connect an Image Input node for SVD models', 'info')
       return
     }
 
@@ -217,7 +244,7 @@ function DiffuserGeneratorNode(props: NodeProps) {
     setProgress(0)
     try {
       const task = await startGeneration(
-        promptData.positive,
+        promptData?.positive || '',
         promptEdgeNeg ? (getNode(promptEdgeNeg)?.data as PromptData | undefined)?.negative || '' : '',
         {
           width: data.width ?? 720,
@@ -233,8 +260,8 @@ function DiffuserGeneratorNode(props: NodeProps) {
           num_frames: data.num_frames,
           max_sequence_length: data.max_sequence_length,
         },
-        (videoNode?.data && 'file' in videoNode.data && (videoNode.data as { file?: File }).file instanceof File) ? (videoNode.data as { file?: unknown }).file as File : undefined,
-        (imageNode?.data && 'file' in imageNode.data && (imageNode.data as { file?: File }).file instanceof File) ? (imageNode.data as { file?: unknown }).file as File : undefined,
+        videoFile,
+        imageFile,
       )
 
       let status: TaskStatus

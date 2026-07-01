@@ -16,8 +16,8 @@ class Settings(BaseSettings):
     max_video_duration_sec: int = 30
     default_width: int = 720
     default_height: int = 480
-    max_width: int = 768
-    max_height: int = 768
+    max_width: int = 1280
+    max_height: int = 1280
     model_name: str = "THUDM/CogVideoX-2b"
     model_type: str = "cogvideox-2b"
     model_cache_dir: str = "D:\\AImation\\models"

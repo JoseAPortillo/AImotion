@@ -19,23 +19,23 @@ def test_generate_accepts_without_video(client):
     assert resp.status_code == 202
 
 
-def test_generate_rejects_missing_prompt(client, sample_video):
+def test_generate_accepts_missing_prompt(client, sample_video):
     with open(sample_video, "rb") as f:
         resp = client.post(
             "/generate",
             files={"video": ("test.mp4", f, "video/mp4")},
         )
-    assert resp.status_code == 422
+    assert resp.status_code == 202
 
 
-def test_generate_rejects_empty_prompt(client, sample_video):
+def test_generate_accepts_empty_prompt(client, sample_video):
     with open(sample_video, "rb") as f:
         resp = client.post(
             "/generate",
             files={"video": ("test.mp4", f, "video/mp4")},
             data={"prompt": ""},
         )
-    assert resp.status_code == 422
+    assert resp.status_code == 202
 
 
 def test_generate_rejects_invalid_format(client):

@@ -83,7 +83,7 @@ def _get_runner(model_key: str):
 async def create_generation(
     image: Optional[UploadFile] = File(None),
     video: Optional[UploadFile] = File(None),
-    prompt: str = Form(..., min_length=1, max_length=1000),
+    prompt: str = Form("", max_length=1000),
     negative_prompt: str = Form("", max_length=1000),
     width: int = Form(_defaults["width"]),
     height: int = Form(_defaults["height"]),
@@ -95,6 +95,7 @@ async def create_generation(
     model: str = Form(settings.model_type),
     num_frames: Optional[int] = Form(None),
     max_sequence_length: Optional[int] = Form(None),
+    decode_chunk_size: Optional[int] = Form(None),
 ):
     model_cfg = get_model_config(model)
     if model_cfg is None:
@@ -113,10 +114,12 @@ async def create_generation(
         )
     image_path = None
     if image:
+        logger.info(f"Received image file: {image.filename}, content_type: {image.content_type}")
         os.makedirs(settings.upload_dir, exist_ok=True)
         file_ext = os.path.splitext(image.filename or "input.png")[1]
         upload_path = os.path.join(settings.upload_dir, f"img_{seed}{file_ext}")
         content = await image.read()
+        logger.info(f"Image content size: {len(content)} bytes")
         if len(content) > settings.max_upload_size_mb * 1024 * 1024:
             raise HTTPException(
                 status_code=413,
@@ -155,6 +158,7 @@ async def create_generation(
         "model": model,
         "num_frames": num_frames,
         "max_sequence_length": max_sequence_length,
+        "decode_chunk_size": decode_chunk_size,
     }
     task_id = await task_manager.create_task(params)
     _dispatch_generation(task_id, params)
@@ -187,7 +191,9 @@ async def _run_generation(task_id: str, params: dict):
         image_path = params.get("image_path")
         if image_path and os.path.exists(image_path) and not video_frames:
             from PIL import Image as PILImage
+            logger.info(f"Loading image from {image_path} into video_frames")
             video_frames = [PILImage.open(image_path).convert("RGB")]
+            logger.info(f"video_frames created with {len(video_frames)} frame(s), size: {video_frames[0].size}")
 
         gen_params = GenerateParams(
             prompt=params["prompt"],
@@ -203,6 +209,7 @@ async def _run_generation(task_id: str, params: dict):
             model=model,
             num_frames=params.get("num_frames"),
             max_sequence_length=params.get("max_sequence_length"),
+            decode_chunk_size=params.get("decode_chunk_size"),
         )
 
         runner = _get_runner(model)

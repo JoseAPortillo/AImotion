@@ -32,6 +32,7 @@ class DiffusersRunner(BaseRunner):
             model=params.model,
             num_frames=params.num_frames,
             max_sequence_length=params.max_sequence_length,
+            decode_chunk_size=params.decode_chunk_size,
             progress_callback=progress_callback,
         )
         media_type = "image/png" if url.endswith(".png") else "video/mp4"

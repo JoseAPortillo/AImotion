@@ -11,12 +11,6 @@ logger = logging.getLogger(__name__)
 
 
 def infer_pipeline_params(pipeline_class: str) -> dict | None:
-    """Infer accepted __call__ params from pipeline class name conventions.
-
-    Differs from get_accepted_params() in that it does NOT load the model —
-    it uses naming heuristics to avoid triggering DummyObject import errors
-    for pipelines whose optional dependencies are absent.
-    """
     if not pipeline_class:
         return None
 
@@ -25,7 +19,19 @@ def infer_pipeline_params(pipeline_class: str) -> dict | None:
     params["num_inference_steps"] = {"has_default": True, "default": 50}
     params["guidance_scale"] = {"has_default": True, "default": 7.0}
 
-    if "ImageToVideo" in pipeline_class:
+    if "StableVideoDiffusion" in pipeline_class:
+        del params["prompt"]
+        del params["guidance_scale"]
+        params["image"] = {"has_default": False, "default": None}
+        params["num_frames"] = {"has_default": True, "default": 25}
+        params["width"] = {"has_default": True, "default": 1024}
+        params["height"] = {"has_default": True, "default": 576}
+        params["min_guidance_scale"] = {"has_default": True, "default": 1.0}
+        params["max_guidance_scale"] = {"has_default": True, "default": 3.0}
+        params["decode_chunk_size"] = {"has_default": True, "default": 14}
+        params["fps"] = {"has_default": True, "default": 7}
+        params["motion_bucket_id"] = {"has_default": True, "default": 127}
+    elif "ImageToVideo" in pipeline_class:
         params["image"] = {"has_default": False, "default": None}
         params["strength"] = {"has_default": True, "default": 0.8}
     elif "VideoToVideo" in pipeline_class:
@@ -38,6 +44,8 @@ def infer_pipeline_params(pipeline_class: str) -> dict | None:
     if "CogVideoX" in pipeline_class:
         params["num_frames"] = {"has_default": True, "default": 49}
         params["max_sequence_length"] = {"has_default": True, "default": 226}
+    elif "StableVideoDiffusion" in pipeline_class:
+        pass
     elif "StableDiffusionXL" in pipeline_class or "StableDiffusion" in pipeline_class:
         params["width"] = {"has_default": True, "default": 1024}
         params["height"] = {"has_default": True, "default": 1024}
@@ -78,7 +86,10 @@ class DiffusersGenerator:
             else:
                 pipe.to(self.device)
             if hasattr(pipe, "vae") and hasattr(pipe.vae, "enable_tiling"):
-                pipe.vae.enable_tiling()
+                try:
+                    pipe.vae.enable_tiling()
+                except Exception:
+                    logger.debug(f"VAE tiling not supported for {type(pipe.vae).__name__}")
             self._log_vram()
             logger.info(f"Pipeline loaded on {self.device}: {type(pipe).__name__}({model_name})")
             return pipe
@@ -100,7 +111,10 @@ class DiffusersGenerator:
                 logger.info(f"Loaded as {pipe_cls.__name__} from single file (full checkpoint)")
                 pipe.to(self.device)
                 if hasattr(pipe, "vae") and hasattr(pipe.vae, "enable_tiling"):
-                    pipe.vae.enable_tiling()
+                    try:
+                        pipe.vae.enable_tiling()
+                    except Exception:
+                        logger.debug(f"VAE tiling not supported for {type(pipe.vae).__name__}")
                 self._log_vram()
                 logger.info(f"Pipeline loaded on {self.device}: {type(pipe).__name__}({model_name})")
                 return pipe
@@ -164,7 +178,10 @@ class DiffusersGenerator:
 
         pipe.to(self.device)
         if hasattr(pipe, "vae") and hasattr(pipe.vae, "enable_tiling"):
-            pipe.vae.enable_tiling()
+            try:
+                pipe.vae.enable_tiling()
+            except Exception:
+                logger.debug(f"VAE tiling not supported for {type(pipe.vae).__name__}")
         self._log_vram()
         logger.info(f"Pipeline loaded on {self.device}: {type(pipe).__name__}({model_name})")
         return pipe
@@ -257,16 +274,22 @@ class DiffusersGenerator:
 
     def _build_pipe_kwargs(
         self, pipe, prompt, negative_prompt, video_frames,
-        strength, width, height, steps, cfg, seed, nf, max_seq, callback,
+        strength, width, height, steps, cfg, seed, nf, max_seq, decode_chunk, callback,
     ):
         import torch
         sig = inspect.signature(pipe.__call__)
         valid = set(sig.parameters.keys())
         kw: dict = {}
 
-        kw["prompt"] = prompt
+        if "prompt" in valid:
+            kw["prompt"] = prompt
         kw["num_inference_steps"] = steps
-        kw["guidance_scale"] = cfg
+        if "guidance_scale" in valid:
+            kw["guidance_scale"] = cfg
+        if "min_guidance_scale" in valid:
+            kw["min_guidance_scale"] = 1.0
+        if "max_guidance_scale" in valid:
+            kw["max_guidance_scale"] = 3.0
         kw["output_type"] = "pil"
 
         if "generator" in valid:
@@ -284,6 +307,7 @@ class DiffusersGenerator:
         if video_frames:
             if "image" in valid:
                 kw["image"] = video_frames[0]
+                logger.info(f"Set kw['image'] from video_frames[0], size: {video_frames[0].size}")
                 if "strength" in valid:
                     kw["strength"] = strength
             elif "video" in valid:
@@ -299,6 +323,8 @@ class DiffusersGenerator:
             kw["num_frames"] = nf
         if "max_sequence_length" in valid:
             kw["max_sequence_length"] = max_seq
+        if decode_chunk is not None and "decode_chunk_size" in valid:
+            kw["decode_chunk_size"] = decode_chunk
 
         return kw
 
@@ -394,6 +420,7 @@ class DiffusersGenerator:
         model: str = "cogvideox-2b",
         num_frames: Optional[int] = None,
         max_sequence_length: Optional[int] = None,
+        decode_chunk_size: Optional[int] = None,
         progress_callback: Optional[Callable[[int, int], Awaitable[None]]] = None,
     ) -> str:
         from app.services.generator import get_model_config
@@ -430,9 +457,13 @@ class DiffusersGenerator:
         if progress_callback:
             await progress_callback(0, s)
 
+        logger.info(f"video_frames: {video_frames is not None}, length: {len(video_frames) if video_frames else 0}")
+        if video_frames:
+            logger.info(f"First frame size: {video_frames[0].size}")
+
         pipe_kwargs = self._build_pipe_kwargs(
             pipe, prompt, negative_prompt, video_frames, strength,
-            w, h, s, c, seed, nf, max_seq, cb,
+            w, h, s, c, seed, nf, max_seq, decode_chunk_size, cb,
         )
 
         logger.info(f"Starting generation with {type(pipe).__name__}...")
