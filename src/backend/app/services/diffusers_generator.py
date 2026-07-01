@@ -478,6 +478,20 @@ class DiffusersGenerator:
 
         logger.info("Pipeline completed, saving output...")
         self._log_vram()
+        logger.info(f"Output type: {type(output)}")
+        logger.info(f"Output attributes: {[a for a in dir(output) if not a.startswith('_')]}")
+        if hasattr(output, "frames"):
+            logger.info(f"Output.frames type: {type(output.frames)}")
+            if output.frames:
+                logger.info(f"Output.frames length: {len(output.frames)}")
+                if len(output.frames) > 0:
+                    logger.info(f"Output.frames[0] type: {type(output.frames[0])}")
+                    if isinstance(output.frames[0], list):
+                        logger.info(f"Output.frames[0] length: {len(output.frames[0])}")
+        if hasattr(output, "images"):
+            logger.info(f"Output.images type: {type(output.images)}")
+            if output.images:
+                logger.info(f"Output.images length: {len(output.images)}")
 
         output_dir = settings.results_dir
         os.makedirs(output_dir, exist_ok=True)
