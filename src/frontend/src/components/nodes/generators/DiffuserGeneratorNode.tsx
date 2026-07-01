@@ -39,6 +39,52 @@ interface ModelEntry {
   }>
 }
 
+type ResPreset = { label: string; w: number; h: number }
+
+const MODEL_PRESETS: Record<string, ResPreset[]> = {
+  'cogvideox': [
+    { label: 'Custom', w: 0, h: 0 },
+    { label: '640×480', w: 640, h: 480 },
+    { label: '720×480 (native)', w: 720, h: 480 },
+    { label: '800×480', w: 800, h: 480 },
+    { label: '960×576', w: 960, h: 576 },
+    { label: '1024×576', w: 1024, h: 576 },
+    { label: '1280×720', w: 1280, h: 720 },
+  ],
+  'ltx-video': [
+    { label: 'Custom', w: 0, h: 0 },
+    { label: '512×512', w: 512, h: 512 },
+    { label: '704×512 (native)', w: 704, h: 512 },
+    { label: '768×512', w: 768, h: 512 },
+    { label: '1024×576', w: 1024, h: 576 },
+    { label: '1280×720', w: 1280, h: 720 },
+    { label: '1920×1080', w: 1920, h: 1080 },
+  ],
+  'wan2.2': [
+    { label: 'Custom', w: 0, h: 0 },
+    { label: '720×480', w: 720, h: 480 },
+    { label: '832×480', w: 832, h: 480 },
+    { label: '1024×576', w: 1024, h: 576 },
+    { label: '1280×720', w: 1280, h: 720 },
+  ],
+}
+
+const DEFAULT_PRESETS: ResPreset[] = [
+  { label: 'Custom', w: 0, h: 0 },
+  { label: '512×512', w: 512, h: 512 },
+  { label: '720×480', w: 720, h: 480 },
+  { label: '768×512', w: 768, h: 512 },
+  { label: '1024×576', w: 1024, h: 576 },
+  { label: '1024×1024', w: 1024, h: 1024 },
+  { label: '1280×720', w: 1280, h: 720 },
+]
+
+function presetsForModel(modelKey: string | undefined): ResPreset[] {
+  if (!modelKey) return DEFAULT_PRESETS
+  const prefix = Object.keys(MODEL_PRESETS).find(k => modelKey.startsWith(k))
+  return prefix ? MODEL_PRESETS[prefix] : DEFAULT_PRESETS
+}
+
 function getModelModality(cfg: ModelEntry | undefined): { label: string; outputLabel: string; outputColor: string } {
   if (!cfg) return { label: 'Unknown', outputLabel: 'Video', outputColor: '#888' }
 
@@ -272,9 +318,71 @@ function DiffuserGeneratorNode(props: NodeProps) {
             </div>
           )}
         </div>
-        {modelConfig?.inputs && Object.entries(modelConfig.inputs)
+        {Object.entries(modelConfig?.inputs ?? {})
           .filter(([, inp]) => !inp.hidden && (inp.type === 'int' || inp.type === 'float') && inp.default != null)
           .map(([name, inp]) => {
+            const hasWidth = modelConfig?.inputs?.width
+            const hasHeight = modelConfig?.inputs?.height
+            if (name === 'width' && hasHeight) return null
+            if (name === 'height' && hasWidth) {
+              const wInp = modelConfig!.inputs!.width!
+              const availablePresets = presetsForModel(data.model).filter(p => p.w === 0 || (
+                p.w >= (wInp.min ?? 0) &&
+                p.w <= (wInp.max ?? 99999) &&
+                p.h >= (inp.min ?? 0) &&
+                p.h <= (inp.max ?? 99999)
+              ))
+              const currentW = data.width ?? wInp.default ?? 0
+              const currentH = data.height ?? inp.default ?? 0
+              const matchedPreset = availablePresets.find(p => p.w === currentW && p.h === currentH)
+              return (
+                <div key="wh-group">
+                  <div style={{ marginTop: 6 }}>
+                    <label style={{ fontSize: 10, color: '#888', display: 'block', marginBottom: 2 }}>Resolution</label>
+                    <select
+                      value={matchedPreset ? matchedPreset.label : 'Custom'}
+                      onChange={(e) => {
+                        const preset = presetsForModel(data.model).find(p => p.label === e.target.value)
+                        if (preset && preset.w > 0) {
+                          updateNodeData(props.id, { width: preset.w, height: preset.h } as Partial<GenerationData>)
+                        }
+                      }}
+                      style={selectStyle}
+                    >
+                      {availablePresets.map(p => (
+                        <option key={p.label} value={p.label}>{p.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ fontSize: 10, color: '#888', display: 'block', marginBottom: 2 }}>width</label>
+                      <input
+                        type="number"
+                        step={1}
+                        value={currentW}
+                        onChange={(e) => updateNodeData(props.id, { width: parseInt(e.target.value, 10) } as Partial<GenerationData>)}
+                        min={wInp.min}
+                        max={wInp.max}
+                        style={{ ...selectStyle, width: '100%' }}
+                      />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ fontSize: 10, color: '#888', display: 'block', marginBottom: 2 }}>height</label>
+                      <input
+                        type="number"
+                        step={1}
+                        value={currentH}
+                        onChange={(e) => updateNodeData(props.id, { height: parseInt(e.target.value, 10) } as Partial<GenerationData>)}
+                        min={inp.min}
+                        max={inp.max}
+                        style={{ ...selectStyle, width: '100%' }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )
+            }
             const isFloat = inp.type === 'float'
             return (
               <div key={name} style={{ marginTop: 6 }}>

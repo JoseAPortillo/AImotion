@@ -288,9 +288,9 @@ class DiffusersGenerator:
                     kw["strength"] = strength
 
         if width is not None and "width" in valid:
-            kw["width"] = (width // 32) * 32
+            kw["width"] = width
         if height is not None and "height" in valid:
-            kw["height"] = (height // 32) * 32
+            kw["height"] = height
         if "num_frames" in valid:
             kw["num_frames"] = nf
         if "max_sequence_length" in valid:
