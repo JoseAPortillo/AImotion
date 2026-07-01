@@ -34,12 +34,26 @@ import SamplingParamsNode from './components/nodes/SamplingParamsNode'
 import DenoisingStrengthNode from './components/nodes/DenoisingStrengthNode'
 import OutputNode from './components/nodes/OutputNode'
 import PreviewNode from './components/nodes/PreviewNode'
+import DiffuserGeneratorNode from './components/nodes/generators/DiffuserGeneratorNode'
+import TransformersGeneratorNode from './components/nodes/generators/TransformersGeneratorNode'
+import VLMNode from './components/nodes/generators/VLMNode'
+import LLMGeneratorNode from './components/nodes/generators/LLMGeneratorNode'
+import CVTaskProcessorNode from './components/nodes/processors/CVTaskProcessorNode'
+import LoadLoRANode from './components/nodes/adapters/LoadLoRANode'
+import ApplyControlNetNode from './components/nodes/adapters/ApplyControlNetNode'
 
 const nodeTypes: NodeTypes = {
   videoInput: VideoInputNode,
   imageInput: ImageInputNode,
   audioInput: AudioInputNode,
   prompt: PromptNode,
+  diffuserGenerator: DiffuserGeneratorNode,
+  transformersGenerator: TransformersGeneratorNode,
+  vlmNode: VLMNode,
+  llmGenerator: LLMGeneratorNode,
+  cvTaskProcessor: CVTaskProcessorNode,
+  loadLora: LoadLoRANode,
+  applyControlNet: ApplyControlNetNode,
   generation: GenerationNode,
   samplingParams: SamplingParamsNode,
   denoisingStrength: DenoisingStrengthNode,
@@ -168,11 +182,11 @@ function AppInner() {
 
   const handleGenerate = useCallback(async () => {
     const promptNode = nodes.find((n) => n.type === 'prompt')?.data as PromptData | undefined
-    const genNode = nodes.find((n) => n.type === 'generation')?.data as GenerationData | undefined
+    const genNode = (nodes.find((n) => n.type === 'diffuserGenerator')?.data || nodes.find((n) => n.type === 'generation')?.data) as GenerationData | undefined
     const videoNode = nodes.find((n) => n.type === 'videoInput')?.data as VideoInputData | undefined
 
     if (!promptNode?.positive || !genNode) {
-      addToast('Add at least a Prompt and a Generation node to the graph', 'info')
+      addToast('Add at least a Prompt and a Diffuser Generator node to the graph', 'info')
       return
     }
 
