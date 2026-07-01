@@ -1,0 +1,113 @@
+{
+  "family": "text2image",
+  "label": "Text-to-Image",
+  "description": "Diffusers text-to-image generation models (SD, SDXL, FLUX, SD3)",
+  "runner": "diffusers",
+  "schedulers": {
+    "ddim": "DDIMScheduler",
+    "pndm": "PNDMScheduler",
+    "euler": "EulerDiscreteScheduler",
+    "euler_ancestral": "EulerAncestralDiscreteScheduler",
+    "dpm_multistep": "DPMSolverMultistepScheduler",
+    "lcm": "LCMScheduler",
+    "flow_match_euler": "FlowMatchEulerDiscreteScheduler",
+    "heun": "HeunDiscreteScheduler",
+    "lms_discrete": "LMSDiscreteScheduler"
+  },
+  "default_scheduler": "euler_ancestral",
+  "defaults": {
+    "width": 1024,
+    "height": 1024,
+    "steps": 30,
+    "cfg": 7.0
+  },
+  "inputs": {
+    "prompt": { "required": true, "type": "text" },
+    "negative_prompt": { "required": false, "type": "text" },
+    "steps": { "required": false, "type": "int", "default": 30, "min": 1, "max": 200 },
+    "cfg": { "required": false, "type": "float", "default": 7.0, "min": 1.0, "max": 30.0 },
+    "seed": { "required": false, "type": "int", "default": -1, "min": -1, "max": 2147483647 },
+    "width": { "required": false, "type": "int", "default": 1024, "min": 64, "max": 4096 },
+    "height": { "required": false, "type": "int", "default": 1024, "min": 64, "max": 4096 }
+  },
+  "output": { "type": "image", "mime": "image/png" },
+  "variants": [
+    {
+      "key": "sdxl",
+      "name": "SDXL 1.0",
+      "hf_name": "stabilityai/stable-diffusion-xl-base-1.0",
+      "type": "installable",
+      "size_gb": 6.9,
+      "dtype": "float16",
+      "needs_token": false,
+      "pipeline": { "class": "StableDiffusionXLPipeline" },
+      "defaults": { "width": 1024, "height": 1024, "steps": 30, "cfg": 7.0 }
+    },
+    {
+      "key": "sd-15",
+      "name": "SD 1.5",
+      "hf_name": "runwayml/stable-diffusion-v1-5",
+      "type": "installable",
+      "size_gb": 4.3,
+      "dtype": "float16",
+      "needs_token": false,
+      "pipeline": { "class": "StableDiffusionPipeline" },
+      "defaults": { "width": 512, "height": 512, "steps": 20, "cfg": 7.5 }
+    },
+    {
+      "key": "sd-21",
+      "name": "SD 2.1",
+      "hf_name": "stabilityai/stable-diffusion-2-1",
+      "type": "installable",
+      "size_gb": 5.2,
+      "dtype": "float16",
+      "needs_token": false,
+      "pipeline": { "class": "StableDiffusionPipeline" },
+      "defaults": { "width": 768, "height": 768, "steps": 20, "cfg": 7.5 }
+    },
+    {
+      "key": "flux-dev",
+      "name": "FLUX.1-dev",
+      "hf_name": "black-forest-labs/FLUX.1-dev",
+      "type": "installable",
+      "size_gb": 12.0,
+      "dtype": "bfloat16",
+      "needs_token": true,
+      "pipeline": { "class": "FluxPipeline" },
+      "defaults": { "width": 1024, "height": 1024, "steps": 50, "cfg": 3.5 },
+      "default_scheduler": "flow_match_euler"
+    },
+    {
+      "key": "flux-schnell",
+      "name": "FLUX.1-schnell",
+      "hf_name": "black-forest-labs/FLUX.1-schnell",
+      "type": "installable",
+      "size_gb": 12.0,
+      "dtype": "bfloat16",
+      "needs_token": true,
+      "pipeline": { "class": "FluxPipeline" },
+      "defaults": { "width": 1024, "height": 1024, "steps": 4, "cfg": 1.0 },
+      "default_scheduler": "flow_match_euler",
+      "inputs": {
+        "prompt": { "required": true, "type": "text" },
+        "seed": { "required": false, "type": "int", "default": -1, "min": -1, "max": 2147483647 },
+        "steps": { "required": false, "type": "int", "default": 4, "min": 1, "max": 8 },
+        "cfg": { "required": false, "type": "float", "default": 1.0, "min": 1.0, "max": 10.0 },
+        "width": { "required": false, "type": "int", "default": 1024, "min": 64, "max": 2048 },
+        "height": { "required": false, "type": "int", "default": 1024, "min": 64, "max": 2048 }
+      }
+    },
+    {
+      "key": "sd3-5",
+      "name": "SD 3.5",
+      "hf_name": "stabilityai/stable-diffusion-3.5-medium",
+      "type": "installable",
+      "size_gb": 12.0,
+      "dtype": "bfloat16",
+      "needs_token": true,
+      "pipeline": { "class": "StableDiffusion3Pipeline" },
+      "defaults": { "width": 1024, "height": 1024, "steps": 50, "cfg": 7.0 },
+      "default_scheduler": "flow_match_euler"
+    }
+  ]
+}

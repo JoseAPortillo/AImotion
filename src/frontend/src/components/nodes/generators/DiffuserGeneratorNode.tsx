@@ -11,6 +11,14 @@ const schedLabels: Record<string, string> = {
   cogvideox_dpm: 'DPM',
   flow_match_euler: 'Flow Euler',
   ltx_euler_ancestral_rf: 'Euler Anc RF',
+  ddim: 'DDIM',
+  pndm: 'PNDM',
+  euler: 'Euler',
+  euler_ancestral: 'Euler Ancestral',
+  dpm_multistep: 'DPM++',
+  lcm: 'LCM',
+  heun: 'Heun',
+  lms_discrete: 'LMS',
   scheduler: 'Auto-detect',
 }
 
@@ -137,7 +145,7 @@ function DiffuserGeneratorNode(props: NodeProps) {
       .then(r => r.json())
       .then(data => {
         const filtered = (data.models || []).filter(
-          (m: ModelEntry) => m.runner === 'diffusers'
+          (m: ModelEntry) => m.runner === 'diffusers' && m.type !== 'future' && m.type !== 'installable'
         )
         setModels(filtered)
         setModelsLoaded(true)

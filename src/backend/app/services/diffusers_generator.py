@@ -72,7 +72,11 @@ class DiffusersGenerator:
             pipe = DiffusionPipeline.from_pretrained(
                 model_name, torch_dtype=dtype, token=token,
             )
-            pipe.to(self.device)
+            if hasattr(pipe, "enable_model_cpu_offload"):
+                pipe.enable_model_cpu_offload()
+                pipe.enable_attention_slicing()
+            else:
+                pipe.to(self.device)
             if hasattr(pipe, "vae") and hasattr(pipe.vae, "enable_tiling"):
                 pipe.vae.enable_tiling()
             self._log_vram()

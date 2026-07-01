@@ -449,6 +449,7 @@ async def list_models():
             "defaults": variant.defaults if variant else {"steps": 50, "cfg": 7.0},
             "inputs": variant.inputs if variant else {},
             "is_video": variant.is_video if variant else False,
+            "runner": variant.family.runner if variant else "diffusers",
         })
     return {"models": results}
 
