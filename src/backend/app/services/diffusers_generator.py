@@ -231,13 +231,15 @@ class DiffusersGenerator:
             )
             logger.info(f"VRAM: {free:.1f} GB free / {total:.1f} GB total")
 
-    def _build_callback(self, steps: int, progress_callback):
+    def _build_callback(self, steps: int, progress_callback, cancel_check=None):
         if not progress_callback:
             return None
         import asyncio
         loop = asyncio.get_running_loop()
         current_step = [0]
         def callback(pipe, step_index, timestep, callback_kwargs):
+            if cancel_check and cancel_check():
+                raise asyncio.CancelledError("Task was cancelled")
             current_step[0] = step_index + 1
             logger.info(f"Step {current_step[0]}/{steps}")
             try:
@@ -345,6 +347,7 @@ class DiffusersGenerator:
         num_frames: Optional[int] = None,
         max_sequence_length: Optional[int] = None,
         progress_callback: Optional[Callable[[int, int], Awaitable[None]]] = None,
+        cancel_check: Optional[Callable[[], bool]] = None,
     ) -> str:
         from app.services.generator import get_model_config
         import torch
@@ -376,7 +379,7 @@ class DiffusersGenerator:
                 f"(no 'image' or 'video' parameter in {type(pipe).__name__}.__call__)"
             )
 
-        cb = self._build_callback(s, progress_callback)
+        cb = self._build_callback(s, progress_callback, cancel_check)
         if progress_callback:
             await progress_callback(0, s)
 
