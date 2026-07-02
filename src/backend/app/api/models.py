@@ -399,6 +399,15 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
         task.error_msg = str(e)
 
 
+def _is_diffusers_pipeline(pipeline_class: str) -> bool:
+    """Check if pipeline_class is a valid diffusers pipeline."""
+    try:
+        import diffusers
+        return hasattr(diffusers, pipeline_class)
+    except Exception:
+        return False
+
+
 def _inputs_from_pipeline(pipeline_class: str) -> dict:
     """Infer inputs from pipeline class for installed models without a catalog variant."""
     params = infer_pipeline_params(pipeline_class)
@@ -464,6 +473,8 @@ async def list_models():
             pipeline_defaults = variant.defaults
             is_video = variant.is_video
             runner = variant.family.runner
+            if inst.pipeline_class and _is_diffusers_pipeline(inst.pipeline_class):
+                runner = "diffusers"
         elif inst.pipeline_class:
             pipeline_inputs = _inputs_from_pipeline(inst.pipeline_class)
             pipeline_accepts = _accepts_from_pipeline(inst.pipeline_class)

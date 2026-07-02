@@ -89,25 +89,6 @@
     "installed_at": "2026-07-01T09:30:30.230595"
   },
   {
-    "key": "wan_ai_wan2.2_animate_14b",
-    "hf_name": "Wan-AI/Wan2.2-Animate-14B",
-    "alias": "Wan2.2-Animate-14B",
-    "pipeline_class": "WanAnimatePipeline",
-    "dtype": "bfloat16",
-    "schedulers": {},
-    "default_scheduler": "",
-    "needs_token": false,
-    "defaults": {
-      "steps": 30,
-      "cfg": 5.0,
-      "num_frames": 81,
-      "width": 832,
-      "height": 480,
-      "max_seq": 512
-    },
-    "installed_at": "2026-07-01T12:01:16.210563"
-  },
-  {
     "key": "stabilityai_stable_video_diffusion_img2vid_xt",
     "hf_name": "stabilityai/stable-video-diffusion-img2vid-xt",
     "alias": "stable-video-diffusion-img2vid-xt",
@@ -128,7 +109,7 @@
     "installed_at": "2026-07-01T20:11:48.600660"
   },
   {
-    "key": "wan_ai_wan2.2_animate_14b_1",
+    "key": "wan_ai_wan2.2_animate_14b",
     "hf_name": "Wan-AI/Wan2.2-Animate-14B",
     "alias": "Wan2.2-Animate-14B",
     "pipeline_class": "WanAnimatePipeline",
