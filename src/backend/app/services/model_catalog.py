@@ -277,7 +277,17 @@ def _infer_inputs(pipeline_class: str | None) -> dict:
         elif pname == "video":
             inputs[pname] = {"required": False, "type": "video"}
         else:
-            inputs[pname] = {"required": False, "type": "text"}
+            default_val = pinfo.get("default")
+            if isinstance(default_val, float):
+                inputs[pname] = {"required": False, "type": "float", "default": default_val}
+            elif isinstance(default_val, bool):
+                inputs[pname] = {"required": False, "type": "bool", "default": default_val}
+            elif isinstance(default_val, int):
+                inputs[pname] = {"required": False, "type": "int", "default": default_val}
+            elif isinstance(default_val, str):
+                inputs[pname] = {"required": False, "type": "text", "default": default_val}
+            else:
+                inputs[pname] = {"required": False, "type": "float", "default": default_val}
     return inputs
 
 

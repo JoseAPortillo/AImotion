@@ -46,35 +46,29 @@ def _infer_params_from_signature(cls: type) -> dict | None:
     except (ValueError, TypeError):
         return None
 
-    call_params = set(sig.parameters.keys())
+    _SKIP_PARAMS = {"self", "kwargs", "callback_on_step_end", "generator"}
+
     params: dict[str, dict] = {}
 
-    params["num_inference_steps"] = {"has_default": True, "default": 50}
+    for name, param in sig.parameters.items():
+        if name in _SKIP_PARAMS:
+            continue
 
-    if "image" in call_params:
-        params["image"] = {"has_default": False, "default": None}
-    if "video" in call_params:
-        params["video"] = {"has_default": False, "default": None}
-    if "strength" in call_params:
-        params["strength"] = {"has_default": True, "default": 0.8}
-    if "prompt" in call_params:
-        params["prompt"] = {"has_default": False, "default": None}
-    if "guidance_scale" in call_params:
-        params["guidance_scale"] = {"has_default": True, "default": 7.0}
+        has_default = param.default is not inspect.Parameter.empty
+        entry: dict = {}
 
-    _DIMENSION_PARAMS = [
-        ("width", 1024), ("height", 1024), ("num_frames", 49),
-        ("max_sequence_length", 226), ("decode_chunk_size", 14),
-        ("fps", 7), ("motion_bucket_id", 127), ("noise_aug_strength", 0.02),
-        ("min_guidance_scale", 1.0), ("max_guidance_scale", 3.0),
-    ]
-    for name, fallback_default in _DIMENSION_PARAMS:
-        if name in call_params:
-            param_obj = sig.parameters[name]
-            if param_obj.default is not inspect.Parameter.empty:
-                params[name] = {"has_default": True, "default": param_obj.default}
+        if has_default:
+            default = param.default
+            if isinstance(default, (int, float, bool, str)) or default is None:
+                entry = {"has_default": True, "default": default}
+            elif isinstance(default, (list, tuple, dict)):
+                entry = {"has_default": True, "default": None}
             else:
-                params[name] = {"has_default": True, "default": fallback_default}
+                entry = {"has_default": True, "default": None}
+        else:
+            entry = {"has_default": False, "default": None}
+
+        params[name] = entry
 
     return params if params else None
 
@@ -380,6 +374,7 @@ class DiffusersGenerator:
         decode_chunk, noise_aug, fps, motion_bucket,
         min_cfg, max_cfg,
         callback,
+        **extra_kwargs,
     ):
         import torch
         sig = inspect.signature(pipe.__call__)
@@ -436,6 +431,10 @@ class DiffusersGenerator:
             kw["fps"] = fps
         if motion_bucket is not None and "motion_bucket_id" in valid:
             kw["motion_bucket_id"] = motion_bucket
+
+        for k, v in extra_kwargs.items():
+            if k in valid and v is not None:
+                kw[k] = v
 
         return kw
 
@@ -538,6 +537,7 @@ class DiffusersGenerator:
         fps: Optional[int] = None,
         motion_bucket_id: Optional[int] = None,
         progress_callback: Optional[Callable[[int, int], Awaitable[None]]] = None,
+        **extra_kwargs,
     ) -> str:
         from app.services.generator import get_model_config
         import torch
@@ -583,6 +583,7 @@ class DiffusersGenerator:
             pipe, prompt, negative_prompt, video_frames, strength,
             w, h, s, c, seed, nf, max_seq, decode_chunk_size,
             noise_aug, fps_val, mbid, min_cfg, max_cfg, cb,
+            **extra_kwargs,
         )
 
         logger.info(f"Starting generation with {type(pipe).__name__}...")

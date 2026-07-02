@@ -1,4 +1,5 @@
 import os
+import json
 import logging
 import asyncio
 from typing import Optional
@@ -101,6 +102,7 @@ async def create_generation(
     max_guidance_scale: Optional[float] = Form(None),
     fps: Optional[int] = Form(None),
     motion_bucket_id: Optional[int] = Form(None),
+    extra_params: Optional[str] = Form(None),
 ):
     model_cfg = get_model_config(model)
     if model_cfg is None:
@@ -169,6 +171,7 @@ async def create_generation(
         "max_guidance_scale": max_guidance_scale,
         "fps": fps,
         "motion_bucket_id": motion_bucket_id,
+        "extra": json.loads(extra_params) if extra_params else {},
     }
     task_id = await task_manager.create_task(params)
     _dispatch_generation(task_id, params)
@@ -225,6 +228,7 @@ async def _run_generation(task_id: str, params: dict):
             max_guidance_scale=params.get("max_guidance_scale"),
             fps=params.get("fps"),
             motion_bucket_id=params.get("motion_bucket_id"),
+            extra=params.get("extra", {}),
         )
 
         runner = _get_runner(model)

@@ -26,6 +26,7 @@ class GenerateParams:
     max_guidance_scale: Optional[float] = None
     fps: Optional[int] = None
     motion_bucket_id: Optional[int] = None
+    extra: dict = field(default_factory=dict)
 
 
 @dataclass

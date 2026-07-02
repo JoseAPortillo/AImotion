@@ -39,6 +39,7 @@ class DiffusersRunner(BaseRunner):
             fps=params.fps,
             motion_bucket_id=params.motion_bucket_id,
             progress_callback=progress_callback,
+            **params.extra,
         )
         media_type = "image/png" if url.endswith(".png") else "video/mp4"
         return GenerateResult(url=url, media_type=media_type)
