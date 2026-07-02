@@ -415,9 +415,10 @@ def _inputs_from_pipeline(pipeline_class: str) -> dict:
 
 def _accepts_from_pipeline(pipeline_class: str) -> dict:
     inputs = _inputs_from_pipeline(pipeline_class)
+    has_video = any("video" in k.lower() for k in inputs.keys())
     return {
         "image": "image" in inputs,
-        "video": "video" in inputs,
+        "video": has_video,
         "strength": "strength" in inputs,
     }
 

@@ -19,6 +19,10 @@
   "inputs": {
     "prompt": { "required": true, "type": "text" },
     "image": { "required": false, "type": "image" },
+    "pose_video": { "required": false, "type": "video" },
+    "face_video": { "required": false, "type": "video" },
+    "background_video": { "required": false, "type": "video" },
+    "mask_video": { "required": false, "type": "video" },
     "steps": { "required": false, "type": "int", "default": 50, "min": 1, "max": 200 },
     "cfg": { "required": false, "type": "float", "default": 5.0, "min": 1.0, "max": 30.0 },
     "seed": { "required": false, "type": "int", "default": 0, "min": 0, "max": 2147483647 },

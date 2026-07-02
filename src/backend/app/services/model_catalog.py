@@ -56,9 +56,10 @@ class ModelFamily:
 
     def accepts(self) -> dict:
         inputs = self.inputs
+        has_video = any("video" in k.lower() for k in inputs.keys())
         return {
             "image": "image" in inputs,
-            "video": "video" in inputs,
+            "video": has_video,
             "strength": "strength" in inputs,
         }
 
@@ -125,9 +126,10 @@ class ModelVariant:
 
     def accepts(self) -> dict:
         inputs = self.inputs
+        has_video = any("video" in k.lower() for k in inputs.keys())
         return {
             "image": "image" in inputs,
-            "video": "video" in inputs,
+            "video": has_video,
             "strength": "strength" in inputs,
         }
 
