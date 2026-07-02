@@ -212,7 +212,7 @@ class ModelCatalog:
         defaults = inst.defaults or (family.defaults if family else {"steps": 50, "cfg": 7.0})
         schedulers = inst.schedulers or (family.schedulers if family else {})
         default_scheduler = inst.default_scheduler or (family.default_scheduler if family else "")
-        is_video = inst.pipeline_class in _INFERRED_VIDEO_PIPELINES or (family and family.is_video)
+        is_video = _is_video_pipeline(inst.pipeline_class) or (family and family.is_video)
         runner = family.runner if family else "diffusers"
         dummy_family = ModelFamily({
             "family": inst.key or inst.hf_name,
@@ -244,6 +244,14 @@ _INFERRED_VIDEO_PIPELINES = {
     "LTXPipeline", "I2VGenXLPipeline", "StableVideoDiffusionPipeline",
     "AnimateDiffPipeline", "VideoToVideoPipeline", "TextToVideoSDPipeline",
 }
+
+
+def _is_video_pipeline(pipeline_class: str) -> bool:
+    """Detect if pipeline is video-based, dynamically from signature or fallback set."""
+    params = infer_pipeline_params(pipeline_class)
+    if params is not None:
+        return "video" in params or "num_frames" in params or "fps" in params
+    return pipeline_class in _INFERRED_VIDEO_PIPELINES
 
 
 def _infer_inputs(pipeline_class: str | None) -> dict:

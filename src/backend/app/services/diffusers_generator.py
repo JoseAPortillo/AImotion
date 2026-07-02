@@ -2,6 +2,7 @@ import logging
 import os
 import time
 import inspect
+import importlib
 from typing import Optional, Callable, Awaitable
 from PIL import Image
 
@@ -10,7 +11,107 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 
+def _resolve_pipeline_class(pipeline_class: str) -> type | None:
+    import diffusers
+
+    cls = getattr(diffusers, pipeline_class, None)
+    if cls is not None:
+        return cls
+
+    pipelines_dir = os.path.join(os.path.dirname(diffusers.__file__), "pipelines")
+    if not os.path.isdir(pipelines_dir):
+        return None
+
+    for sub_name in sorted(os.listdir(pipelines_dir)):
+        sub_init = os.path.join(pipelines_dir, sub_name, "__init__.py")
+        if not os.path.isfile(sub_init):
+            continue
+        try:
+            mod = importlib.import_module(f"diffusers.pipelines.{sub_name}")
+            cls = getattr(mod, pipeline_class, None)
+            if cls is not None:
+                return cls
+        except Exception:
+            continue
+
+    return None
+
+
+def _infer_params_from_signature(cls: type) -> dict | None:
+    if not hasattr(cls, "__call__"):
+        return None
+
+    try:
+        sig = inspect.signature(cls.__call__)
+    except (ValueError, TypeError):
+        return None
+
+    call_params = set(sig.parameters.keys())
+    params: dict[str, dict] = {}
+
+    params["num_inference_steps"] = {"has_default": True, "default": 50}
+
+    if "image" in call_params:
+        params["image"] = {"has_default": False, "default": None}
+    if "video" in call_params:
+        params["video"] = {"has_default": False, "default": None}
+    if "strength" in call_params:
+        params["strength"] = {"has_default": True, "default": 0.8}
+    if "prompt" in call_params:
+        params["prompt"] = {"has_default": False, "default": None}
+    if "guidance_scale" in call_params:
+        params["guidance_scale"] = {"has_default": True, "default": 7.0}
+
+    _DIMENSION_PARAMS = [
+        ("width", 1024), ("height", 1024), ("num_frames", 49),
+        ("max_sequence_length", 226), ("decode_chunk_size", 14),
+        ("fps", 7), ("motion_bucket_id", 127), ("noise_aug_strength", 0.02),
+        ("min_guidance_scale", 1.0), ("max_guidance_scale", 3.0),
+    ]
+    for name, fallback_default in _DIMENSION_PARAMS:
+        if name in call_params:
+            param_obj = sig.parameters[name]
+            if param_obj.default is not inspect.Parameter.empty:
+                params[name] = {"has_default": True, "default": param_obj.default}
+            else:
+                params[name] = {"has_default": True, "default": fallback_default}
+
+    return params if params else None
+
+
+def _apply_family_defaults(pipeline_class: str, params: dict):
+    if "CogVideoX" in pipeline_class:
+        params.setdefault("num_frames", {"has_default": True, "default": 49})
+        params.setdefault("max_sequence_length", {"has_default": True, "default": 226})
+    elif pipeline_class in ("LTXPipeline",):
+        params.setdefault("width", {"has_default": True, "default": 704})
+        params.setdefault("height", {"has_default": True, "default": 512})
+        params.setdefault("num_frames", {"has_default": True, "default": 97})
+        params.setdefault("max_sequence_length", {"has_default": True, "default": 256})
+
+
 def infer_pipeline_params(pipeline_class: str) -> dict | None:
+    if not pipeline_class:
+        return None
+
+    params = None
+    try:
+        cls = _resolve_pipeline_class(pipeline_class)
+        if cls is not None:
+            params = _infer_params_from_signature(cls)
+    except Exception as e:
+        logger.warning("Dynamic pipeline inspection failed for %s: %s", pipeline_class, e)
+
+    if params is None:
+        params = _legacy_infer_pipeline_params(pipeline_class)
+
+    if params:
+        _apply_family_defaults(pipeline_class, params)
+
+    return params
+
+
+def _legacy_infer_pipeline_params(pipeline_class: str) -> dict | None:
     if not pipeline_class:
         return None
 
