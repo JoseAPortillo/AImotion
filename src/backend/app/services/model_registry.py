@@ -224,7 +224,10 @@ def discover_pipeline(hf_name: str) -> dict:
             if not pipeline_class and "video" in pipeline_tag:
                 pipeline_class = "CogVideoXPipeline"
             if not pipeline_class and "image" in pipeline_tag:
-                pipeline_class = "StableDiffusionXLPipeline"
+                if pipeline_tag == "image-to-image":
+                    pipeline_class = "StableDiffusionXLImg2ImgPipeline"
+                else:
+                    pipeline_class = "StableDiffusionXLPipeline"
 
         if not pipeline_class:
             logger.warning(f"Unsupported model {hf_name}: pipeline={pipeline_tag}, tags={tags}")
