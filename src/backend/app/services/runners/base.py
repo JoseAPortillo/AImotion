@@ -1,3 +1,4 @@
+import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Optional, Callable, Awaitable
@@ -43,6 +44,7 @@ class BaseRunner(ABC):
         self,
         params: GenerateParams,
         progress_callback: Optional[Callable[[int, int], Awaitable[None]]] = None,
+        cancel_event: Optional[threading.Event] = None,
     ) -> GenerateResult:
         ...
 

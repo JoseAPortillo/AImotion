@@ -3,6 +3,7 @@ import asyncio
 import logging
 import os
 import time
+import threading
 from typing import Optional
 from app.models.generate import TaskStatus
 from app.config import settings
@@ -23,6 +24,7 @@ class GenerationTask:
         self.result_type: Optional[str] = None
         self.error: Optional[str] = None
         self.created_at = time.time()
+        self.cancel_event = threading.Event()
 
     def to_dict(self) -> dict:
         return {
@@ -91,6 +93,13 @@ class TaskManager:
             if task:
                 task.status = TaskStatus.FAILED
                 task.error = error
+
+    async def cancel_task(self, task_id: str):
+        async with self._lock:
+            task = self._tasks.get(task_id)
+            if task and task.status in (TaskStatus.PENDING, TaskStatus.RUNNING):
+                task.status = TaskStatus.CANCELLED
+                task.cancel_event.set()
 
     async def start_cleanup(self):
         self._cleanup_task = asyncio.create_task(self._cleanup_loop())

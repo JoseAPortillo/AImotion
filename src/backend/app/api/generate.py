@@ -15,6 +15,8 @@ from app.services.model_catalog import catalog
 from app.services.runners.base import GenerateParams
 from app.services.runners.registry import RunnerRegistry
 
+
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/generate", tags=["generate"])
@@ -185,9 +187,15 @@ def _dispatch_generation(task_id: str, params: dict):
 async def _run_generation(task_id: str, params: dict):
     runner = None
     try:
+        task = await task_manager.get_task(task_id)
+        if task is None or task.cancel_event.is_set():
+            return
+
         await task_manager.set_running(task_id, params["steps"])
 
         async def progress_callback(current: int, total: int):
+            if task.cancel_event.is_set():
+                raise asyncio.CancelledError("Generation cancelled by user")
             await task_manager.set_progress(task_id, current, total)
 
         model = params.get("model", settings.model_type)
@@ -232,9 +240,12 @@ async def _run_generation(task_id: str, params: dict):
         )
 
         runner = _get_runner(model)
-        result = await runner.generate(gen_params, progress_callback)
+        result = await runner.generate(gen_params, progress_callback, cancel_event=task.cancel_event)
         result_type = "image" if result.url.endswith(".png") else "video"
         await task_manager.complete_task(task_id, result.url, result_type)
+    except asyncio.CancelledError:
+        logger.info(f"Task {task_id} was cancelled")
+        await task_manager.cancel_task(task_id)
     except Exception as e:
         await task_manager.fail_task(task_id, str(e))
 
@@ -245,6 +256,17 @@ async def get_task_status(task_id: str):
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
     return task.to_dict()
+
+
+@router.delete("/{task_id}")
+async def cancel_generation(task_id: str):
+    task = await task_manager.get_task(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if task.status in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED):
+        return {"status": task.status.value}
+    await task_manager.cancel_task(task_id)
+    return {"status": "cancelling"}
 
 
 results_router = APIRouter(tags=["results"])

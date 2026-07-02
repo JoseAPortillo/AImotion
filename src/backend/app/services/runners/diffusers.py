@@ -1,4 +1,5 @@
 import logging
+import threading
 from typing import Optional, Callable, Awaitable
 
 from app.services.diffusers_generator import DiffusersGenerator
@@ -17,7 +18,16 @@ class DiffusersRunner(BaseRunner):
         self,
         params: GenerateParams,
         progress_callback: Optional[Callable[[int, int], Awaitable[None]]] = None,
+        cancel_event: Optional[threading.Event] = None,
     ) -> GenerateResult:
+        _EXPLICIT_KWARGS = {
+            'prompt', 'negative_prompt', 'video_frames', 'strength', 'width',
+            'height', 'steps', 'cfg', 'seed', 'scheduler', 'model',
+            'num_frames', 'max_sequence_length', 'decode_chunk_size',
+            'noise_aug_strength', 'min_guidance_scale', 'max_guidance_scale',
+            'fps', 'motion_bucket_id',
+        }
+        safe_extra = {k: v for k, v in params.extra.items() if k not in _EXPLICIT_KWARGS}
         url = await self._gen.generate(
             prompt=params.prompt,
             negative_prompt=params.negative_prompt,
@@ -39,7 +49,8 @@ class DiffusersRunner(BaseRunner):
             fps=params.fps,
             motion_bucket_id=params.motion_bucket_id,
             progress_callback=progress_callback,
-            **params.extra,
+            cancel_event=cancel_event,
+            **safe_extra,
         )
         media_type = "image/png" if url.endswith(".png") else "video/mp4"
         return GenerateResult(url=url, media_type=media_type)

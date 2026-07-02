@@ -1,4 +1,5 @@
 import logging
+import threading
 from typing import Optional, Callable, Awaitable
 
 from app.services.runners.base import BaseRunner, GenerateParams, GenerateResult
@@ -17,6 +18,7 @@ class GGUFRunner(BaseRunner):
         self,
         params: GenerateParams,
         progress_callback: Optional[Callable[[int, int], Awaitable[None]]] = None,
+        cancel_event: Optional[threading.Event] = None,
     ) -> GenerateResult:
         raise NotImplementedError(
             f"GGUF runner does not support generation yet. "
