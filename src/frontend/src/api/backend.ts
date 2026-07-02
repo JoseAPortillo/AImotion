@@ -10,13 +10,14 @@ export interface TaskResponse {
 }
 
 export interface TaskStatus {
-  status: 'pending' | 'running' | 'completed' | 'failed'
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
   progress?: number
   current_step?: number
   total_steps?: number
   result_url?: string
   result_type?: 'image' | 'video'
   error?: string
+  eta_sec?: number
 }
 
 export async function checkHealth(): Promise<HealthResponse> {
@@ -80,6 +81,10 @@ export async function pollTask(taskId: string): Promise<TaskStatus> {
   const r = await fetch(`/generate/${taskId}`)
   if (!r.ok) throw new Error('Failed to poll task')
   return r.json()
+}
+
+export async function cancelTask(taskId: string): Promise<void> {
+  await fetch(`/generate/${taskId}`, { method: 'DELETE' })
 }
 
 export interface VLMResponse {

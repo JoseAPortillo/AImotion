@@ -1,11 +1,11 @@
-import { memo, useCallback, useMemo, useState, useEffect } from 'react'
+import { memo, useCallback, useMemo, useState, useEffect, useRef } from 'react'
 import type { NodeProps } from '@xyflow/react'
 import { Handle, Position } from '@xyflow/react'
 import { NODE_DEFINITIONS, getHandleColor, type NodeType, type GenerationData, type PromptData } from '../../types/nodes'
 import NodeWrapper, { CollapsibleSection, InfoLabel, FIELD_DESCS } from './NodeWrapper'
 import { useGraphStore } from '../../store/graph'
 import { useToastStore } from '../../store/toast'
-import { startGeneration, pollTask, type TaskStatus } from '../../api/backend'
+import { startGeneration, pollTask, cancelTask, type TaskStatus } from '../../api/backend'
 
 const schedLabels: Record<string, string> = {
   cogvideox_ddim: 'DDIM',
@@ -73,6 +73,19 @@ const selectStyle: React.CSSProperties = {
   marginTop: 3,
 }
 
+function formatEta(sec: number): string {
+  if (sec < 60) return `${Math.round(sec)}s`
+  if (sec < 3600) {
+    const m = Math.floor(sec / 60)
+    const s = Math.round(sec % 60)
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+  }
+  const h = Math.floor(sec / 3600)
+  const m = Math.floor((sec % 3600) / 60)
+  const s = Math.round(sec % 60)
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+}
+
 function GenerationNode(props: NodeProps) {
   const def = NODE_DEFINITIONS[props.type as NodeType]
   const data = props.data as GenerationData
@@ -83,6 +96,9 @@ function GenerationNode(props: NodeProps) {
   const addToast = useToastStore((s) => s.addToast)
   const [genRunning, setGenRunning] = useState(false)
   const [progress, setProgress] = useState(0)
+  const [etaSec, setEtaSec] = useState<number | null>(null)
+  const startTimeRef = useRef(0)
+  const taskIdRef = useRef('')
   const [models, setModels] = useState<ModelEntry[]>([])
   const [modelsLoaded, setModelsLoaded] = useState(false)
 
@@ -161,7 +177,7 @@ function GenerationNode(props: NodeProps) {
 
     const extraParams: Record<string, number | string | boolean> = {}
     if (modelConfig?.inputs) {
-      const fixedFields = new Set(['width', 'height', 'steps', 'cfg', 'strength', 'seed', 'scheduler', 'model', 'vae_tiling', 'vae_tile_overlap', 'num_frames', 'max_sequence_length'])
+      const fixedFields = new Set(['width', 'height', 'steps', 'cfg', 'strength', 'seed', 'scheduler', 'model', 'vae_tiling', 'vae_tile_overlap', 'num_frames', 'max_sequence_length', 'decode_chunk_size', 'noise_aug_strength', 'min_guidance_scale', 'max_guidance_scale', 'fps', 'motion_bucket_id'])
       for (const [name, inp] of Object.entries(modelConfig.inputs)) {
         if (inp.hidden) continue
         if (fixedFields.has(name)) continue
@@ -175,6 +191,9 @@ function GenerationNode(props: NodeProps) {
 
     setGenRunning(true)
     setProgress(0)
+    setEtaSec(null)
+    startTimeRef.current = Date.now()
+    taskIdRef.current = ''
     try {
       const task = await startGeneration(
         promptData.positive,
@@ -198,20 +217,35 @@ function GenerationNode(props: NodeProps) {
         (imageNode?.data && 'file' in imageNode.data && (imageNode.data as { file?: File }).file instanceof File) ? (imageNode.data as { file?: unknown }).file as File : undefined,
       )
 
+      taskIdRef.current = task.task_id
       let status: TaskStatus
       do {
         await new Promise((r) => setTimeout(r, 2000))
         status = await pollTask(task.task_id)
 
+        if (status.status === 'cancelled') break
+
         if (status.current_step != null && status.total_steps != null && status.total_steps > 0) {
           setProgress(Math.round((status.current_step / status.total_steps) * 100))
+          const elapsed = (Date.now() - startTimeRef.current) / 1000
+          if (status.current_step > 0 && elapsed > 0) {
+            const stepsRemaining = status.total_steps - status.current_step
+            setEtaSec((stepsRemaining * elapsed) / status.current_step)
+          }
         } else if (status.progress != null) {
           setProgress(Math.round(status.progress * 100))
+          const elapsed = (Date.now() - startTimeRef.current) / 1000
+          if (status.progress > 0 && elapsed > 0) {
+            setEtaSec((elapsed / status.progress) * (1 - status.progress))
+          }
         }
       } while (status.status === 'pending' || status.status === 'running')
 
-      if (status.status === 'completed' && status.result_url) {
+      if (status.status === 'cancelled') {
+        addToast('Generation cancelled', 'info')
+      } else if (status.status === 'completed' && status.result_url) {
         setProgress(100)
+        setEtaSec(null)
         setOutputUrl(status.result_url, status.result_type)
       } else {
         addToast(`Workflow failed: ${status.error || 'unknown error'}`, 'error')
@@ -220,11 +254,20 @@ function GenerationNode(props: NodeProps) {
       addToast(`Error: ${err.message}`, 'error')
     } finally {
       setGenRunning(false)
+      setEtaSec(null)
     }
   }, [props.id, data, nodes, edges, setOutputUrl])
 
+  const handleCancel = useCallback(async () => {
+    if (!taskIdRef.current) return
+    setEtaSec(null)
+    try {
+      await cancelTask(taskIdRef.current)
+    } catch { /* ignore */ }
+  }, [])
+
   return (
-    <NodeWrapper def={def} selected={props.selected} headerRight={modelConfig && (
+    <NodeWrapper def={def} selected={props.selected} style={{ width: props.width, height: props.height }} headerRight={modelConfig && (
       <span style={{ fontSize: 9, opacity: 0.8, background: 'rgba(0,0,0,0.3)', padding: '1px 4px', borderRadius: 3 }}>
         {modelModality.label}
       </span>
@@ -262,24 +305,56 @@ function GenerationNode(props: NodeProps) {
           </div>
         </Handle>
       </>
-    } footer={
-      <button
-        onClick={handleGenWorkflow}
-        disabled={genRunning}
-        style={{
-          width: '100%',
-          padding: '4px 0',
-          borderRadius: 4,
-          border: 'none',
-          fontSize: 10,
-          fontWeight: 600,
-          cursor: genRunning ? 'not-allowed' : 'pointer',
-          background: genRunning ? '#333' : '#4ade80',
-          color: genRunning ? '#888' : '#0f0f0f',
-        }}
-      >
-        {genRunning ? 'Generating...' : 'Generate ▶'}
-      </button>
+    } progressBar={genRunning && (
+      <div style={{ padding: '4px 6px', borderTop: '1px solid #2a2a2a', background: '#1a1a1a', flexShrink: 0 }}>
+        {etaSec != null && (
+          <div style={{ fontSize: 9, color: '#2563eb', marginBottom: 2, fontVariantNumeric: 'tabular-nums' }}>
+            ETA {formatEta(etaSec)}
+          </div>
+        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <div style={{ flex: 1, height: 4, borderRadius: 2, background: '#2a2a2a', overflow: 'hidden' }}>
+            <div style={{ width: `${Math.min(progress, 100)}%`, height: '100%', borderRadius: 2, background: '#2563eb', transition: 'width 0.3s ease' }} />
+          </div>
+          <span style={{ fontSize: 9, color: '#999', minWidth: 24, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{progress}%</span>
+        </div>
+      </div>
+    )} footer={
+      genRunning ? (
+        <button
+          onClick={handleCancel}
+          style={{
+            width: '100%',
+            padding: '4px 0',
+            borderRadius: 4,
+            border: 'none',
+            fontSize: 10,
+            fontWeight: 600,
+            cursor: 'pointer',
+            background: '#ef4444',
+            color: '#fff',
+          }}
+        >
+          Cancel
+        </button>
+      ) : (
+        <button
+          onClick={handleGenWorkflow}
+          style={{
+            width: '100%',
+            padding: '4px 0',
+            borderRadius: 4,
+            border: 'none',
+            fontSize: 10,
+            fontWeight: 600,
+            cursor: 'pointer',
+            background: '#4ade80',
+            color: '#0f0f0f',
+          }}
+        >
+          Generate ▶
+        </button>
+      )
     }>
       <div style={{ padding: '4px 6px', fontSize: 10, color: '#ccc' }}>
         <select
@@ -384,6 +459,34 @@ function GenerationNode(props: NodeProps) {
               </span>
             </div>
           </div>
+          {modelConfig?.inputs?.width && modelConfig?.inputs?.height && (
+            <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+              <div style={{ flex: 1 }}>
+                <InfoLabel label="Width" desc={FIELD_DESCS.width} />
+                <input
+                  type="number"
+                  step={1}
+                  value={data.width ?? modelConfig.inputs.width.default ?? 720}
+                  onChange={(e) => updateNodeData(props.id, { width: parseInt(e.target.value, 10) } as Partial<GenerationData>)}
+                  min={modelConfig.inputs.width.min}
+                  max={modelConfig.inputs.width.max}
+                  style={{ ...selectStyle, width: '100%' }}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <InfoLabel label="Height" desc={FIELD_DESCS.height} />
+                <input
+                  type="number"
+                  step={1}
+                  value={data.height ?? modelConfig.inputs.height.default ?? 480}
+                  onChange={(e) => updateNodeData(props.id, { height: parseInt(e.target.value, 10) } as Partial<GenerationData>)}
+                  min={modelConfig.inputs.height.min}
+                  max={modelConfig.inputs.height.max}
+                  style={{ ...selectStyle, width: '100%' }}
+                />
+              </div>
+            </div>
+          )}
         </CollapsibleSection>
 
         <CollapsibleSection title="Avanzados" defaultOpen={false}>
@@ -412,7 +515,7 @@ function GenerationNode(props: NodeProps) {
             )}
           </div>
           {modelConfig?.inputs && Object.entries(modelConfig.inputs)
-            .filter(([, inp]) => !inp.hidden && (inp.type === 'int' || inp.type === 'float') && inp.default != null)
+            .filter(([name, inp]) => !inp.hidden && (inp.type === 'int' || inp.type === 'float') && inp.default != null && name !== 'width' && name !== 'height')
             .map(([name, inp]) => {
               const isFloat = inp.type === 'float'
               const desc = FIELD_DESCS[name]
@@ -433,17 +536,6 @@ function GenerationNode(props: NodeProps) {
             })}
         </CollapsibleSection>
       </div>
-
-      {genRunning && (
-        <div style={{ padding: '0 6px 3px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <div style={{ flex: 1, height: 4, borderRadius: 2, background: '#2a2a2a', overflow: 'hidden' }}>
-              <div style={{ width: `${Math.min(progress, 100)}%`, height: '100%', borderRadius: 2, background: '#2563eb', transition: 'width 0.3s ease' }} />
-            </div>
-            <span style={{ fontSize: 9, color: '#999', minWidth: 24, textAlign: 'right' }}>{progress}%</span>
-          </div>
-        </div>
-      )}
     </NodeWrapper>
   )
 }
