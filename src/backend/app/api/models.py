@@ -12,6 +12,7 @@ from huggingface_hub import HfApi, hf_hub_download
 from app.config import settings
 from app.services.generator import VideoGenerator, get_model_config
 from app.services.model_catalog import catalog
+from app.services.diffusers_generator import infer_pipeline_params
 from app.services.model_registry import (
     list_installed, find_installed, add_installed, remove_installed,
     remove_cached, generate_key, is_model_cached, discover_pipeline,
@@ -398,6 +399,29 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
         task.error_msg = str(e)
 
 
+def _inputs_from_pipeline(pipeline_class: str) -> dict:
+    """Infer inputs from pipeline class for installed models without a catalog variant."""
+    params = infer_pipeline_params(pipeline_class)
+    if params is None:
+        return {}
+    inputs = {}
+    for pname, pinfo in params.items():
+        inputs[pname] = {
+            "has_default": pinfo.get("has_default", False),
+            "default": pinfo.get("default"),
+        }
+    return inputs
+
+
+def _accepts_from_pipeline(pipeline_class: str) -> dict:
+    inputs = _inputs_from_pipeline(pipeline_class)
+    return {
+        "image": "image" in inputs,
+        "video": "video" in inputs,
+        "strength": "strength" in inputs,
+    }
+
+
 def _build_variant_entry(variant) -> dict:
     hf_name = variant.hf_name
     return {
@@ -433,6 +457,24 @@ async def list_models():
         variant = catalog.get_variant(inst.key)
         if variant and variant.type == "builtin":
             continue
+        if variant:
+            pipeline_inputs = variant.inputs
+            pipeline_accepts = variant.accepts()
+            pipeline_defaults = variant.defaults
+            is_video = variant.is_video
+            runner = variant.family.runner
+        elif inst.pipeline_class:
+            pipeline_inputs = _inputs_from_pipeline(inst.pipeline_class)
+            pipeline_accepts = _accepts_from_pipeline(inst.pipeline_class)
+            pipeline_defaults = inst.defaults or {"steps": 50, "cfg": 7.0}
+            is_video = "video" in inst.pipeline_class.lower()
+            runner = "diffusers"
+        else:
+            pipeline_inputs = {}
+            pipeline_accepts = {}
+            pipeline_defaults = {"steps": 50, "cfg": 7.0}
+            is_video = False
+            runner = "diffusers"
         results.append({
             "key": inst.key,
             "name": inst.alias or inst.hf_name,
@@ -445,11 +487,11 @@ async def list_models():
             "default_scheduler": inst.default_scheduler,
             "alias": inst.alias,
             "pipeline_class": inst.pipeline_class,
-            "accepts": variant.accepts() if variant else {},
-            "defaults": variant.defaults if variant else {"steps": 50, "cfg": 7.0},
-            "inputs": variant.inputs if variant else {},
-            "is_video": variant.is_video if variant else False,
-            "runner": variant.family.runner if variant else "diffusers",
+            "accepts": pipeline_accepts,
+            "defaults": pipeline_defaults,
+            "inputs": pipeline_inputs,
+            "is_video": is_video,
+            "runner": runner,
         })
     return {"models": results}
 

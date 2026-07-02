@@ -163,9 +163,14 @@ class DiffusersGenerator:
 
     # ---- loading ----
 
-    def _load_pipe(self, model_name: str, dtype, token=None):
+    def _load_pipe(self, model_name: str, dtype, token=None, pipeline_class_name: str | None = None):
         from diffusers import DiffusionPipeline, StableDiffusionXLPipeline, StableDiffusionPipeline
         from huggingface_hub import HfApi, hf_hub_download
+
+        mod_cls = None
+        if pipeline_class_name:
+            import importlib
+            mod_cls = getattr(importlib.import_module("diffusers"), pipeline_class_name, None)
         
         api = HfApi()
         files = api.list_repo_files(model_name)
@@ -173,7 +178,8 @@ class DiffusersGenerator:
         has_model_index = 'model_index.json' in files
         
         if has_model_index or not weight_files:
-            pipe = DiffusionPipeline.from_pretrained(
+            pipe_cls = mod_cls or DiffusionPipeline
+            pipe = pipe_cls.from_pretrained(
                 model_name, torch_dtype=dtype, token=token,
             )
             if hasattr(pipe, "enable_model_cpu_offload"):
@@ -296,8 +302,9 @@ class DiffusersGenerator:
             os.environ["HF_TOKEN"] = tok
         dtype_name = cfg.get("dtype", settings.dtype)
         dtype = torch.bfloat16 if dtype_name == "bfloat16" else torch.float16
+        pipeline_class = cfg.get("pipeline_class")
         self.unload()
-        self._pipe = self._load_pipe(model_name, dtype, tok)
+        self._pipe = self._load_pipe(model_name, dtype, tok, pipeline_class_name=pipeline_class)
         self._current_model_key = model_key
         self._current_model_name = model_name
         return self._pipe

@@ -52,21 +52,22 @@
     "key": "zai_org_cogvideox_2b",
     "hf_name": "zai-org/CogVideoX-2b",
     "alias": "CogVideoX-2b",
-    "pipeline_class": "CogVideoXPipeline",
+    "pipeline_class": "CogVideoXVideoToVideoPipeline",
     "dtype": "bfloat16",
     "schedulers": {
-      "scheduler": "CogVideoXDDIMScheduler"
+      "cogvideox_ddim": "CogVideoXDDIMScheduler",
+      "cogvideox_dpm": "CogVideoXDPMScheduler"
     },
     "default_scheduler": "cogvideox_ddim",
     "needs_token": false,
     "defaults": {
-      "width": 720,
-      "height": 480,
-      "steps": 50,
+      "width": 480,
+      "height": 320,
+      "steps": 20,
       "cfg": 6.0,
-      "num_frames": 49,
+      "num_frames": 16,
       "fps": 8,
-      "max_seq": 226
+      "max_seq": 128
     },
     "installed_at": "2026-06-30T12:45:35.783453"
   },
