@@ -161,7 +161,7 @@ def install_requirements(requirements: list[dict]) -> tuple[bool, str]:
                 return False, f"Error installing {package}: {e}"
         elif req["type"] == "env_var":
             name = req["name"]
-            if not os.environ.get(name) and not getattr(settings, name.lower(), None):
+            if not os.environ.get(name):
                 return False, f"Environment variable {name} is not set. Please set it before installing."
         elif req["type"] == "runner":
             runner_key = req["runner_key"]
