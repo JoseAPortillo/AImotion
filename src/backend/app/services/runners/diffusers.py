@@ -33,6 +33,11 @@ class DiffusersRunner(BaseRunner):
             num_frames=params.num_frames,
             max_sequence_length=params.max_sequence_length,
             decode_chunk_size=params.decode_chunk_size,
+            noise_aug_strength=params.noise_aug_strength,
+            min_guidance_scale=params.min_guidance_scale,
+            max_guidance_scale=params.max_guidance_scale,
+            fps=params.fps,
+            motion_bucket_id=params.motion_bucket_id,
             progress_callback=progress_callback,
         )
         media_type = "image/png" if url.endswith(".png") else "video/mp4"

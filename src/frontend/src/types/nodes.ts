@@ -91,6 +91,11 @@ export interface GenerationData extends Record<string, unknown> {
   height: number
   num_frames?: number
   max_sequence_length?: number
+  noise_aug_strength?: number
+  min_guidance_scale?: number
+  max_guidance_scale?: number
+  fps?: number
+  motion_bucket_id?: number
 }
 
 export interface VLMData extends Record<string, unknown> {

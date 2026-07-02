@@ -31,6 +31,7 @@ def infer_pipeline_params(pipeline_class: str) -> dict | None:
         params["decode_chunk_size"] = {"has_default": True, "default": 14}
         params["fps"] = {"has_default": True, "default": 7}
         params["motion_bucket_id"] = {"has_default": True, "default": 127}
+        params["noise_aug_strength"] = {"has_default": True, "default": 0.02}
     elif "ImageToVideo" in pipeline_class:
         params["image"] = {"has_default": False, "default": None}
         params["strength"] = {"has_default": True, "default": 0.8}
@@ -274,7 +275,10 @@ class DiffusersGenerator:
 
     def _build_pipe_kwargs(
         self, pipe, prompt, negative_prompt, video_frames,
-        strength, width, height, steps, cfg, seed, nf, max_seq, decode_chunk, callback,
+        strength, width, height, steps, cfg, seed, nf, max_seq,
+        decode_chunk, noise_aug, fps, motion_bucket,
+        min_cfg, max_cfg,
+        callback,
     ):
         import torch
         sig = inspect.signature(pipe.__call__)
@@ -286,10 +290,10 @@ class DiffusersGenerator:
         kw["num_inference_steps"] = steps
         if "guidance_scale" in valid:
             kw["guidance_scale"] = cfg
-        if "min_guidance_scale" in valid:
-            kw["min_guidance_scale"] = 1.0
-        if "max_guidance_scale" in valid:
-            kw["max_guidance_scale"] = 3.0
+        if "min_guidance_scale" in valid and min_cfg is not None:
+            kw["min_guidance_scale"] = min_cfg
+        if "max_guidance_scale" in valid and max_cfg is not None:
+            kw["max_guidance_scale"] = max_cfg
         kw["output_type"] = "pil"
 
         if "generator" in valid:
@@ -325,6 +329,12 @@ class DiffusersGenerator:
             kw["max_sequence_length"] = max_seq
         if decode_chunk is not None and "decode_chunk_size" in valid:
             kw["decode_chunk_size"] = decode_chunk
+        if noise_aug is not None and "noise_aug_strength" in valid:
+            kw["noise_aug_strength"] = noise_aug
+        if fps is not None and "fps" in valid:
+            kw["fps"] = fps
+        if motion_bucket is not None and "motion_bucket_id" in valid:
+            kw["motion_bucket_id"] = motion_bucket
 
         return kw
 
@@ -421,6 +431,11 @@ class DiffusersGenerator:
         num_frames: Optional[int] = None,
         max_sequence_length: Optional[int] = None,
         decode_chunk_size: Optional[int] = None,
+        noise_aug_strength: Optional[float] = None,
+        min_guidance_scale: Optional[float] = None,
+        max_guidance_scale: Optional[float] = None,
+        fps: Optional[int] = None,
+        motion_bucket_id: Optional[int] = None,
         progress_callback: Optional[Callable[[int, int], Awaitable[None]]] = None,
     ) -> str:
         from app.services.generator import get_model_config
@@ -431,15 +446,17 @@ class DiffusersGenerator:
             raise ValueError(f"Unsupported model: {model}")
 
         d = model_cfg["defaults"]
-        # Only pass width/height to the pipeline if the model config defines them.
-        # Models with fixed training resolution (e.g. CogVideoX-5b-I2V) omit them.
         w = width if "width" in d else None
         h = height if "height" in d else None
         s = steps or d.get("steps", 50)
         c = cfg or d.get("cfg", 6.0)
-        fps = d.get("fps", 8)
+        fps_val = fps or d.get("fps", 8)
         nf = num_frames if num_frames is not None else d.get("num_frames", 49)
         max_seq = max_sequence_length if max_sequence_length is not None else d.get("max_seq", 226)
+        noise_aug = noise_aug_strength if noise_aug_strength is not None else d.get("noise_aug_strength", 0.02)
+        mbid = motion_bucket_id if motion_bucket_id is not None else d.get("motion_bucket_id", 127)
+        min_cfg = min_guidance_scale if min_guidance_scale is not None else d.get("min_guidance_scale")
+        max_cfg = max_guidance_scale if max_guidance_scale is not None else d.get("max_guidance_scale")
 
         pipe = self._ensure_pipe(model)
         self._apply_scheduler(scheduler, pipe=pipe, cfg=model_cfg)
@@ -463,7 +480,8 @@ class DiffusersGenerator:
 
         pipe_kwargs = self._build_pipe_kwargs(
             pipe, prompt, negative_prompt, video_frames, strength,
-            w, h, s, c, seed, nf, max_seq, decode_chunk_size, cb,
+            w, h, s, c, seed, nf, max_seq, decode_chunk_size,
+            noise_aug, fps_val, mbid, min_cfg, max_cfg, cb,
         )
 
         logger.info(f"Starting generation with {type(pipe).__name__}...")
@@ -500,7 +518,7 @@ class DiffusersGenerator:
         if hasattr(output, "frames") and output.frames:
             from diffusers.utils import export_to_video
             out_path = os.path.join(output_dir, f"gen_{ts}_{seed}.mp4")
-            export_to_video(output.frames[0], out_path, fps=fps)
+            export_to_video(output.frames[0], out_path, fps=fps_val)
             logger.info(f"Saved video to {out_path}")
             return f"/results/{os.path.basename(out_path)}"
         elif hasattr(output, "images") and output.images:

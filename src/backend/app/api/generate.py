@@ -96,6 +96,11 @@ async def create_generation(
     num_frames: Optional[int] = Form(None),
     max_sequence_length: Optional[int] = Form(None),
     decode_chunk_size: Optional[int] = Form(None),
+    noise_aug_strength: Optional[float] = Form(None),
+    min_guidance_scale: Optional[float] = Form(None),
+    max_guidance_scale: Optional[float] = Form(None),
+    fps: Optional[int] = Form(None),
+    motion_bucket_id: Optional[int] = Form(None),
 ):
     model_cfg = get_model_config(model)
     if model_cfg is None:
@@ -159,6 +164,11 @@ async def create_generation(
         "num_frames": num_frames,
         "max_sequence_length": max_sequence_length,
         "decode_chunk_size": decode_chunk_size,
+        "noise_aug_strength": noise_aug_strength,
+        "min_guidance_scale": min_guidance_scale,
+        "max_guidance_scale": max_guidance_scale,
+        "fps": fps,
+        "motion_bucket_id": motion_bucket_id,
     }
     task_id = await task_manager.create_task(params)
     _dispatch_generation(task_id, params)
@@ -210,6 +220,11 @@ async def _run_generation(task_id: str, params: dict):
             num_frames=params.get("num_frames"),
             max_sequence_length=params.get("max_sequence_length"),
             decode_chunk_size=params.get("decode_chunk_size"),
+            noise_aug_strength=params.get("noise_aug_strength"),
+            min_guidance_scale=params.get("min_guidance_scale"),
+            max_guidance_scale=params.get("max_guidance_scale"),
+            fps=params.get("fps"),
+            motion_bucket_id=params.get("motion_bucket_id"),
         )
 
         runner = _get_runner(model)
