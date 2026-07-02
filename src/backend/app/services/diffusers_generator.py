@@ -77,6 +77,11 @@ def _apply_family_defaults(pipeline_class: str, params: dict):
     if "CogVideoX" in pipeline_class:
         params.setdefault("num_frames", {"has_default": True, "default": 49})
         params.setdefault("max_sequence_length", {"has_default": True, "default": 226})
+    elif "Wan" in pipeline_class:
+        params.setdefault("num_frames", {"has_default": True, "default": 81})
+        params.setdefault("width", {"has_default": True, "default": 832})
+        params.setdefault("height", {"has_default": True, "default": 480})
+        params.setdefault("max_sequence_length", {"has_default": True, "default": 512})
     elif pipeline_class in ("LTXPipeline",):
         params.setdefault("width", {"has_default": True, "default": 704})
         params.setdefault("height", {"has_default": True, "default": 512})
@@ -140,6 +145,11 @@ def _legacy_infer_pipeline_params(pipeline_class: str) -> dict | None:
     if "CogVideoX" in pipeline_class:
         params["num_frames"] = {"has_default": True, "default": 49}
         params["max_sequence_length"] = {"has_default": True, "default": 226}
+    elif "Wan" in pipeline_class:
+        params["num_frames"] = {"has_default": True, "default": 81}
+        params["width"] = {"has_default": True, "default": 832}
+        params["height"] = {"has_default": True, "default": 480}
+        params["max_sequence_length"] = {"has_default": True, "default": 512}
     elif "StableVideoDiffusion" in pipeline_class:
         pass
     elif "StableDiffusionXL" in pipeline_class or "StableDiffusion" in pipeline_class:

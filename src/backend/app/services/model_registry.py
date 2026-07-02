@@ -204,6 +204,12 @@ def discover_pipeline(hf_name: str) -> dict:
             config = _read_hf_json(hf_name, "config.json")
             if config:
                 pipeline_class = config.get("_class_name", "")
+                if pipeline_class and pipeline_class.endswith("Model"):
+                    model_to_pipeline = {
+                        "WanAnimateModel": "WanAnimatePipeline",
+                        "CogVideoXTransformer3DModel": "CogVideoXPipeline",
+                    }
+                    pipeline_class = model_to_pipeline.get(pipeline_class, pipeline_class.replace("Model", "Pipeline"))
             if not pipeline_class:
                 supported_keywords = {}
                 for fam in _catalog_families():
@@ -223,11 +229,20 @@ def discover_pipeline(hf_name: str) -> dict:
                             break
             if not pipeline_class and "video" in pipeline_tag:
                 if pipeline_tag == "image-to-video":
-                    pipeline_class = "CogVideoXImageToVideoPipeline"
+                    if "wan" in tags or "wan" in pipeline_tag:
+                        pipeline_class = "WanImageToVideoPipeline"
+                    else:
+                        pipeline_class = "CogVideoXImageToVideoPipeline"
                 elif pipeline_tag == "video-to-video":
-                    pipeline_class = "CogVideoXVideoToVideoPipeline"
+                    if "wan" in tags or "wan" in pipeline_tag:
+                        pipeline_class = "WanVideoToVideoPipeline"
+                    else:
+                        pipeline_class = "CogVideoXVideoToVideoPipeline"
                 else:
-                    pipeline_class = "CogVideoXPipeline"
+                    if "wan" in tags or "wan" in pipeline_tag:
+                        pipeline_class = "WanPipeline"
+                    else:
+                        pipeline_class = "CogVideoXPipeline"
             if not pipeline_class and "image" in pipeline_tag:
                 if pipeline_tag == "image-to-image":
                     pipeline_class = "StableDiffusionXLImg2ImgPipeline"

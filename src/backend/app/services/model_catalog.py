@@ -243,6 +243,7 @@ _INFERRED_VIDEO_PIPELINES = {
     "CogVideoXPipeline", "CogVideoXImageToVideoPipeline", "CogVideoXVideoToVideoPipeline",
     "LTXPipeline", "I2VGenXLPipeline", "StableVideoDiffusionPipeline",
     "AnimateDiffPipeline", "VideoToVideoPipeline", "TextToVideoSDPipeline",
+    "WanAnimatePipeline", "WanVideoToVideoPipeline", "WanImageToVideoPipeline",
 }
 
 

@@ -1,0 +1,11 @@
+$venvPath = ".venv\Scripts\Activate"
+
+if (Test-Path $venvPath) {
+    Write-Host "Activando entorno virtual..."
+    & $venvPath
+
+    $env:PYTHONPATH = 'src/backend'; uvicorn app.main:app --reload --port 8000
+} else {
+    Write-Host "No se encontró el entorno virtual en $venvPath"
+}
+

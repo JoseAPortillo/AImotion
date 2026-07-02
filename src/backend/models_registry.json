@@ -49,29 +49,6 @@
     "installed_at": "2026-06-30T12:39:32.307387"
   },
   {
-    "key": "zai_org_cogvideox_2b",
-    "hf_name": "zai-org/CogVideoX-2b",
-    "alias": "CogVideoX-2b",
-    "pipeline_class": "CogVideoXVideoToVideoPipeline",
-    "dtype": "bfloat16",
-    "schedulers": {
-      "cogvideox_ddim": "CogVideoXDDIMScheduler",
-      "cogvideox_dpm": "CogVideoXDPMScheduler"
-    },
-    "default_scheduler": "cogvideox_ddim",
-    "needs_token": false,
-    "defaults": {
-      "width": 480,
-      "height": 320,
-      "steps": 20,
-      "cfg": 6.0,
-      "num_frames": 16,
-      "fps": 8,
-      "max_seq": 128
-    },
-    "installed_at": "2026-06-30T12:45:35.783453"
-  },
-  {
     "key": "thudm_cogvideox_5b_i2v",
     "hf_name": "THUDM/CogVideoX-5b-I2V",
     "alias": "CogVideoX-5b-I2V",
@@ -115,14 +92,18 @@
     "key": "wan_ai_wan2.2_animate_14b",
     "hf_name": "Wan-AI/Wan2.2-Animate-14B",
     "alias": "Wan2.2-Animate-14B",
-    "pipeline_class": "WanAnimateModel",
+    "pipeline_class": "WanAnimatePipeline",
     "dtype": "bfloat16",
     "schedulers": {},
     "default_scheduler": "",
     "needs_token": false,
     "defaults": {
-      "steps": 50,
-      "cfg": 7.0
+      "steps": 30,
+      "cfg": 5.0,
+      "num_frames": 81,
+      "width": 832,
+      "height": 480,
+      "max_seq": 512
     },
     "installed_at": "2026-07-01T12:01:16.210563"
   },
@@ -145,5 +126,24 @@
       "height": 576
     },
     "installed_at": "2026-07-01T20:11:48.600660"
+  },
+  {
+    "key": "wan_ai_wan2.2_animate_14b_1",
+    "hf_name": "Wan-AI/Wan2.2-Animate-14B",
+    "alias": "Wan2.2-Animate-14B",
+    "pipeline_class": "WanAnimatePipeline",
+    "dtype": "bfloat16",
+    "schedulers": {},
+    "default_scheduler": "",
+    "needs_token": false,
+    "defaults": {
+      "steps": 30,
+      "cfg": 5.0,
+      "num_frames": 81,
+      "width": 832,
+      "height": 480,
+      "max_seq": 512
+    },
+    "installed_at": "2026-07-02T19:40:17.823268"
   }
 ]
