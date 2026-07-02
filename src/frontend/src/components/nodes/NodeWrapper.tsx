@@ -39,6 +39,7 @@ export const FIELD_DESCS: Record<string, string> = {
   positive: 'Positive prompt describing what you want to generate.',
   negative: 'Negative prompt describing what to avoid in generation.',
   controlnetModel: 'ControlNet model to use for conditioning.',
+  image_guidance_scale: 'How strongly the InstructPix2Pix edit follows the instruction. Higher = more change.',
 }
 
 export function InfoLabel({ label, desc, style }: { label: string; desc?: string; style?: React.CSSProperties }) {
