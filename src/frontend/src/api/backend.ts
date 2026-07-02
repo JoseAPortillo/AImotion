@@ -41,6 +41,7 @@ export async function startGeneration(
     vae_tile_overlap: number
     num_frames?: number
     max_sequence_length?: number
+    extraParams?: Record<string, number | string | boolean>
   },
   videoFile?: File,
   imageFile?: File,
@@ -62,6 +63,9 @@ export async function startGeneration(
   formData.append('vae_tile_overlap', String(params.vae_tile_overlap))
   if (params.num_frames != null) formData.append('num_frames', String(params.num_frames))
   if (params.max_sequence_length != null) formData.append('max_sequence_length', String(params.max_sequence_length))
+  if (params.extraParams && Object.keys(params.extraParams).length > 0) {
+    formData.append('extra_params', JSON.stringify(params.extraParams))
+  }
 
   const r = await fetch('/generate', { method: 'POST', body: formData })
   if (!r.ok) {

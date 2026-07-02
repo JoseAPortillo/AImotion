@@ -241,6 +241,20 @@ function DiffuserGeneratorNode(props: NodeProps) {
       return
     }
 
+    const extraParams: Record<string, number | string | boolean> = {}
+    if (modelConfig?.inputs) {
+      const fixedFields = new Set(['width', 'height', 'steps', 'cfg', 'strength', 'seed', 'scheduler', 'model', 'vae_tiling', 'vae_tile_overlap', 'num_frames', 'max_sequence_length'])
+      for (const [name, inp] of Object.entries(modelConfig.inputs)) {
+        if (inp.hidden) continue
+        if (fixedFields.has(name)) continue
+        if (inp.type !== 'int' && inp.type !== 'float') continue
+        const val = (data as Record<string, unknown>)[name]
+        if (val !== undefined && val !== null) {
+          extraParams[name] = val as number
+        }
+      }
+    }
+
     setGenRunning(true)
     setProgress(0)
     try {
@@ -260,6 +274,7 @@ function DiffuserGeneratorNode(props: NodeProps) {
           vae_tile_overlap: data.vae_tile_overlap ?? 0.0,
           num_frames: data.num_frames,
           max_sequence_length: data.max_sequence_length,
+          extraParams,
         },
         videoFile,
         imageFile,
