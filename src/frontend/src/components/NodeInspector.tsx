@@ -12,6 +12,9 @@ import {
   type DenoisingStrengthData,
   type GenerationData,
   type OutputData,
+  type TransformersData,
+  type LoRAData,
+  type ControlNetData,
 } from '../types/nodes'
 
 const schedLabels: Record<string, string> = {
@@ -22,12 +25,49 @@ const schedLabels: Record<string, string> = {
   scheduler: 'Auto-detect',
 }
 
+const FIELD_DESCS: Record<string, string> = {
+  steps: 'Number of denoising steps. More steps = higher quality but slower generation.',
+  cfg: 'Classifier-Free Guidance scale. Higher values = generation follows the prompt more closely.',
+  seed: 'Random seed for reproducibility. 0 = random seed each run.',
+  strength: 'How much of the original image/video is preserved. Lower values = more change.',
+  width: 'Output width in pixels. Must be a multiple of 8.',
+  height: 'Output height in pixels. Must be a multiple of 8.',
+  num_frames: 'Number of frames to generate. More frames = longer video.',
+  max_sequence_length: 'Maximum sequence length for text encoding. Higher = more context.',
+  vae_tiling: 'Process the VAE in tiles to reduce VRAM usage.',
+  vae_tile_overlap: 'Overlap between VAE tiles. Higher = fewer seams but more VRAM.',
+  noise_aug_strength: 'Strength of noise augmentation applied to the input image (SVD). Higher = more variation from the input.',
+  fps: 'Frames per second in the generated video.',
+  motion_bucket_id: 'Motion bucket ID for SVD. Higher values = more motion in the output.',
+  decode_chunk_size: 'Number of frames to decode at once. Lower = less VRAM usage.',
+  min_guidance_scale: 'Minimum guidance scale for SVD. Used for classifier-free guidance range.',
+  max_guidance_scale: 'Maximum guidance scale for SVD. Used for classifier-free guidance range.',
+  temperature: 'Sampling temperature. Higher = more random output. Lower = more deterministic.',
+  max_tokens: 'Maximum number of tokens to generate.',
+  top_p: 'Nucleus sampling threshold. Only tokens with cumulative probability above this are considered.',
+  top_k: 'Top-K sampling. Only the top K most likely tokens are considered at each step.',
+  loraFile: 'Path to the LoRA weights file.',
+  scale: 'Strength of the LoRA adapter. Higher = more pronounced effect.',
+  model: 'HuggingFace model to use for generation.',
+  scheduler: 'Noise scheduler for the diffusion process. Different schedulers trade off speed vs quality.',
+  positive: 'Positive prompt describing what you want to generate.',
+  negative: 'Negative prompt describing what to avoid in generation.',
+  controlnetModel: 'ControlNet model to use for conditioning.',
+}
+
 interface ModelEntry {
   key: string
   name: string
   schedulers: string[]
   default_scheduler: string
   type: string
+  hf_name?: string
+  pipeline_class?: string
+  runner?: string
+  defaults?: Record<string, unknown>
+  inputs?: Record<string, { type: string; default?: number; min?: number; max?: number; hidden?: boolean }>
+  accepts?: Record<string, boolean>
+  is_video?: boolean
 }
 
 const panelStyle: React.CSSProperties = {
@@ -59,16 +99,68 @@ const inputStyle: React.CSSProperties = {
   boxSizing: 'border-box',
 }
 
-function Label({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+function Label({ children, style, desc }: { children: React.ReactNode; style?: React.CSSProperties; desc?: string }) {
   return (
     <label style={{ ...labelStyle, ...style }}>
       {children}
+      {desc && (
+        <span
+          title={desc}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginLeft: 4,
+            width: 14,
+            height: 14,
+            borderRadius: '50%',
+            background: '#333',
+            color: '#999',
+            fontSize: 9,
+            cursor: 'help',
+            lineHeight: 1,
+            verticalAlign: 'middle',
+          }}
+        >
+          ?
+        </span>
+      )}
     </label>
   )
 }
 
 function FieldWrap({ children }: { children: React.ReactNode }) {
   return <div style={{ marginBottom: 14 }}>{children}</div>
+}
+
+function CollapsibleSection({ title, defaultOpen, children }: { title: string; defaultOpen?: boolean; children: React.ReactNode }) {
+  const [open, setOpen] = useState(defaultOpen ?? false)
+  return (
+    <div style={{ marginBottom: 0, borderBottom: '1px solid #2a2a2a' }}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        style={{
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          background: 'none',
+          border: 'none',
+          color: '#aaa',
+          fontSize: 11,
+          fontWeight: 600,
+          padding: '8px 0',
+          cursor: 'pointer',
+          textAlign: 'left',
+          fontFamily: 'inherit',
+        }}
+      >
+        {title}
+        <span style={{ fontSize: 9, color: '#666' }}>{open ? '▼' : '▶'}</span>
+      </button>
+      {open && <div style={{ paddingBottom: 8 }}>{children}</div>}
+    </div>
+  )
 }
 
 export default function NodeInspector() {
@@ -112,10 +204,56 @@ export default function NodeInspector() {
     updateNodeData(nid, { [field]: value } as Partial<NodeData>)
   }
 
+  function renderDynamicInputs(data: GenerationData) {
+    const modelCfg = models.find(m => m.key === data.model)
+    const inputs = modelCfg?.inputs
+    if (!inputs) return null
+    return (
+      <>
+        {Object.entries(inputs)
+          .filter(([, inp]) => !inp.hidden && (inp.type === 'int' || inp.type === 'float') && inp.default != null)
+          .map(([name, inp]) => {
+            const isFloat = inp.type === 'float'
+            const label = name.replace(/_/g, ' ')
+            const desc = FIELD_DESCS[name] || FIELD_DESCS[label]
+            return (
+              <FieldWrap key={name}>
+                <Label desc={desc}>
+                  {label}
+                  <input
+                    type="number"
+                    style={inputStyle}
+                    step={isFloat ? 'any' : 1}
+                    value={(data[name as keyof GenerationData] ?? inp.default) as number}
+                    onChange={(e) => handleChange(name, isFloat ? parseFloat(e.target.value) : parseInt(e.target.value, 10))}
+                    min={inp.min}
+                    max={inp.max}
+                  />
+                </Label>
+              </FieldWrap>
+            )
+          })}
+      </>
+    )
+  }
+
   function renderFields(n: typeof node) {
     if (!n) return null
     switch (n.type) {
       case 'videoInput': {
+        const data = n.data as VideoInputData
+        if (!data.fileName) return null
+        return (
+          <FieldWrap>
+            <Label>
+              File
+              <input style={inputStyle} value={data.fileName} readOnly />
+            </Label>
+          </FieldWrap>
+        )
+      }
+
+      case 'imageInput': {
         const data = n.data as VideoInputData
         if (!data.fileName) return null
         return (
@@ -146,7 +284,7 @@ export default function NodeInspector() {
         return (
           <>
             <FieldWrap>
-              <Label>
+              <Label desc="Positive prompt describing what you want to generate.">
                 Positive Prompt
                 <textarea
                   style={{ ...inputStyle, resize: 'vertical', minHeight: 80, fontFamily: 'inherit' }}
@@ -156,7 +294,7 @@ export default function NodeInspector() {
               </Label>
             </FieldWrap>
             <FieldWrap>
-              <Label>
+              <Label desc="Negative prompt describing what to avoid in generation.">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                   <span>Negative Prompt</span>
                   <button
@@ -188,6 +326,7 @@ export default function NodeInspector() {
         )
       }
 
+      case 'diffuserGenerator':
       case 'generation': {
         const data = n.data as GenerationData
         const modelCfg = models.find(m => m.key === data.model)
@@ -204,7 +343,7 @@ export default function NodeInspector() {
         return (
           <>
             <FieldWrap>
-              <Label>
+              <Label desc={FIELD_DESCS.model}>
                 Model
                 <select style={inputStyle} value={data.model} onChange={handleModel}>
                   {!modelsLoaded && <option value="">Loading...</option>}
@@ -218,17 +357,132 @@ export default function NodeInspector() {
                 </select>
               </Label>
             </FieldWrap>
-            <FieldWrap>
-              <Label>
-                Scheduler
-                <select style={inputStyle} value={data.scheduler} onChange={(e) => handleChange('scheduler', e.target.value)}>
-                  <option value="">Default{defSched ? ` (${schedLabels[defSched] || defSched})` : ''}</option>
-                  {scheds.map(s => (
-                    <option key={s} value={s}>{schedLabels[s] || s}</option>
-                  ))}
-                </select>
-              </Label>
-            </FieldWrap>
+
+            {modelCfg && (
+              <div style={{ marginBottom: 10, padding: 8, background: '#131313', borderRadius: 6, fontSize: 10, color: '#777', lineHeight: 1.6 }}>
+                <div><strong style={{ color: '#999' }}>{modelCfg.name}</strong></div>
+                {modelCfg.hf_name && <div style={{ wordBreak: 'break-all' }}>{modelCfg.hf_name}</div>}
+                {modelCfg.pipeline_class && <div style={{ color: '#666', marginTop: 2 }}>{modelCfg.pipeline_class}</div>}
+                {modelCfg.defaults && (
+                  <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: '0 8px' }}>
+                    {Object.entries(modelCfg.defaults)
+                      .filter(([k]) => !['num_frames', 'width', 'height'].includes(k))
+                      .slice(0, 4)
+                      .map(([k, v]) => (
+                        <span key={k} style={{ color: '#555' }}>{k}: <span style={{ color: '#888' }}>{String(v)}</span></span>
+                      ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <CollapsibleSection title="Scheduler" defaultOpen={true}>
+              <FieldWrap>
+                <Label desc={FIELD_DESCS.scheduler}>
+                  Scheduler
+                  <select style={inputStyle} value={data.scheduler} onChange={(e) => handleChange('scheduler', e.target.value)}>
+                    <option value="">Default{defSched ? ` (${schedLabels[defSched] || defSched})` : ''}</option>
+                    {scheds.map(s => (
+                      <option key={s} value={s}>{schedLabels[s] || s}</option>
+                    ))}
+                  </select>
+                </Label>
+              </FieldWrap>
+            </CollapsibleSection>
+
+            <CollapsibleSection title="Básicos" defaultOpen={true}>
+              <FieldWrap>
+                <Label desc={FIELD_DESCS.steps}>
+                  Steps
+                  <input
+                    type="number"
+                    style={inputStyle}
+                    min={1}
+                    max={200}
+                    value={data.steps}
+                    onChange={(e) => handleChange('steps', parseInt(e.target.value, 10) || 1)}
+                  />
+                </Label>
+              </FieldWrap>
+              <FieldWrap>
+                <Label desc={FIELD_DESCS.cfg}>
+                  CFG
+                  <input
+                    type="number"
+                    style={inputStyle}
+                    min={1}
+                    max={20}
+                    step={0.5}
+                    value={data.cfg}
+                    onChange={(e) => handleChange('cfg', parseFloat(e.target.value) || 1)}
+                  />
+                </Label>
+              </FieldWrap>
+              <FieldWrap>
+                <Label desc={FIELD_DESCS.seed}>
+                  Seed
+                  <input
+                    type="number"
+                    style={inputStyle}
+                    min={0}
+                    value={data.seed}
+                    onChange={(e) => handleChange('seed', parseInt(e.target.value, 10) || 0)}
+                  />
+                </Label>
+              </FieldWrap>
+              <FieldWrap>
+                <Label desc={FIELD_DESCS.strength}>
+                  Strength
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                    <input
+                      type="range"
+                      style={{ flex: 1, accentColor: def.color }}
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      value={data.strength}
+                      onChange={(e) => handleChange('strength', parseFloat(e.target.value))}
+                    />
+                    <span style={{ color: '#e0e0e0', fontSize: 13, minWidth: 36, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                      {data.strength.toFixed(2)}
+                    </span>
+                  </div>
+                </Label>
+              </FieldWrap>
+            </CollapsibleSection>
+
+            <CollapsibleSection title="Avanzados" defaultOpen={false}>
+              <FieldWrap>
+                <Label desc={FIELD_DESCS.vae_tiling}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <input
+                      type="checkbox"
+                      checked={data.vae_tiling}
+                      onChange={(e) => handleChange('vae_tiling', e.target.checked)}
+                      style={{ accentColor: def.color, margin: 0 }}
+                    />
+                    VAE Tiling
+                  </div>
+                </Label>
+              </FieldWrap>
+              {data.vae_tiling && (
+                <FieldWrap>
+                  <Label desc={FIELD_DESCS.vae_tile_overlap}>
+                    Tile Overlap
+                    <input
+                      type="number"
+                      style={inputStyle}
+                      min={0}
+                      max={0.9}
+                      step={0.1}
+                      value={data.vae_tile_overlap}
+                      onChange={(e) => handleChange('vae_tile_overlap', parseFloat(e.target.value) || 0)}
+                    />
+                  </Label>
+                </FieldWrap>
+              )}
+              {renderDynamicInputs(data)}
+            </CollapsibleSection>
           </>
         )
       }
@@ -239,7 +493,7 @@ export default function NodeInspector() {
         return (
           <>
             <FieldWrap>
-              <Label>
+              <Label desc={FIELD_DESCS.steps}>
                 Steps
                 <input
                   type="number"
@@ -252,7 +506,7 @@ export default function NodeInspector() {
               </Label>
             </FieldWrap>
             <FieldWrap>
-              <Label>
+              <Label desc={FIELD_DESCS.cfg}>
                 CFG
                 <input
                   type="number"
@@ -266,7 +520,7 @@ export default function NodeInspector() {
               </Label>
             </FieldWrap>
             <FieldWrap>
-              <Label>
+              <Label desc={FIELD_DESCS.seed}>
                 Seed
                 <input
                   type="number"
@@ -301,7 +555,7 @@ export default function NodeInspector() {
             </FieldWrap>
             <div style={{ display: 'flex', gap: 8 }}>
               <FieldWrap>
-                <Label>
+                <Label desc={FIELD_DESCS.width}>
                   W
                   <input
                     type="number"
@@ -315,7 +569,7 @@ export default function NodeInspector() {
                 </Label>
               </FieldWrap>
               <FieldWrap>
-                <Label>
+                <Label desc={FIELD_DESCS.height}>
                   H
                   <input
                     type="number"
@@ -337,7 +591,7 @@ export default function NodeInspector() {
         const data = n.data as DenoisingStrengthData
         return (
           <FieldWrap>
-            <Label>
+            <Label desc={FIELD_DESCS.strength}>
               Strength
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
                 <input
@@ -377,6 +631,226 @@ export default function NodeInspector() {
         return (
           <p style={{ color: '#888', fontSize: 12, margin: 0 }}>Preview has no editable properties.</p>
         )
+
+      case 'transformersGenerator': {
+        const data = n.data as TransformersData
+        return (
+          <>
+            <FieldWrap>
+              <Label desc={FIELD_DESCS.model}>
+                Model
+                <input
+                  style={inputStyle}
+                  value={data.model}
+                  onChange={(e) => handleChange('model', e.target.value)}
+                  placeholder="Model name"
+                />
+              </Label>
+            </FieldWrap>
+            <FieldWrap>
+              <Label desc={FIELD_DESCS.temperature}>
+                Temperature
+                <input
+                  type="number"
+                  style={inputStyle}
+                  min={0}
+                  max={2}
+                  step={0.1}
+                  value={data.temperature}
+                  onChange={(e) => handleChange('temperature', parseFloat(e.target.value) || 0)}
+                />
+              </Label>
+            </FieldWrap>
+            <FieldWrap>
+              <Label desc={FIELD_DESCS.top_p}>
+                Top P
+                <input
+                  type="number"
+                  style={inputStyle}
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={data.top_p}
+                  onChange={(e) => handleChange('top_p', parseFloat(e.target.value) || 0)}
+                />
+              </Label>
+            </FieldWrap>
+            <FieldWrap>
+              <Label desc={FIELD_DESCS.top_k}>
+                Top K
+                <input
+                  type="number"
+                  style={inputStyle}
+                  min={0}
+                  max={200}
+                  value={data.top_k}
+                  onChange={(e) => handleChange('top_k', parseInt(e.target.value, 10) || 0)}
+                />
+              </Label>
+            </FieldWrap>
+            <FieldWrap>
+              <Label desc={FIELD_DESCS.max_tokens}>
+                Max Tokens
+                <input
+                  type="number"
+                  style={inputStyle}
+                  min={1}
+                  max={32768}
+                  value={data.max_tokens}
+                  onChange={(e) => handleChange('max_tokens', parseInt(e.target.value, 10) || 1)}
+                />
+              </Label>
+            </FieldWrap>
+            <FieldWrap>
+              <Label desc={FIELD_DESCS.seed}>
+                Seed
+                <input
+                  type="number"
+                  style={inputStyle}
+                  min={0}
+                  value={data.seed}
+                  onChange={(e) => handleChange('seed', parseInt(e.target.value, 10) || 0)}
+                />
+              </Label>
+            </FieldWrap>
+          </>
+        )
+      }
+
+      case 'vlmNode': {
+        const data = n.data as TransformersData
+        return (
+          <>
+            <FieldWrap>
+              <Label desc={FIELD_DESCS.model}>
+                Model
+                <input
+                  style={inputStyle}
+                  value={data.model}
+                  onChange={(e) => handleChange('model', e.target.value)}
+                  placeholder="Model name"
+                />
+              </Label>
+            </FieldWrap>
+            <FieldWrap>
+              <Label desc={FIELD_DESCS.temperature}>
+                Temperature
+                <input
+                  type="number"
+                  style={inputStyle}
+                  min={0}
+                  max={2}
+                  step={0.1}
+                  value={data.temperature}
+                  onChange={(e) => handleChange('temperature', parseFloat(e.target.value) || 0)}
+                />
+              </Label>
+            </FieldWrap>
+            <FieldWrap>
+              <Label desc={FIELD_DESCS.max_tokens}>
+                Max Tokens
+                <input
+                  type="number"
+                  style={inputStyle}
+                  min={1}
+                  max={32768}
+                  value={data.max_tokens}
+                  onChange={(e) => handleChange('max_tokens', parseInt(e.target.value, 10) || 1)}
+                />
+              </Label>
+            </FieldWrap>
+            <FieldWrap>
+              <Label>
+                System Prompt
+                <textarea
+                  style={{ ...inputStyle, resize: 'vertical', minHeight: 60, fontFamily: 'inherit' }}
+                  value={data.system_prompt}
+                  onChange={(e) => handleChange('system_prompt', e.target.value)}
+                />
+              </Label>
+            </FieldWrap>
+          </>
+        )
+      }
+
+      case 'loadLora': {
+        const data = n.data as LoRAData
+        return (
+          <>
+            <FieldWrap>
+              <Label desc={FIELD_DESCS.model}>
+                Model
+                <input
+                  style={inputStyle}
+                  value={data.model}
+                  onChange={(e) => handleChange('model', e.target.value)}
+                  placeholder="Model key"
+                />
+              </Label>
+            </FieldWrap>
+            <FieldWrap>
+              <Label desc={FIELD_DESCS.loraFile}>
+                LoRA File
+                <input
+                  style={inputStyle}
+                  value={data.loraFile}
+                  onChange={(e) => handleChange('loraFile', e.target.value)}
+                  placeholder="Path to .safetensors"
+                />
+              </Label>
+            </FieldWrap>
+            <FieldWrap>
+              <Label desc={FIELD_DESCS.scale}>
+                Scale
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                  <input
+                    type="range"
+                    style={{ flex: 1, accentColor: def.color }}
+                    min={0}
+                    max={2}
+                    step={0.05}
+                    value={data.scale}
+                    onChange={(e) => handleChange('scale', parseFloat(e.target.value))}
+                  />
+                  <span style={{ color: '#e0e0e0', fontSize: 13, minWidth: 36, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                    {data.scale.toFixed(2)}
+                  </span>
+                </div>
+              </Label>
+            </FieldWrap>
+          </>
+        )
+      }
+
+      case 'applyControlNet': {
+        const data = n.data as ControlNetData
+        return (
+          <>
+            <FieldWrap>
+              <Label desc={FIELD_DESCS.model}>
+                Model
+                <input
+                  style={inputStyle}
+                  value={data.model}
+                  onChange={(e) => handleChange('model', e.target.value)}
+                  placeholder="Diffusion model key"
+                />
+              </Label>
+            </FieldWrap>
+            <FieldWrap>
+              <Label desc={FIELD_DESCS.controlnetModel}>
+                ControlNet Model
+                <input
+                  style={inputStyle}
+                  value={data.controlnetModel}
+                  onChange={(e) => handleChange('controlnetModel', e.target.value)}
+                  placeholder="HF model ID"
+                />
+              </Label>
+            </FieldWrap>
+          </>
+        )
+      }
 
       default:
         return null
