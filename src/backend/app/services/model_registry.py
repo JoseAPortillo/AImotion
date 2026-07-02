@@ -222,7 +222,12 @@ def discover_pipeline(hf_name: str) -> dict:
                             pipeline_class = supported_keywords[t]
                             break
             if not pipeline_class and "video" in pipeline_tag:
-                pipeline_class = "CogVideoXPipeline"
+                if pipeline_tag == "image-to-video":
+                    pipeline_class = "CogVideoXImageToVideoPipeline"
+                elif pipeline_tag == "video-to-video":
+                    pipeline_class = "CogVideoXVideoToVideoPipeline"
+                else:
+                    pipeline_class = "CogVideoXPipeline"
             if not pipeline_class and "image" in pipeline_tag:
                 if pipeline_tag == "image-to-image":
                     pipeline_class = "StableDiffusionXLImg2ImgPipeline"
