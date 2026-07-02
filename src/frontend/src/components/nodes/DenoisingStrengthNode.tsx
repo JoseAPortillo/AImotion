@@ -12,7 +12,11 @@ function DenoisingStrengthNode(props: NodeProps) {
   const pct = Math.round((data.strength ?? 0.8) * 100)
 
   return (
-    <NodeWrapper def={def} selected={props.selected}>
+    <NodeWrapper def={def} selected={props.selected} handles={
+      <Handle type="source" position={Position.Right} id="strength" style={{ top: '50%', background: getHandleColor('strength', 'params') }}>
+        <div style={{ position: 'absolute', right: -6, top: -2, transform: 'translateX(100%)', fontSize: 9, color: getHandleColor('strength', 'params'), whiteSpace: 'nowrap' }}>Strength</div>
+      </Handle>
+    }>
       <div style={{ padding: '4px 6px', fontSize: 10, color: '#ccc' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <input
@@ -27,9 +31,6 @@ function DenoisingStrengthNode(props: NodeProps) {
           <span style={{ fontSize: 11, fontWeight: 700, minWidth: 32, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{pct}%</span>
         </div>
       </div>
-      <Handle type="source" position={Position.Right} id="strength" style={{ top: '50%', background: getHandleColor('strength', 'params') }}>
-        <div style={{ position: 'absolute', right: -6, top: -2, transform: 'translateX(100%)', fontSize: 9, color: getHandleColor('strength', 'params'), whiteSpace: 'nowrap' }}>Strength</div>
-      </Handle>
     </NodeWrapper>
   )
 }

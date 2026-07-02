@@ -56,7 +56,11 @@ function VideoInputNode(props: NodeProps) {
   const handleClick = () => inputRef.current?.click()
 
   return (
-    <NodeWrapper def={def} selected={props.selected}>
+    <NodeWrapper def={def} selected={props.selected} handles={
+      <Handle type="source" position={Position.Right} id="video" style={{ top: '50%', background: PORT_COLORS.video_tensor }}>
+        <div style={{ position: 'absolute', right: -6, top: -2, transform: 'translateX(100%)', fontSize: 9, color: getHandleColor('video', 'video_tensor'), whiteSpace: 'nowrap' }}>Video</div>
+      </Handle>
+    }>
       {objUrl ? (
         <div
           style={{ padding: 4, cursor: 'pointer' }}
@@ -78,9 +82,6 @@ function VideoInputNode(props: NodeProps) {
         </div>
       )}
       <input ref={inputRef} type="file" accept=".mp4,.mov,.avi,.mkv" style={{ display: 'none' }} onChange={handleChange} />
-      <Handle type="source" position={Position.Right} id="video" style={{ top: '50%', background: PORT_COLORS.video_tensor }}>
-        <div style={{ position: 'absolute', right: -6, top: -2, transform: 'translateX(100%)', fontSize: 9, color: getHandleColor('video', 'video_tensor'), whiteSpace: 'nowrap' }}>Video</div>
-      </Handle>
     </NodeWrapper>
   )
 }

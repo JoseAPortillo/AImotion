@@ -11,7 +11,11 @@ function OutputNode(props: NodeProps) {
   const updateNodeData = useGraphStore((s) => s.updateNodeData)
 
   return (
-    <NodeWrapper def={def} selected={props.selected}>
+    <NodeWrapper def={def} selected={props.selected} handles={
+      <Handle type="target" position={Position.Left} id="video_in" style={{ top: '50%', background: getHandleColor('video_in', 'video_tensor') }}>
+        <div style={{ position: 'absolute', left: -6, top: -2, transform: 'translateX(-100%)', fontSize: 9, color: getHandleColor('video_in', 'video_tensor'), whiteSpace: 'nowrap' }}>Video</div>
+      </Handle>
+    }>
       <div style={{ padding: '4px 6px', fontSize: 10, color: '#ccc', textAlign: 'center' }}>
         <select
           value={data.format || 'mp4'}
@@ -22,9 +26,6 @@ function OutputNode(props: NodeProps) {
           <option value="gif">GIF</option>
         </select>
       </div>
-      <Handle type="target" position={Position.Left} id="video_in" style={{ top: '50%', background: getHandleColor('video_in', 'video_tensor') }}>
-        <div style={{ position: 'absolute', left: -6, top: -2, transform: 'translateX(-100%)', fontSize: 9, color: getHandleColor('video_in', 'video_tensor'), whiteSpace: 'nowrap' }}>Video</div>
-      </Handle>
     </NodeWrapper>
   )
 }

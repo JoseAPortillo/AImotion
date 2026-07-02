@@ -58,7 +58,11 @@ function ImageInputNode(props: NodeProps) {
   const handleClick = () => inputRef.current?.click()
 
   return (
-    <NodeWrapper def={def} selected={props.selected}>
+    <NodeWrapper def={def} selected={props.selected} handles={
+      <Handle type="source" position={Position.Right} id="image" style={{ top: '50%', background: '#f97316' }}>
+        <div style={{ position: 'absolute', right: -6, top: -2, transform: 'translateX(100%)', fontSize: 9, color: '#f97316', whiteSpace: 'nowrap' }}>Image</div>
+      </Handle>
+    }>
       {objUrl ? (
         <div
           style={{ padding: 4, cursor: 'pointer' }}
@@ -80,9 +84,6 @@ function ImageInputNode(props: NodeProps) {
         </div>
       )}
       <input ref={inputRef} type="file" accept=".png,.jpg,.jpeg,.tga,.bmp,.webp,.gif,.tiff" style={{ display: 'none' }} onChange={handleChange} />
-      <Handle type="source" position={Position.Right} id="image" style={{ top: '50%', background: '#f97316' }}>
-        <div style={{ position: 'absolute', right: -6, top: -2, transform: 'translateX(100%)', fontSize: 9, color: '#f97316', whiteSpace: 'nowrap' }}>Image</div>
-      </Handle>
     </NodeWrapper>
   )
 }

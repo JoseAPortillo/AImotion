@@ -295,7 +295,41 @@ function DiffuserGeneratorNode(props: NodeProps) {
       <span style={{ fontSize: 9, opacity: 0.8, background: 'rgba(0,0,0,0.3)', padding: '1px 4px', borderRadius: 3 }}>
         {modelModality.label}
       </span>
-    )} footer={
+    )} handles={
+      <>
+        {def.inputs.map((inp, i) => {
+          const isActive = activeInputs.has(inp.id)
+          const color = getHandleColor(inp.id, inp.type)
+          const activeIdx = [...activeInputs].indexOf(inp.id)
+          const top = activeIdx >= 0 ? `${((activeIdx + 1) / (activeInputs.size + 1)) * 100}%` : '50%'
+          return (
+            <Handle
+              key={inp.id}
+              type="target"
+              position={Position.Left}
+              id={inp.id}
+              style={{
+                top,
+                background: color,
+                opacity: isActive ? 1 : 0,
+                pointerEvents: isActive ? 'auto' : 'none',
+              }}
+            >
+              {isActive && (
+                <div style={{ position: 'absolute', left: -6, top: -2, transform: 'translateX(-100%)', fontSize: 9, color, whiteSpace: 'nowrap' }}>
+                  {inp.label}
+                </div>
+              )}
+            </Handle>
+          )
+        })}
+        <Handle type="source" position={Position.Right} id="video_out" style={{ top: '50%', background: modelModality.outputColor }}>
+          <div style={{ position: 'absolute', right: -6, top: -2, transform: 'translateX(100%)', fontSize: 9, color: modelModality.outputColor, whiteSpace: 'nowrap' }}>
+            {modelModality.outputLabel}
+          </div>
+        </Handle>
+      </>
+    } footer={
       <button
         onClick={handleGenWorkflow}
         disabled={genRunning}
@@ -539,38 +573,6 @@ function DiffuserGeneratorNode(props: NodeProps) {
           </div>
         </div>
       )}
-
-      {def.inputs.map((inp, i) => {
-        const isActive = activeInputs.has(inp.id)
-        const color = getHandleColor(inp.id, inp.type)
-        const activeIdx = [...activeInputs].indexOf(inp.id)
-        const top = activeIdx >= 0 ? `${((activeIdx + 1) / (activeInputs.size + 1)) * 100}%` : '50%'
-        return (
-          <Handle
-            key={inp.id}
-            type="target"
-            position={Position.Left}
-            id={inp.id}
-            style={{
-              top,
-              background: color,
-              opacity: isActive ? 1 : 0,
-              pointerEvents: isActive ? 'auto' : 'none',
-            }}
-          >
-            {isActive && (
-              <div style={{ position: 'absolute', left: -6, top: -2, transform: 'translateX(-100%)', fontSize: 9, color, whiteSpace: 'nowrap' }}>
-                {inp.label}
-              </div>
-            )}
-          </Handle>
-        )
-      })}
-      <Handle type="source" position={Position.Right} id="video_out" style={{ top: '50%', background: modelModality.outputColor }}>
-        <div style={{ position: 'absolute', right: -6, top: -2, transform: 'translateX(100%)', fontSize: 9, color: modelModality.outputColor, whiteSpace: 'nowrap' }}>
-          {modelModality.outputLabel}
-        </div>
-      </Handle>
     </NodeWrapper>
   )
 }

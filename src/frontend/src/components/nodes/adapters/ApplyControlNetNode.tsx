@@ -96,6 +96,18 @@ function ApplyControlNetNode(props: NodeProps) {
           </button>
         )}
       </div>
+    } handles={
+      <>
+        <Handle type="target" position={Position.Left} id="image_in" style={{ top: '33%', background: getHandleColor('image_in', 'video_tensor') }}>
+          <div style={{ position: 'absolute', left: -6, top: -2, transform: 'translateX(-100%)', fontSize: 9, color: getHandleColor('image_in', 'video_tensor'), whiteSpace: 'nowrap' }}>Conditioning</div>
+        </Handle>
+        <Handle type="target" position={Position.Left} id="model_in" style={{ top: '66%', background: PORT_COLORS.params }}>
+          <div style={{ position: 'absolute', left: -6, top: -2, transform: 'translateX(-100%)', fontSize: 9, color: PORT_COLORS.params, whiteSpace: 'nowrap' }}>Model</div>
+        </Handle>
+        <Handle type="source" position={Position.Right} id="model_out" style={{ top: '50%', background: PORT_COLORS.params }}>
+          <div style={{ position: 'absolute', right: -6, top: -2, transform: 'translateX(100%)', fontSize: 9, color: PORT_COLORS.params, whiteSpace: 'nowrap' }}>Model + CN</div>
+        </Handle>
+      </>
     }>
       <div style={{ padding: '4px 6px', fontSize: 10, color: '#ccc' }}>
         <input
@@ -122,16 +134,6 @@ function ApplyControlNetNode(props: NodeProps) {
           <div style={{ marginTop: 3, fontSize: 9, color: '#4ade80' }}>● Active</div>
         )}
       </div>
-
-      <Handle type="target" position={Position.Left} id="image_in" style={{ top: '33%', background: getHandleColor('image_in', 'video_tensor') }}>
-        <div style={{ position: 'absolute', left: -6, top: -2, transform: 'translateX(-100%)', fontSize: 9, color: getHandleColor('image_in', 'video_tensor'), whiteSpace: 'nowrap' }}>Conditioning</div>
-      </Handle>
-      <Handle type="target" position={Position.Left} id="model_in" style={{ top: '66%', background: PORT_COLORS.params }}>
-        <div style={{ position: 'absolute', left: -6, top: -2, transform: 'translateX(-100%)', fontSize: 9, color: PORT_COLORS.params, whiteSpace: 'nowrap' }}>Model</div>
-      </Handle>
-      <Handle type="source" position={Position.Right} id="model_out" style={{ top: '50%', background: PORT_COLORS.params }}>
-        <div style={{ position: 'absolute', right: -6, top: -2, transform: 'translateX(100%)', fontSize: 9, color: PORT_COLORS.params, whiteSpace: 'nowrap' }}>Model + CN</div>
-      </Handle>
     </NodeWrapper>
   )
 }

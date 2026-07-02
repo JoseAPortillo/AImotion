@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useState, useLayoutEffect, useRef, type ReactNode } from 'react'
 import { NodeResizer } from '@xyflow/react'
 
 interface NodeWrapperProps {
@@ -7,6 +7,7 @@ interface NodeWrapperProps {
   selected: boolean
   headerRight?: ReactNode
   footer?: ReactNode
+  handles?: ReactNode
   style?: React.CSSProperties
 }
 
@@ -106,19 +107,62 @@ const rootStyle: React.CSSProperties = {
   border: '1px solid #333',
   borderRadius: 8,
   position: 'relative',
+  display: 'flex',
+  flexDirection: 'column',
+  overflow: 'hidden',
 }
 
-function NodeWrapper({ children, def, selected, headerRight, footer, style }: NodeWrapperProps) {
+const contentStyle: React.CSSProperties = {
+  flex: 1,
+  minHeight: 0,
+  overflowY: 'auto',
+  overflowX: 'hidden',
+}
+
+const scrollbarStyles = `
+  .node-content::-webkit-scrollbar {
+    width: 4px;
+  }
+  .node-content::-webkit-scrollbar-track {
+    background: #000;
+  }
+  .node-content::-webkit-scrollbar-thumb {
+    background: #444;
+    border-radius: 2px;
+  }
+  .node-content::-webkit-scrollbar-thumb:hover {
+    background: #666;
+  }
+`
+
+function NodeWrapper({ children, def, selected, headerRight, footer, handles, style }: NodeWrapperProps) {
+  const rootRef = useRef<HTMLDivElement>(null)
+  const [frozenHeight, setFrozenHeight] = useState<number | null>(null)
+
+  useLayoutEffect(() => {
+    if (rootRef.current && frozenHeight === null) {
+      setFrozenHeight(rootRef.current.offsetHeight)
+    }
+  }, [frozenHeight])
+
+  const dynamicRoot = frozenHeight
+    ? { ...rootStyle, maxHeight: frozenHeight, height: frozenHeight, ...style }
+    : { ...rootStyle, ...style }
+
   return (
-    <div style={{ ...rootStyle, ...(footer ? { paddingBottom: 28 } : {}), ...style }}>
+    <div ref={rootRef} style={dynamicRoot}>
+      <style>{scrollbarStyles}</style>
       {selected && <NodeResizer handleStyle={{ width: 8, height: 8, borderRadius: '50%', background: '#888', zIndex: 10 }} />}
-      <div style={{ background: def.color, padding: '4px 8px', fontSize: 10, fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderRadius: '8px 8px 0 0', overflow: 'hidden' }}>
+      <div style={{ background: def.color, padding: '4px 8px', fontSize: 10, fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderRadius: '8px 8px 0 0', overflow: 'hidden', flexShrink: 0 }}>
         <span>{def.label}</span>
         {headerRight}
       </div>
-      {children}
+      <div className="node-content" style={contentStyle}>
+        {children}
+      </div>
+      {handles}
       {footer && (
-        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, borderTop: '1px solid #2a2a2a', padding: '4px 8px', background: '#1a1a1a' }}>
+        <div style={{ borderTop: '1px solid #2a2a2a', padding: '4px 8px', background: '#1a1a1a', flexShrink: 0 }}>
           {footer}
         </div>
       )}

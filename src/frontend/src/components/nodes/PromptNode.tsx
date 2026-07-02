@@ -44,6 +44,15 @@ function PromptNode(props: NodeProps) {
       >
         {improving ? '...' : '✨ Improve'}
       </button>
+    } handles={
+      <>
+        <Handle type="source" position={Position.Right} id="positive" style={{ top: '35%', background: getHandleColor('positive', 'prompt') }}>
+          <div style={{ position: 'absolute', right: -6, top: -2, transform: 'translateX(100%)', fontSize: 9, color: getHandleColor('positive', 'prompt'), whiteSpace: 'nowrap' }}>Positive</div>
+        </Handle>
+        <Handle type="source" position={Position.Right} id="negative" style={{ top: '65%', background: getHandleColor('negative', 'prompt') }}>
+          <div style={{ position: 'absolute', right: -6, top: -2, transform: 'translateX(100%)', fontSize: 9, color: getHandleColor('negative', 'prompt'), whiteSpace: 'nowrap' }}>Negative</div>
+        </Handle>
+      </>
     }>
       <div style={{ padding: '4px 6px', fontSize: 10, color: '#ccc' }}>
         <textarea
@@ -97,12 +106,6 @@ function PromptNode(props: NodeProps) {
           )}
         </div>
       </div>
-      <Handle type="source" position={Position.Right} id="positive" style={{ top: '35%', background: getHandleColor('positive', 'prompt') }}>
-        <div style={{ position: 'absolute', right: -6, top: -2, transform: 'translateX(100%)', fontSize: 9, color: getHandleColor('positive', 'prompt'), whiteSpace: 'nowrap' }}>Positive</div>
-      </Handle>
-      <Handle type="source" position={Position.Right} id="negative" style={{ top: '65%', background: getHandleColor('negative', 'prompt') }}>
-        <div style={{ position: 'absolute', right: -6, top: -2, transform: 'translateX(100%)', fontSize: 9, color: getHandleColor('negative', 'prompt'), whiteSpace: 'nowrap' }}>Negative</div>
-      </Handle>
     </NodeWrapper>
   )
 }

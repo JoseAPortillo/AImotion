@@ -57,7 +57,11 @@ function SamplingParamsNode(props: NodeProps) {
   }, [props.id, updateNodeData])
 
   return (
-    <NodeWrapper def={def} selected={props.selected}>
+    <NodeWrapper def={def} selected={props.selected} handles={
+      <Handle type="source" position={Position.Right} id="params" style={{ top: '50%', background: getHandleColor('params', 'params') }}>
+        <div style={{ position: 'absolute', right: -6, top: -2, transform: 'translateX(100%)', fontSize: 9, color: getHandleColor('params', 'params'), whiteSpace: 'nowrap' }}>Params</div>
+      </Handle>
+    }>
       <div style={{ padding: '4px 6px', fontSize: 10, color: '#ccc' }}>
         <div style={{ ...inputRow, gap: 4, marginBottom: 3 }}>
           <span style={inlineLabel}>Steps</span>
@@ -85,9 +89,6 @@ function SamplingParamsNode(props: NodeProps) {
           <input style={inlineInput} type="number" min={128} max={768} step={8} value={data.height} onChange={(e) => updateNodeData(props.id, { height: parseInt(e.target.value, 10) || 128 } as Partial<SamplingParamsData>)} />
         </div>
       </div>
-      <Handle type="source" position={Position.Right} id="params" style={{ top: '50%', background: getHandleColor('params', 'params') }}>
-        <div style={{ position: 'absolute', right: -6, top: -2, transform: 'translateX(100%)', fontSize: 9, color: getHandleColor('params', 'params'), whiteSpace: 'nowrap' }}>Params</div>
-      </Handle>
     </NodeWrapper>
   )
 }

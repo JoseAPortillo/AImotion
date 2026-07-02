@@ -37,7 +37,11 @@ function AudioInputNode(props: NodeProps) {
   const handleClick = () => inputRef.current?.click()
 
   return (
-    <NodeWrapper def={def} selected={props.selected}>
+    <NodeWrapper def={def} selected={props.selected} handles={
+      <Handle type="source" position={Position.Right} id="audio" style={{ top: '50%', background: PORT_COLORS.audio_features }}>
+        <div style={{ position: 'absolute', right: -6, top: -2, transform: 'translateX(100%)', fontSize: 9, color: getHandleColor('audio', 'audio_features'), whiteSpace: 'nowrap' }}>Audio</div>
+      </Handle>
+    }>
       <div
         style={{ padding: 6, fontSize: 10, color: '#ccc', cursor: 'pointer', border: '2px dashed #555', margin: 6, borderRadius: 4, textAlign: 'center' }}
         onDragOver={(e) => e.preventDefault()}
@@ -47,9 +51,6 @@ function AudioInputNode(props: NodeProps) {
         {fileName || 'Drop audio file here'}
       </div>
       <input ref={inputRef} type="file" accept=".mp3,.wav,.flac,.ogg" style={{ display: 'none' }} onChange={handleChange} />
-      <Handle type="source" position={Position.Right} id="audio" style={{ top: '50%', background: PORT_COLORS.audio_features }}>
-        <div style={{ position: 'absolute', right: -6, top: -2, transform: 'translateX(100%)', fontSize: 9, color: getHandleColor('audio', 'audio_features'), whiteSpace: 'nowrap' }}>Audio</div>
-      </Handle>
     </NodeWrapper>
   )
 }
