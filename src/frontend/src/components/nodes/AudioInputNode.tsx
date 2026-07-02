@@ -1,7 +1,8 @@
 import { memo, useCallback, useRef } from 'react'
 import type { NodeProps } from '@xyflow/react'
-import { Handle, Position, NodeResizer } from '@xyflow/react'
+import { Handle, Position } from '@xyflow/react'
 import { NODE_DEFINITIONS, PORT_COLORS, getHandleColor, type NodeType } from '../../types/nodes'
+import NodeWrapper from './NodeWrapper'
 import { useGraphStore } from '../../store/graph'
 
 function AudioInputNode(props: NodeProps) {
@@ -36,13 +37,9 @@ function AudioInputNode(props: NodeProps) {
   const handleClick = () => inputRef.current?.click()
 
   return (
-    <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, position: 'relative' }}>
-      {props.selected && <NodeResizer handleStyle={{ width: 8, height: 8, borderRadius: '50%', background: '#888', zIndex: 10 }} />}
-      <div style={{ background: def.color, padding: '6px 10px', fontSize: 12, fontWeight: 600, display: 'flex', justifyContent: 'space-between', borderRadius: '8px 8px 0 0', overflow: 'hidden' }}>
-        <span>{def.label}</span>
-      </div>
+    <NodeWrapper def={def} selected={props.selected}>
       <div
-        style={{ padding: 10, fontSize: 12, color: '#ccc', cursor: 'pointer', border: '2px dashed #555', margin: 8, borderRadius: 4, textAlign: 'center' }}
+        style={{ padding: 6, fontSize: 10, color: '#ccc', cursor: 'pointer', border: '2px dashed #555', margin: 6, borderRadius: 4, textAlign: 'center' }}
         onDragOver={(e) => e.preventDefault()}
         onDrop={handleDrop}
         onClick={handleClick}
@@ -51,9 +48,9 @@ function AudioInputNode(props: NodeProps) {
       </div>
       <input ref={inputRef} type="file" accept=".mp3,.wav,.flac,.ogg" style={{ display: 'none' }} onChange={handleChange} />
       <Handle type="source" position={Position.Right} id="audio" style={{ top: '50%', background: PORT_COLORS.audio_features }}>
-        <div style={{ position: 'absolute', right: -8, top: -2, transform: 'translateX(100%)', fontSize: 10, color: getHandleColor('audio', 'audio_features'), whiteSpace: 'nowrap' }}>Audio</div>
+        <div style={{ position: 'absolute', right: -6, top: -2, transform: 'translateX(100%)', fontSize: 9, color: getHandleColor('audio', 'audio_features'), whiteSpace: 'nowrap' }}>Audio</div>
       </Handle>
-    </div>
+    </NodeWrapper>
   )
 }
 

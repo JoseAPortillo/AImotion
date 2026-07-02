@@ -1,7 +1,8 @@
 import { memo, useCallback, useState, useEffect } from 'react'
 import type { NodeProps } from '@xyflow/react'
-import { Handle, Position, NodeResizer } from '@xyflow/react'
+import { Handle, Position } from '@xyflow/react'
 import { NODE_DEFINITIONS, PORT_COLORS, getHandleColor, type NodeType, type TransformersData, type PromptData } from '../../../types/nodes'
+import NodeWrapper from '../NodeWrapper'
 import { useGraphStore } from '../../../store/graph'
 import { useToastStore } from '../../../store/toast'
 import { generateLLM } from '../../../api/backend'
@@ -93,12 +94,26 @@ function TransformersGeneratorNode(props: NodeProps) {
   }, [props.id, data, nodes, edges, updateNodeData])
 
   return (
-    <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, position: 'relative', paddingBottom: 38, minWidth: 200 }}>
-      {props.selected && <NodeResizer handleStyle={{ width: 8, height: 8, borderRadius: '50%', background: '#888', zIndex: 10 }} />}
-      <div style={{ background: def.color, padding: '6px 10px', fontSize: 12, fontWeight: 600, borderRadius: '8px 8px 0 0' }}>
-        {def.label}
-      </div>
-      <div style={{ padding: '6px 10px', fontSize: 12, color: '#ccc', maxHeight: 300, overflowY: 'auto' }}>
+    <NodeWrapper def={def} selected={props.selected} style={{ minWidth: 160 }} footer={
+      <button
+        onClick={handleGenerate}
+        disabled={generating}
+        style={{
+          width: '100%',
+          padding: '4px 0',
+          borderRadius: 4,
+          border: 'none',
+          fontSize: 10,
+          fontWeight: 600,
+          cursor: generating ? 'not-allowed' : 'pointer',
+          background: generating ? '#333' : '#06b6d4',
+          color: generating ? '#888' : '#0f0f0f',
+        }}
+      >
+        {generating ? 'Generating...' : 'Generate ▶'}
+      </button>
+    }>
+      <div style={{ padding: '4px 6px', fontSize: 10, color: '#ccc', maxHeight: 240, overflowY: 'auto' }}>
         <select
           value={data.model}
           onChange={(e) => updateNodeData(props.id, { model: e.target.value } as Partial<TransformersData>)}
@@ -112,8 +127,8 @@ function TransformersGeneratorNode(props: NodeProps) {
           ))}
         </select>
 
-        <div style={{ marginTop: 6 }}>
-          <label style={{ fontSize: 10, color: '#888', display: 'block', marginBottom: 2 }}>Temperature</label>
+        <div style={{ marginTop: 4 }}>
+          <label style={{ fontSize: 9, color: '#888', display: 'block', marginBottom: 1 }}>Temperature</label>
           <input
             type="range"
             min="0"
@@ -123,11 +138,11 @@ function TransformersGeneratorNode(props: NodeProps) {
             onChange={(e) => updateNodeData(props.id, { temperature: parseFloat(e.target.value) } as Partial<TransformersData>)}
             style={{ width: '100%' }}
           />
-          <span style={{ fontSize: 10, color: '#888' }}>{data.temperature}</span>
+          <span style={{ fontSize: 9, color: '#888' }}>{data.temperature}</span>
         </div>
 
-        <div style={{ marginTop: 6 }}>
-          <label style={{ fontSize: 10, color: '#888', display: 'block', marginBottom: 2 }}>Max Tokens</label>
+        <div style={{ marginTop: 4 }}>
+          <label style={{ fontSize: 9, color: '#888', display: 'block', marginBottom: 1 }}>Max Tokens</label>
           <input
             type="number"
             min={1}
@@ -138,8 +153,8 @@ function TransformersGeneratorNode(props: NodeProps) {
           />
         </div>
 
-        <div style={{ marginTop: 6 }}>
-          <label style={{ fontSize: 10, color: '#888', display: 'block', marginBottom: 2 }}>Top-P</label>
+        <div style={{ marginTop: 4 }}>
+          <label style={{ fontSize: 9, color: '#888', display: 'block', marginBottom: 1 }}>Top-P</label>
           <input
             type="range"
             min="0"
@@ -149,11 +164,11 @@ function TransformersGeneratorNode(props: NodeProps) {
             onChange={(e) => updateNodeData(props.id, { top_p: parseFloat(e.target.value) } as Partial<TransformersData>)}
             style={{ width: '100%' }}
           />
-          <span style={{ fontSize: 10, color: '#888' }}>{data.top_p}</span>
+          <span style={{ fontSize: 9, color: '#888' }}>{data.top_p}</span>
         </div>
 
-        <div style={{ marginTop: 6 }}>
-          <label style={{ fontSize: 10, color: '#888', display: 'block', marginBottom: 2 }}>Top-K</label>
+        <div style={{ marginTop: 4 }}>
+          <label style={{ fontSize: 9, color: '#888', display: 'block', marginBottom: 1 }}>Top-K</label>
           <input
             type="number"
             min={1}
@@ -164,8 +179,8 @@ function TransformersGeneratorNode(props: NodeProps) {
           />
         </div>
 
-        <div style={{ marginTop: 6 }}>
-          <label style={{ fontSize: 10, color: '#888', display: 'block', marginBottom: 2 }}>Seed</label>
+        <div style={{ marginTop: 4 }}>
+          <label style={{ fontSize: 9, color: '#888', display: 'block', marginBottom: 1 }}>Seed</label>
           <input
             type="number"
             min={0}
@@ -176,42 +191,22 @@ function TransformersGeneratorNode(props: NodeProps) {
         </div>
 
         {data.result && (
-          <div style={{ marginTop: 8, padding: 6, background: '#0f0f0f', borderRadius: 4, maxHeight: 100, overflowY: 'auto' }}>
-            <div style={{ fontSize: 11, lineHeight: 1.4, color: '#e0e0e0', whiteSpace: 'pre-wrap' }}>{String(data.result)}</div>
+          <div style={{ marginTop: 6, padding: 4, background: '#0f0f0f', borderRadius: 4, maxHeight: 80, overflowY: 'auto' }}>
+            <div style={{ fontSize: 10, lineHeight: 1.3, color: '#e0e0e0', whiteSpace: 'pre-wrap' }}>{String(data.result)}</div>
           </div>
         )}
       </div>
 
-      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, borderTop: '1px solid #2a2a2a', padding: '6px 10px', background: '#1a1a1a' }}>
-        <button
-          onClick={handleGenerate}
-          disabled={generating}
-          style={{
-            width: '100%',
-            padding: '6px 0',
-            borderRadius: 4,
-            border: 'none',
-            fontSize: 12,
-            fontWeight: 600,
-            cursor: generating ? 'not-allowed' : 'pointer',
-            background: generating ? '#333' : '#06b6d4',
-            color: generating ? '#888' : '#0f0f0f',
-          }}
-        >
-          {generating ? 'Generating...' : 'Generate ▶'}
-        </button>
-      </div>
-
       <Handle type="target" position={Position.Left} id="prompt_pos" style={{ top: '33%', background: PORT_COLORS.prompt }}>
-        <div style={{ position: 'absolute', left: -8, top: -2, transform: 'translateX(-100%)', fontSize: 10, color: PORT_COLORS.prompt, whiteSpace: 'nowrap' }}>Prompt</div>
+        <div style={{ position: 'absolute', left: -6, top: -2, transform: 'translateX(-100%)', fontSize: 9, color: PORT_COLORS.prompt, whiteSpace: 'nowrap' }}>Prompt</div>
       </Handle>
       <Handle type="target" position={Position.Left} id="system_in" style={{ top: '66%', background: '#86efac' }}>
-        <div style={{ position: 'absolute', left: -8, top: -2, transform: 'translateX(-100%)', fontSize: 10, color: '#86efac', whiteSpace: 'nowrap' }}>System</div>
+        <div style={{ position: 'absolute', left: -6, top: -2, transform: 'translateX(-100%)', fontSize: 9, color: '#86efac', whiteSpace: 'nowrap' }}>System</div>
       </Handle>
       <Handle type="source" position={Position.Right} id="text_out" style={{ top: '50%', background: PORT_COLORS.prompt }}>
-        <div style={{ position: 'absolute', right: -8, top: -2, transform: 'translateX(100%)', fontSize: 10, color: PORT_COLORS.prompt, whiteSpace: 'nowrap' }}>Text</div>
+        <div style={{ position: 'absolute', right: -6, top: -2, transform: 'translateX(100%)', fontSize: 9, color: PORT_COLORS.prompt, whiteSpace: 'nowrap' }}>Text</div>
       </Handle>
-    </div>
+    </NodeWrapper>
   )
 }
 

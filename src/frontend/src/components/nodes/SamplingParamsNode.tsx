@@ -1,7 +1,8 @@
 import { memo, useCallback } from 'react'
 import type { NodeProps } from '@xyflow/react'
-import { Handle, Position, NodeResizer } from '@xyflow/react'
-import { NODE_DEFINITIONS, PORT_COLORS, getHandleColor, getResolutionPresetKey, RESOLUTION_PRESETS, type NodeType, type SamplingParamsData } from '../../types/nodes'
+import { Handle, Position } from '@xyflow/react'
+import { NODE_DEFINITIONS, getHandleColor, getResolutionPresetKey, RESOLUTION_PRESETS, type NodeType, type SamplingParamsData } from '../../types/nodes'
+import NodeWrapper from './NodeWrapper'
 import { useGraphStore } from '../../store/graph'
 
 const inputRow: React.CSSProperties = {
@@ -56,21 +57,17 @@ function SamplingParamsNode(props: NodeProps) {
   }, [props.id, updateNodeData])
 
   return (
-    <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, position: 'relative' }}>
-      {props.selected && <NodeResizer handleStyle={{ width: 8, height: 8, borderRadius: '50%', background: '#888', zIndex: 10 }} />}
-      <div style={{ background: def.color, padding: '6px 10px', fontSize: 12, fontWeight: 600, display: 'flex', justifyContent: 'space-between', borderRadius: '8px 8px 0 0', overflow: 'hidden' }}>
-        <span>{def.label}</span>
-      </div>
-      <div style={{ padding: '6px 10px', fontSize: 12, color: '#ccc' }}>
-        <div style={inputRow}>
+    <NodeWrapper def={def} selected={props.selected}>
+      <div style={{ padding: '4px 6px', fontSize: 10, color: '#ccc' }}>
+        <div style={{ ...inputRow, gap: 4, marginBottom: 3 }}>
           <span style={inlineLabel}>Steps</span>
           <input style={inlineInput} type="number" min={1} max={200} value={data.steps} onChange={(e) => updateNodeData(props.id, { steps: parseInt(e.target.value, 10) || 1 } as Partial<SamplingParamsData>)} />
-          <span style={{ ...inlineLabel, marginLeft: 8 }}>CFG</span>
+          <span style={{ ...inlineLabel, marginLeft: 6 }}>CFG</span>
           <input style={inlineInput} type="number" min={1} max={20} step={0.5} value={data.cfg} onChange={(e) => updateNodeData(props.id, { cfg: parseFloat(e.target.value) || 1 } as Partial<SamplingParamsData>)} />
         </div>
-        <div style={inputRow}>
+        <div style={{ ...inputRow, gap: 4, marginBottom: 3 }}>
           <span style={inlineLabel}>Seed</span>
-          <input style={{ ...inlineInput, width: 80 }} type="number" min={0} value={data.seed} onChange={(e) => updateNodeData(props.id, { seed: parseInt(e.target.value, 10) || 0 } as Partial<SamplingParamsData>)} />
+          <input style={{ ...inlineInput, width: 72 }} type="number" min={0} value={data.seed} onChange={(e) => updateNodeData(props.id, { seed: parseInt(e.target.value, 10) || 0 } as Partial<SamplingParamsData>)} />
         </div>
         <div>
           <select style={selectStyle} value={presetKey || '__custom__'} onChange={(e) => handlePreset(e.target.value)}>
@@ -81,7 +78,7 @@ function SamplingParamsNode(props: NodeProps) {
             <option value="__custom__">Custom...</option>
           </select>
         </div>
-        <div style={inputRow}>
+        <div style={{ ...inputRow, gap: 4 }}>
           <span style={inlineLabel}>Res</span>
           <input style={inlineInput} type="number" min={128} max={768} step={8} value={data.width} onChange={(e) => updateNodeData(props.id, { width: parseInt(e.target.value, 10) || 128 } as Partial<SamplingParamsData>)} />
           <span style={{ color: '#555' }}>×</span>
@@ -89,9 +86,9 @@ function SamplingParamsNode(props: NodeProps) {
         </div>
       </div>
       <Handle type="source" position={Position.Right} id="params" style={{ top: '50%', background: getHandleColor('params', 'params') }}>
-        <div style={{ position: 'absolute', right: -8, top: -2, transform: 'translateX(100%)', fontSize: 10, color: getHandleColor('params', 'params'), whiteSpace: 'nowrap' }}>Params</div>
+        <div style={{ position: 'absolute', right: -6, top: -2, transform: 'translateX(100%)', fontSize: 9, color: getHandleColor('params', 'params'), whiteSpace: 'nowrap' }}>Params</div>
       </Handle>
-    </div>
+    </NodeWrapper>
   )
 }
 

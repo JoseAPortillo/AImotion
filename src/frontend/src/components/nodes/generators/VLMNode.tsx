@@ -1,7 +1,8 @@
 import { memo, useCallback } from 'react'
 import type { NodeProps } from '@xyflow/react'
-import { Handle, Position, NodeResizer } from '@xyflow/react'
+import { Handle, Position } from '@xyflow/react'
 import { NODE_DEFINITIONS, PORT_COLORS, getHandleColor, type NodeType, type VLMData, type PromptData } from '../../../types/nodes'
+import NodeWrapper from '../NodeWrapper'
 import { useGraphStore } from '../../../store/graph'
 import { useToastStore } from '../../../store/toast'
 import { analyzeVLM } from '../../../api/backend'
@@ -47,53 +48,47 @@ function VLMNode(props: NodeProps) {
   }, [props.id, nodes, edges, updateNodeData])
 
   return (
-    <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, position: 'relative', paddingBottom: 38 }}>
-      {props.selected && <NodeResizer handleStyle={{ width: 8, height: 8, borderRadius: '50%', background: '#888', zIndex: 10 }} />}
-      <div style={{ background: def.color, padding: '6px 10px', fontSize: 12, fontWeight: 600, borderRadius: '8px 8px 0 0' }}>
-        {def.label}
-      </div>
-      <div style={{ padding: '6px 10px', fontSize: 12, color: '#ccc', minHeight: 40 }}>
+    <NodeWrapper def={def} selected={props.selected} footer={
+      <button
+        onClick={handleAnalyze}
+        disabled={data.loading}
+        style={{
+          width: '100%',
+          padding: '4px 0',
+          borderRadius: 4,
+          border: 'none',
+          fontSize: 10,
+          fontWeight: 600,
+          cursor: data.loading ? 'not-allowed' : 'pointer',
+          background: data.loading ? '#333' : '#a855f7',
+          color: data.loading ? '#888' : '#fff',
+        }}
+      >
+        {data.loading ? 'Analyzing...' : 'Analyze ▶'}
+      </button>
+    }>
+      <div style={{ padding: '4px 6px', fontSize: 10, color: '#ccc', minHeight: 32 }}>
         {data.loading ? (
           <span style={{ color: '#888' }}>Analyzing...</span>
         ) : data.result ? (
-          <div style={{ fontSize: 11, lineHeight: 1.4, maxHeight: 120, overflowY: 'auto', color: '#e0e0e0', whiteSpace: 'pre-wrap' }}>
+          <div style={{ fontSize: 10, lineHeight: 1.3, maxHeight: 80, overflowY: 'auto', color: '#e0e0e0', whiteSpace: 'pre-wrap' }}>
             {String(data.result)}
           </div>
         ) : (
-          <span style={{ color: '#888', fontSize: 11 }}>Connect Image + Prompt, then click Analyze</span>
+          <span style={{ color: '#888', fontSize: 10 }}>Connect Image + Prompt, then click Analyze</span>
         )}
       </div>
 
-      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, borderTop: '1px solid #2a2a2a', padding: '6px 10px', background: '#1a1a1a' }}>
-        <button
-          onClick={handleAnalyze}
-          disabled={data.loading}
-          style={{
-            width: '100%',
-            padding: '6px 0',
-            borderRadius: 4,
-            border: 'none',
-            fontSize: 12,
-            fontWeight: 600,
-            cursor: data.loading ? 'not-allowed' : 'pointer',
-            background: data.loading ? '#333' : '#a855f7',
-            color: data.loading ? '#888' : '#fff',
-          }}
-        >
-          {data.loading ? 'Analyzing...' : 'Analyze ▶'}
-        </button>
-      </div>
-
       <Handle type="target" position={Position.Left} id="image_in" style={{ top: '33%', background: getHandleColor('image_in', 'video_tensor') }}>
-        <div style={{ position: 'absolute', left: -8, top: -2, transform: 'translateX(-100%)', fontSize: 10, color: getHandleColor('image_in', 'video_tensor'), whiteSpace: 'nowrap' }}>Image</div>
+        <div style={{ position: 'absolute', left: -6, top: -2, transform: 'translateX(-100%)', fontSize: 9, color: getHandleColor('image_in', 'video_tensor'), whiteSpace: 'nowrap' }}>Image</div>
       </Handle>
       <Handle type="target" position={Position.Left} id="prompt_pos" style={{ top: '66%', background: PORT_COLORS.prompt }}>
-        <div style={{ position: 'absolute', left: -8, top: -2, transform: 'translateX(-100%)', fontSize: 10, color: PORT_COLORS.prompt, whiteSpace: 'nowrap' }}>Prompt</div>
+        <div style={{ position: 'absolute', left: -6, top: -2, transform: 'translateX(-100%)', fontSize: 9, color: PORT_COLORS.prompt, whiteSpace: 'nowrap' }}>Prompt</div>
       </Handle>
       <Handle type="source" position={Position.Right} id="text_out" style={{ top: '50%', background: PORT_COLORS.prompt }}>
-        <div style={{ position: 'absolute', right: -8, top: -2, transform: 'translateX(100%)', fontSize: 10, color: PORT_COLORS.prompt, whiteSpace: 'nowrap' }}>Text</div>
+        <div style={{ position: 'absolute', right: -6, top: -2, transform: 'translateX(100%)', fontSize: 9, color: PORT_COLORS.prompt, whiteSpace: 'nowrap' }}>Text</div>
       </Handle>
-    </div>
+    </NodeWrapper>
   )
 }
 

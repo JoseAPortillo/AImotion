@@ -1,7 +1,8 @@
 import { memo } from 'react'
 import type { NodeProps } from '@xyflow/react'
-import { Handle, Position, NodeResizer } from '@xyflow/react'
-import { NODE_DEFINITIONS, PORT_COLORS, getHandleColor, type NodeType } from '../../types/nodes'
+import { Handle, Position } from '@xyflow/react'
+import { NODE_DEFINITIONS, getHandleColor, type NodeType } from '../../types/nodes'
+import NodeWrapper from './NodeWrapper'
 import { useGraphStore } from '../../store/graph'
 
 function PreviewNode(props: NodeProps) {
@@ -12,26 +13,22 @@ function PreviewNode(props: NodeProps) {
   const isImage = resultType === 'image' || (!resultType && outputUrl?.endsWith('.png'))
 
   return (
-    <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, position: 'relative' }}>
-      {props.selected && <NodeResizer handleStyle={{ width: 8, height: 8, borderRadius: '50%', background: '#888', zIndex: 10 }} />}
-      <div style={{ background: def.color, padding: '6px 10px', fontSize: 12, fontWeight: 600, display: 'flex', justifyContent: 'space-between', borderRadius: '8px 8px 0 0', overflow: 'hidden' }}>
-        <span>{def.label}</span>
-      </div>
-      <div style={{ padding: 10, fontSize: 12, color: '#ccc' }}>
+    <NodeWrapper def={def} selected={props.selected}>
+      <div style={{ padding: '4px 6px', fontSize: 10, color: '#ccc' }}>
         {outputUrl ? (
           isImage ? (
-            <img src={outputUrl} alt="Generated" style={{ width: '100%', maxWidth: 320, maxHeight: 320, borderRadius: 4, display: 'block', margin: '0 auto' }} />
+            <img src={outputUrl} alt="Generated" style={{ width: '100%', maxWidth: 200, maxHeight: 200, borderRadius: 4, display: 'block', margin: '0 auto' }} />
           ) : (
-            <video src={outputUrl} controls autoPlay style={{ width: '100%', maxWidth: 320, maxHeight: 180, borderRadius: 4, display: 'block', margin: '0 auto' }} />
+            <video src={outputUrl} controls autoPlay style={{ width: '100%', maxWidth: 200, maxHeight: 120, borderRadius: 4, display: 'block', margin: '0 auto' }} />
           )
         ) : (
           <span style={{ color: '#888' }}>Connect to Generation node</span>
         )}
       </div>
       <Handle type="target" position={Position.Left} id="video_in" style={{ top: '50%', background: getHandleColor('video_in', 'video_tensor') }}>
-        <div style={{ position: 'absolute', left: -8, top: -2, transform: 'translateX(-100%)', fontSize: 10, color: getHandleColor('video_in', 'video_tensor'), whiteSpace: 'nowrap' }}>Output</div>
+        <div style={{ position: 'absolute', left: -6, top: -2, transform: 'translateX(-100%)', fontSize: 9, color: getHandleColor('video_in', 'video_tensor'), whiteSpace: 'nowrap' }}>Output</div>
       </Handle>
-    </div>
+    </NodeWrapper>
   )
 }
 

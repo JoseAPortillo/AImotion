@@ -1,7 +1,8 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import type { NodeProps } from '@xyflow/react'
-import { Handle, Position, NodeResizer } from '@xyflow/react'
-import { NODE_DEFINITIONS, PORT_COLORS, getHandleColor, type NodeType } from '../../types/nodes'
+import { Handle, Position } from '@xyflow/react'
+import { NODE_DEFINITIONS, getHandleColor, type NodeType } from '../../types/nodes'
+import NodeWrapper from './NodeWrapper'
 import { useGraphStore } from '../../store/graph'
 
 const IMAGE_EXTS = /\.(png|jpg|jpeg|tga|bmp|webp|gif|tiff)$/i
@@ -57,24 +58,20 @@ function ImageInputNode(props: NodeProps) {
   const handleClick = () => inputRef.current?.click()
 
   return (
-    <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, position: 'relative' }}>
-      {props.selected && <NodeResizer handleStyle={{ width: 8, height: 8, borderRadius: '50%', background: '#888', zIndex: 10 }} />}
-      <div style={{ background: def.color, padding: '6px 10px', fontSize: 12, fontWeight: 600, display: 'flex', justifyContent: 'space-between', borderRadius: '8px 8px 0 0', overflow: 'hidden' }}>
-        <span>{def.label}</span>
-      </div>
+    <NodeWrapper def={def} selected={props.selected}>
       {objUrl ? (
         <div
-          style={{ padding: 6, cursor: 'pointer' }}
+          style={{ padding: 4, cursor: 'pointer' }}
           onClick={handleClick}
           onDragOver={(e) => e.preventDefault()}
           onDrop={handleDrop}
         >
-          <img src={objUrl} style={{ width: '100%', borderRadius: 4, maxHeight: 100, objectFit: 'contain' }} alt="" />
-          <div style={{ fontSize: 10, color: '#888', marginTop: 2, textAlign: 'center' }}>{data.fileName} — click to change</div>
+          <img src={objUrl} style={{ width: '100%', borderRadius: 4, maxHeight: 70, objectFit: 'contain' }} alt="" />
+          <div style={{ fontSize: 9, color: '#888', marginTop: 2, textAlign: 'center' }}>{data.fileName} — click to change</div>
         </div>
       ) : (
         <div
-          style={{ padding: 10, fontSize: 12, color: '#ccc', cursor: 'pointer', border: '2px dashed #555', margin: 8, borderRadius: 4, textAlign: 'center' }}
+          style={{ padding: 6, fontSize: 10, color: '#ccc', cursor: 'pointer', border: '2px dashed #555', margin: 6, borderRadius: 4, textAlign: 'center' }}
           onDragOver={(e) => e.preventDefault()}
           onDrop={handleDrop}
           onClick={handleClick}
@@ -84,9 +81,9 @@ function ImageInputNode(props: NodeProps) {
       )}
       <input ref={inputRef} type="file" accept=".png,.jpg,.jpeg,.tga,.bmp,.webp,.gif,.tiff" style={{ display: 'none' }} onChange={handleChange} />
       <Handle type="source" position={Position.Right} id="image" style={{ top: '50%', background: '#f97316' }}>
-        <div style={{ position: 'absolute', right: -8, top: -2, transform: 'translateX(100%)', fontSize: 10, color: '#f97316', whiteSpace: 'nowrap' }}>Image</div>
+        <div style={{ position: 'absolute', right: -6, top: -2, transform: 'translateX(100%)', fontSize: 9, color: '#f97316', whiteSpace: 'nowrap' }}>Image</div>
       </Handle>
-    </div>
+    </NodeWrapper>
   )
 }
 

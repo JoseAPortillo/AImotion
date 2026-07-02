@@ -1,7 +1,8 @@
 import { memo, useCallback, useMemo, useState, useEffect } from 'react'
 import type { NodeProps } from '@xyflow/react'
-import { Handle, Position, NodeResizer } from '@xyflow/react'
-import { NODE_DEFINITIONS, PORT_COLORS, getHandleColor, type NodeType, type GenerationData, type PromptData } from '../../types/nodes'
+import { Handle, Position } from '@xyflow/react'
+import { NODE_DEFINITIONS, getHandleColor, type NodeType, type GenerationData, type PromptData } from '../../types/nodes'
+import NodeWrapper, { CollapsibleSection, InfoLabel, FIELD_DESCS } from './NodeWrapper'
 import { useGraphStore } from '../../store/graph'
 import { useToastStore } from '../../store/toast'
 import { startGeneration, pollTask, type TaskStatus } from '../../api/backend'
@@ -65,11 +66,11 @@ const selectStyle: React.CSSProperties = {
   border: '1px solid #333',
   borderRadius: 4,
   color: '#ccc',
-  padding: '3px 6px',
-  fontSize: 11,
+  padding: '2px 4px',
+  fontSize: 10,
   outline: 'none',
   width: '100%',
-  marginTop: 4,
+  marginTop: 3,
 }
 
 function GenerationNode(props: NodeProps) {
@@ -208,17 +209,30 @@ function GenerationNode(props: NodeProps) {
   }, [props.id, data, nodes, edges, setOutputUrl])
 
   return (
-    <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, position: 'relative', paddingBottom: 38 }}>
-      {props.selected && <NodeResizer handleStyle={{ width: 8, height: 8, borderRadius: '50%', background: '#888', zIndex: 10 }} />}
-      <div style={{ background: def.color, padding: '6px 10px', fontSize: 12, fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderRadius: '8px 8px 0 0', overflow: 'hidden' }}>
-        <span>{def.label}</span>
-        {modelConfig && (
-          <span style={{ fontSize: 9, opacity: 0.8, background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: 4 }}>
-            {modelModality.label}
-          </span>
-        )}
-      </div>
-      <div style={{ padding: '6px 10px', fontSize: 12, color: '#ccc' }}>
+    <NodeWrapper def={def} selected={props.selected} headerRight={modelConfig && (
+      <span style={{ fontSize: 9, opacity: 0.8, background: 'rgba(0,0,0,0.3)', padding: '1px 4px', borderRadius: 3 }}>
+        {modelModality.label}
+      </span>
+    )} footer={
+      <button
+        onClick={handleGenWorkflow}
+        disabled={genRunning}
+        style={{
+          width: '100%',
+          padding: '4px 0',
+          borderRadius: 4,
+          border: 'none',
+          fontSize: 10,
+          fontWeight: 600,
+          cursor: genRunning ? 'not-allowed' : 'pointer',
+          background: genRunning ? '#333' : '#4ade80',
+          color: genRunning ? '#888' : '#0f0f0f',
+        }}
+      >
+        {genRunning ? 'Generating...' : 'Generate ▶'}
+      </button>
+    }>
+      <div style={{ padding: '4px 6px', fontSize: 10, color: '#ccc' }}>
         <select
           value={data.model}
           onChange={handleModelChange}
@@ -236,94 +250,152 @@ function GenerationNode(props: NodeProps) {
             <option value={data.model} disabled>{data.model} (unavailable)</option>
           )}
         </select>
-        <select
-          value={data.scheduler}
-          onChange={(e) => updateNodeData(props.id, { scheduler: e.target.value } as Partial<GenerationData>)}
-          style={selectStyle}
-        >
-          <option value="">Default{defaultSched ? ` (${schedLabels[defaultSched] || defaultSched})` : ''}</option>
-          {availableScheds.map(s => (
-            <option key={s} value={s}>{schedLabels[s] || s}</option>
-          ))}
-        </select>
-        {schedLabel && <div style={{ marginTop: 2, fontSize: 10, color: '#888' }}>Current: {schedLabel}</div>}
-        <div style={{ marginTop: 8 }}>
-          <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+
+        {modelConfig && (
+          <div style={{ marginTop: 4, padding: 4, background: '#131313', borderRadius: 4, fontSize: 9, color: '#777', lineHeight: 1.5 }}>
+            <div style={{ color: '#999', fontWeight: 600 }}>{modelConfig.name}</div>
+            {modelConfig.pipeline_class && <div style={{ color: '#666' }}>{modelConfig.pipeline_class}</div>}
+            {modelConfig.defaults && (
+              <div style={{ marginTop: 2, display: 'flex', flexWrap: 'wrap', gap: '0 6px' }}>
+                {Object.entries(modelConfig.defaults)
+                  .filter(([k]) => !['num_frames', 'width', 'height'].includes(k))
+                  .slice(0, 4)
+                  .map(([k, v]) => (
+                    <span key={k} style={{ color: '#555' }}>{k}: <span style={{ color: '#888' }}>{String(v)}</span></span>
+                  ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <CollapsibleSection title="Scheduler" defaultOpen={true}>
+          <select
+            value={data.scheduler}
+            onChange={(e) => updateNodeData(props.id, { scheduler: e.target.value } as Partial<GenerationData>)}
+            style={selectStyle}
+          >
+            <option value="">Default{defaultSched ? ` (${schedLabels[defaultSched] || defaultSched})` : ''}</option>
+            {availableScheds.map(s => (
+              <option key={s} value={s}>{schedLabels[s] || s}</option>
+            ))}
+          </select>
+          {schedLabel && <div style={{ marginTop: 1, fontSize: 9, color: '#888' }}>Current: {schedLabel}</div>}
+        </CollapsibleSection>
+
+        <CollapsibleSection title="Básicos" defaultOpen={true}>
+          <div style={{ marginTop: 2 }}>
+            <InfoLabel label="Steps" desc={FIELD_DESCS.steps} />
             <input
-              type="checkbox"
-              checked={data.vae_tiling}
-              onChange={(e) => updateNodeData(props.id, { vae_tiling: e.target.checked } as Partial<GenerationData>)}
+              type="number"
+              step={1}
+              min={1}
+              max={200}
+              value={data.steps ?? 50}
+              onChange={(e) => updateNodeData(props.id, { steps: parseInt(e.target.value, 10) || 1 } as Partial<GenerationData>)}
+              style={selectStyle}
             />
-            VAE Tiling
-          </label>
-          {data.vae_tiling && (
-            <div style={{ marginTop: 4 }}>
-              <label style={{ fontSize: 10, color: '#888' }}>Tile Overlap: {data.vae_tile_overlap > 0 ? data.vae_tile_overlap : 'VAE default'}</label>
+          </div>
+          <div style={{ marginTop: 4 }}>
+            <InfoLabel label="CFG" desc={FIELD_DESCS.cfg} />
+            <input
+              type="number"
+              step={0.5}
+              min={1}
+              max={20}
+              value={data.cfg ?? 6}
+              onChange={(e) => updateNodeData(props.id, { cfg: parseFloat(e.target.value) || 1 } as Partial<GenerationData>)}
+              style={selectStyle}
+            />
+          </div>
+          <div style={{ marginTop: 4 }}>
+            <InfoLabel label="Seed" desc={FIELD_DESCS.seed} />
+            <input
+              type="number"
+              step={1}
+              min={0}
+              value={data.seed ?? 0}
+              onChange={(e) => updateNodeData(props.id, { seed: parseInt(e.target.value, 10) || 0 } as Partial<GenerationData>)}
+              style={selectStyle}
+            />
+          </div>
+          <div style={{ marginTop: 4 }}>
+            <InfoLabel label="Strength" desc={FIELD_DESCS.strength} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
               <input
                 type="range"
-                min="0"
-                max="0.9"
-                step="0.1"
-                value={data.vae_tile_overlap}
-                onChange={(e) => updateNodeData(props.id, { vae_tile_overlap: parseFloat(e.target.value) } as Partial<GenerationData>)}
-                style={{ width: '100%', marginTop: 2 }}
+                min={0}
+                max={1}
+                step={0.05}
+                value={data.strength ?? 0.8}
+                onChange={(e) => updateNodeData(props.id, { strength: parseFloat(e.target.value) } as Partial<GenerationData>)}
+                style={{ flex: 1, marginTop: 1 }}
               />
+              <span style={{ fontSize: 9, color: '#999', minWidth: 30, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                {(data.strength ?? 0.8).toFixed(2)}
+              </span>
             </div>
-          )}
-        </div>
-        {modelConfig?.inputs && Object.entries(modelConfig.inputs)
-          .filter(([, inp]) => !inp.hidden && (inp.type === 'int' || inp.type === 'float') && inp.default != null)
-          .map(([name, inp]) => {
-            const isFloat = inp.type === 'float'
-            return (
-              <div key={name} style={{ marginTop: 6 }}>
-                <label style={{ fontSize: 10, color: '#888', display: 'block', marginBottom: 2 }}>{name.replace(/_/g, ' ')}</label>
+          </div>
+        </CollapsibleSection>
+
+        <CollapsibleSection title="Avanzados" defaultOpen={false}>
+          <div style={{ marginTop: 2 }}>
+            <label style={{ fontSize: 9, display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={data.vae_tiling}
+                onChange={(e) => updateNodeData(props.id, { vae_tiling: e.target.checked } as Partial<GenerationData>)}
+              />
+              <span title={FIELD_DESCS.vae_tiling} style={{ borderBottom: '1px dotted #555', cursor: 'help' }}>VAE Tiling</span>
+            </label>
+            {data.vae_tiling && (
+              <div style={{ marginTop: 2 }}>
+                <span style={{ fontSize: 8, color: '#888' }}>Tile Overlap: {data.vae_tile_overlap > 0 ? data.vae_tile_overlap : 'VAE default'}</span>
                 <input
-                  type="number"
-                  step={isFloat ? 'any' : 1}
-                  value={(data[name as keyof GenerationData] ?? inp.default) as number}
-                  onChange={(e) => updateNodeData(props.id, { [name]: isFloat ? parseFloat(e.target.value) : parseInt(e.target.value, 10) } as Partial<GenerationData>)}
-                  min={inp.min}
-                  max={inp.max}
-                  style={{ ...selectStyle, width: '100%' }}
+                  type="range"
+                  min="0"
+                  max="0.9"
+                  step="0.1"
+                  value={data.vae_tile_overlap}
+                  onChange={(e) => updateNodeData(props.id, { vae_tile_overlap: parseFloat(e.target.value) } as Partial<GenerationData>)}
+                  style={{ width: '100%', marginTop: 1 }}
                 />
               </div>
-            )
-          })}
+            )}
+          </div>
+          {modelConfig?.inputs && Object.entries(modelConfig.inputs)
+            .filter(([, inp]) => !inp.hidden && (inp.type === 'int' || inp.type === 'float') && inp.default != null)
+            .map(([name, inp]) => {
+              const isFloat = inp.type === 'float'
+              const desc = FIELD_DESCS[name]
+              return (
+                <div key={name} style={{ marginTop: 4 }}>
+                  <InfoLabel label={name.replace(/_/g, ' ')} desc={desc} />
+                  <input
+                    type="number"
+                    step={isFloat ? 'any' : 1}
+                    value={(data[name as keyof GenerationData] ?? inp.default) as number}
+                    onChange={(e) => updateNodeData(props.id, { [name]: isFloat ? parseFloat(e.target.value) : parseInt(e.target.value, 10) } as Partial<GenerationData>)}
+                    min={inp.min}
+                    max={inp.max}
+                    style={selectStyle}
+                  />
+                </div>
+              )
+            })}
+        </CollapsibleSection>
       </div>
 
       {genRunning && (
-        <div style={{ padding: '0 10px 4px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ flex: 1, height: 6, borderRadius: 3, background: '#2a2a2a', overflow: 'hidden' }}>
-              <div style={{ width: `${Math.min(progress, 100)}%`, height: '100%', borderRadius: 3, background: '#2563eb', transition: 'width 0.3s ease' }} />
+        <div style={{ padding: '0 6px 3px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <div style={{ flex: 1, height: 4, borderRadius: 2, background: '#2a2a2a', overflow: 'hidden' }}>
+              <div style={{ width: `${Math.min(progress, 100)}%`, height: '100%', borderRadius: 2, background: '#2563eb', transition: 'width 0.3s ease' }} />
             </div>
-            <span style={{ fontSize: 10, color: '#999', minWidth: 28, textAlign: 'right' }}>{progress}%</span>
+            <span style={{ fontSize: 9, color: '#999', minWidth: 24, textAlign: 'right' }}>{progress}%</span>
           </div>
         </div>
       )}
 
-      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, borderTop: '1px solid #2a2a2a', padding: '6px 10px', background: '#1a1a1a' }}>
-        <button
-          onClick={handleGenWorkflow}
-          disabled={genRunning}
-          style={{
-            width: '100%',
-            padding: '6px 0',
-            borderRadius: 4,
-            border: 'none',
-            fontSize: 12,
-            fontWeight: 600,
-            cursor: genRunning ? 'not-allowed' : 'pointer',
-            background: genRunning ? '#333' : '#4ade80',
-            color: genRunning ? '#888' : '#0f0f0f',
-          }}
-        >
-          {genRunning ? 'Generating...' : 'Generate ▶'}
-        </button>
-      </div>
-
-      {/* Render all possible handles — hide inactive ones so React Flow registers them all */}
       {def.inputs.map((inp, i) => {
         const isActive = activeInputs.has(inp.id)
         const color = getHandleColor(inp.id, inp.type)
@@ -343,7 +415,7 @@ function GenerationNode(props: NodeProps) {
             }}
           >
             {isActive && (
-              <div style={{ position: 'absolute', left: -8, top: -2, transform: 'translateX(-100%)', fontSize: 10, color, whiteSpace: 'nowrap' }}>
+              <div style={{ position: 'absolute', left: -6, top: -2, transform: 'translateX(-100%)', fontSize: 9, color, whiteSpace: 'nowrap' }}>
                 {inp.label}
               </div>
             )}
@@ -351,11 +423,11 @@ function GenerationNode(props: NodeProps) {
         )
       })}
       <Handle type="source" position={Position.Right} id="video_out" style={{ top: '50%', background: modelModality.outputColor }}>
-        <div style={{ position: 'absolute', right: -8, top: -2, transform: 'translateX(100%)', fontSize: 10, color: modelModality.outputColor, whiteSpace: 'nowrap' }}>
+        <div style={{ position: 'absolute', right: -6, top: -2, transform: 'translateX(100%)', fontSize: 9, color: modelModality.outputColor, whiteSpace: 'nowrap' }}>
           {modelModality.outputLabel}
         </div>
       </Handle>
-    </div>
+    </NodeWrapper>
   )
 }
 

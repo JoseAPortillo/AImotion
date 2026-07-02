@@ -1,27 +1,24 @@
 import { memo } from 'react'
 import type { NodeProps } from '@xyflow/react'
-import { Handle, Position, NodeResizer } from '@xyflow/react'
+import { Handle, Position } from '@xyflow/react'
 import { NODE_DEFINITIONS, getHandleColor, type NodeType } from '../../../types/nodes'
+import NodeWrapper from '../NodeWrapper'
 
 function CVTaskProcessorNode(props: NodeProps) {
   const def = NODE_DEFINITIONS[props.type as NodeType]
 
   return (
-    <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, position: 'relative' }}>
-      {props.selected && <NodeResizer handleStyle={{ width: 8, height: 8, borderRadius: '50%', background: '#888', zIndex: 10 }} />}
-      <div style={{ background: def.color, padding: '6px 10px', fontSize: 12, fontWeight: 600, borderRadius: '8px 8px 0 0' }}>
-        {def.label}
-      </div>
-      <div style={{ padding: '6px 10px', fontSize: 11, color: '#888' }}>
+    <NodeWrapper def={def} selected={props.selected}>
+      <div style={{ padding: '4px 6px', fontSize: 10, color: '#888' }}>
         Computer Vision — coming soon
       </div>
       <Handle type="target" position={Position.Left} id="image_in" style={{ top: '50%', background: getHandleColor('image_in', 'video_tensor') }}>
-        <div style={{ position: 'absolute', left: -8, top: -2, transform: 'translateX(-100%)', fontSize: 10, color: getHandleColor('image_in', 'video_tensor'), whiteSpace: 'nowrap' }}>Image</div>
+        <div style={{ position: 'absolute', left: -6, top: -2, transform: 'translateX(-100%)', fontSize: 9, color: getHandleColor('image_in', 'video_tensor'), whiteSpace: 'nowrap' }}>Image</div>
       </Handle>
       <Handle type="source" position={Position.Right} id="mask_out" style={{ top: '50%', background: '#ef4444' }}>
-        <div style={{ position: 'absolute', right: -8, top: -2, transform: 'translateX(100%)', fontSize: 10, color: '#ef4444', whiteSpace: 'nowrap' }}>Mask</div>
+        <div style={{ position: 'absolute', right: -6, top: -2, transform: 'translateX(100%)', fontSize: 9, color: '#ef4444', whiteSpace: 'nowrap' }}>Mask</div>
       </Handle>
-    </div>
+    </NodeWrapper>
   )
 }
 

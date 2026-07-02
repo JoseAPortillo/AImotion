@@ -1,7 +1,8 @@
 import { memo, useCallback, useRef, useState } from 'react'
 import type { NodeProps } from '@xyflow/react'
-import { Handle, Position, NodeResizer } from '@xyflow/react'
+import { Handle, Position } from '@xyflow/react'
 import { NODE_DEFINITIONS, PORT_COLORS, type NodeType, type LoRAData } from '../../../types/nodes'
+import NodeWrapper from '../NodeWrapper'
 import { useGraphStore } from '../../../store/graph'
 import { useToastStore } from '../../../store/toast'
 
@@ -69,49 +70,17 @@ function LoadLoRANode(props: NodeProps) {
   }, [props.id, updateNodeData])
 
   return (
-    <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, position: 'relative', paddingBottom: 38 }}>
-      {props.selected && <NodeResizer handleStyle={{ width: 8, height: 8, borderRadius: '50%', background: '#888', zIndex: 10 }} />}
-      <div style={{ background: def.color, padding: '6px 10px', fontSize: 12, fontWeight: 600, borderRadius: '8px 8px 0 0' }}>
-        {def.label}
-      </div>
-      <div style={{ padding: '6px 10px', fontSize: 12, color: '#ccc' }}>
-        <input
-          ref={inputRef}
-          type="file"
-          accept=".safetensors,.bin,.pt,.pth"
-          onChange={handleChange}
-          style={{ fontSize: 10, color: '#ccc', width: '100%', marginBottom: 6 }}
-        />
-        {data.loraFile && (
-          <div style={{ fontSize: 10, color: '#888', marginBottom: 6 }}>File: {String(data.loraFile)}</div>
-        )}
-        <div>
-          <label style={{ fontSize: 10, color: '#888', display: 'block', marginBottom: 2 }}>Scale: {Number(data.scale).toFixed(2)}</label>
-          <input
-            type="range"
-            min="0"
-            max="2"
-            step="0.05"
-            value={data.scale}
-            onChange={(e) => updateNodeData(props.id, { scale: parseFloat(e.target.value) } as Partial<LoRAData>)}
-            style={{ width: '100%' }}
-          />
-        </div>
-        {data.active && (
-          <div style={{ marginTop: 4, fontSize: 10, color: '#4ade80' }}>● Active</div>
-        )}
-      </div>
-
-      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, borderTop: '1px solid #2a2a2a', padding: '6px 10px', background: '#1a1a1a', display: 'flex', gap: 6 }}>
+    <NodeWrapper def={def} selected={props.selected} footer={
+      <div style={{ display: 'flex', gap: 4 }}>
         <button
           onClick={handleApply}
           disabled={applying}
           style={{
             flex: 1,
-            padding: '4px 0',
+            padding: '3px 0',
             borderRadius: 4,
             border: 'none',
-            fontSize: 11,
+            fontSize: 10,
             fontWeight: 600,
             cursor: applying ? 'not-allowed' : 'pointer',
             background: applying ? '#333' : '#f97316',
@@ -124,10 +93,10 @@ function LoadLoRANode(props: NodeProps) {
           <button
             onClick={handleUnload}
             style={{
-              padding: '4px 8px',
+              padding: '3px 6px',
               borderRadius: 4,
               border: 'none',
-              fontSize: 11,
+              fontSize: 10,
               fontWeight: 600,
               cursor: 'pointer',
               background: '#e11d48',
@@ -138,14 +107,42 @@ function LoadLoRANode(props: NodeProps) {
           </button>
         )}
       </div>
+    }>
+      <div style={{ padding: '4px 6px', fontSize: 10, color: '#ccc' }}>
+        <input
+          ref={inputRef}
+          type="file"
+          accept=".safetensors,.bin,.pt,.pth"
+          onChange={handleChange}
+          style={{ fontSize: 9, color: '#ccc', width: '100%', marginBottom: 4 }}
+        />
+        {data.loraFile && (
+          <div style={{ fontSize: 9, color: '#888', marginBottom: 4 }}>File: {String(data.loraFile)}</div>
+        )}
+        <div>
+          <label style={{ fontSize: 9, color: '#888', display: 'block', marginBottom: 1 }}>Scale: {Number(data.scale).toFixed(2)}</label>
+          <input
+            type="range"
+            min="0"
+            max="2"
+            step="0.05"
+            value={data.scale}
+            onChange={(e) => updateNodeData(props.id, { scale: parseFloat(e.target.value) } as Partial<LoRAData>)}
+            style={{ width: '100%' }}
+          />
+        </div>
+        {data.active && (
+          <div style={{ marginTop: 3, fontSize: 9, color: '#4ade80' }}>● Active</div>
+        )}
+      </div>
 
       <Handle type="target" position={Position.Left} id="model_in" style={{ top: '50%', background: PORT_COLORS.params }}>
-        <div style={{ position: 'absolute', left: -8, top: -2, transform: 'translateX(-100%)', fontSize: 10, color: PORT_COLORS.params, whiteSpace: 'nowrap' }}>Model</div>
+        <div style={{ position: 'absolute', left: -6, top: -2, transform: 'translateX(-100%)', fontSize: 9, color: PORT_COLORS.params, whiteSpace: 'nowrap' }}>Model</div>
       </Handle>
       <Handle type="source" position={Position.Right} id="model_out" style={{ top: '50%', background: PORT_COLORS.params }}>
-        <div style={{ position: 'absolute', right: -8, top: -2, transform: 'translateX(100%)', fontSize: 10, color: PORT_COLORS.params, whiteSpace: 'nowrap' }}>Model + LoRA</div>
+        <div style={{ position: 'absolute', right: -6, top: -2, transform: 'translateX(100%)', fontSize: 9, color: PORT_COLORS.params, whiteSpace: 'nowrap' }}>Model + LoRA</div>
       </Handle>
-    </div>
+    </NodeWrapper>
   )
 }
 
