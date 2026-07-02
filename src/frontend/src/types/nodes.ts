@@ -40,6 +40,7 @@ export interface NodeDefinition {
   outputs: PortDef[]
   defaultData?: Record<string, unknown>
   paletteHidden?: boolean
+  defaultSize?: { width: number; height: number }
 }
 
 export interface ImageInputData extends Record<string, unknown> {

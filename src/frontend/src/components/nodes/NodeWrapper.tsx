@@ -1,14 +1,15 @@
-import { useState, useLayoutEffect, useRef, type ReactNode } from 'react'
-import { NodeResizer } from '@xyflow/react'
+import { useState, type ReactNode } from 'react'
+import { NodeResizer, useNodeId, useStore } from '@xyflow/react'
 
 interface NodeWrapperProps {
   children: ReactNode
   def: { color: string; label: string }
   selected: boolean
+  style?: React.CSSProperties
   headerRight?: ReactNode
   footer?: ReactNode
   handles?: ReactNode
-  style?: React.CSSProperties
+  progressBar?: ReactNode
 }
 
 export const FIELD_DESCS: Record<string, string> = {
@@ -136,22 +137,21 @@ const scrollbarStyles = `
   }
 `
 
-function NodeWrapper({ children, def, selected, headerRight, footer, handles, style }: NodeWrapperProps) {
-  const rootRef = useRef<HTMLDivElement>(null)
-  const [frozenHeight, setFrozenHeight] = useState<number | null>(null)
+function NodeWrapper({ children, def, selected, headerRight, footer, handles, style: propStyle, progressBar }: NodeWrapperProps) {
+  const nodeId = useNodeId()
+  const node = useStore(s => (nodeId ? s.nodeLookup.get(nodeId) : undefined))
 
-  useLayoutEffect(() => {
-    if (rootRef.current && frozenHeight === null) {
-      setFrozenHeight(rootRef.current.offsetHeight)
-    }
-  }, [frozenHeight])
+  const w = (propStyle?.width as number) || node?.width || 260
+  const h = (propStyle?.height as number) || node?.height || 320
 
-  const dynamicRoot = frozenHeight
-    ? { ...rootStyle, maxHeight: frozenHeight, height: frozenHeight, ...style }
-    : { ...rootStyle, ...style }
+  const containerStyle: React.CSSProperties = {
+    ...rootStyle,
+    width: w,
+    height: h,
+  }
 
   return (
-    <div ref={rootRef} style={dynamicRoot}>
+    <div style={containerStyle}>
       <style>{scrollbarStyles}</style>
       {selected && <NodeResizer handleStyle={{ width: 8, height: 8, borderRadius: '50%', background: '#888', zIndex: 10 }} />}
       <div style={{ background: def.color, padding: '4px 8px', fontSize: 10, fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderRadius: '8px 8px 0 0', overflow: 'hidden', flexShrink: 0 }}>
@@ -161,6 +161,7 @@ function NodeWrapper({ children, def, selected, headerRight, footer, handles, st
       <div className="node-content" style={contentStyle}>
         {children}
       </div>
+      {progressBar}
       {handles}
       {footer && (
         <div style={{ borderTop: '1px solid #2a2a2a', padding: '4px 8px', background: '#1a1a1a', flexShrink: 0 }}>

@@ -11,6 +11,25 @@ import {
 } from '@xyflow/react'
 import { NODE_DEFINITIONS, type NodeType, type AppNode, type NodeData, getPortTypeFromHandle, getEdgeStyle } from '../types/nodes'
 
+const NODE_DEFAULT_SIZE: Record<NodeType, { width: number; height: number }> = {
+  videoInput: { width: 260, height: 120 },
+  imageInput: { width: 260, height: 120 },
+  audioInput: { width: 260, height: 120 },
+  prompt: { width: 260, height: 180 },
+  diffuserGenerator: { width: 260, height: 420 },
+  transformersGenerator: { width: 260, height: 350 },
+  vlmNode: { width: 260, height: 300 },
+  llmGenerator: { width: 260, height: 320 },
+  cvTaskProcessor: { width: 260, height: 180 },
+  loadLora: { width: 260, height: 180 },
+  applyControlNet: { width: 260, height: 200 },
+  generation: { width: 260, height: 420 },
+  samplingParams: { width: 260, height: 180 },
+  denoisingStrength: { width: 260, height: 100 },
+  output: { width: 260, height: 200 },
+  preview: { width: 260, height: 200 },
+}
+
 interface GraphState {
   nodes: AppNode[]
   edges: Edge[]
@@ -42,11 +61,14 @@ export const useGraphStore = create<GraphState>((set, get) => ({
     const def = NODE_DEFINITIONS[type]
     nodeCounter++
     const id = `${type}_${nodeCounter}`
+    const defaultSize = NODE_DEFAULT_SIZE[type] || { width: 260, height: 320 }
     const newNode: AppNode = {
       id,
       type,
       position,
       data: { ...def.defaultData } as NodeData,
+      width: defaultSize.width,
+      height: defaultSize.height,
     }
     set((state) => ({ nodes: [...state.nodes, newNode] }))
   },
