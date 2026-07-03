@@ -207,6 +207,7 @@ function GenerationNode(props: NodeProps) {
           seed: data.seed ?? 0,
           scheduler: data.scheduler || '',
           model: data.model || 'cogvideox-2b',
+          execution_mode: data.execution_mode || 'local',
           vae_tiling: data.vae_tiling ?? true,
           vae_tile_overlap: data.vae_tile_overlap ?? 0.0,
           num_frames: data.num_frames,

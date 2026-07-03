@@ -82,6 +82,7 @@ export interface DenoisingStrengthData extends Record<string, unknown> {
 export interface GenerationData extends Record<string, unknown> {
   model: string
   scheduler: string
+  execution_mode: 'local' | 'cloud'
   vae_tiling: boolean
   vae_tile_overlap: number
   steps: number
@@ -241,7 +242,7 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
     outputs: [
       { id: 'video_out', label: 'Video', type: 'video_tensor' },
     ],
-    defaultData: { model: 'cogvideox-2b', scheduler: '', vae_tiling: true, vae_tile_overlap: 0.0, steps: 50, cfg: 6, seed: 0, strength: 0.8, width: 720, height: 480 },
+    defaultData: { model: 'cogvideox-2b', scheduler: '', execution_mode: 'local', vae_tiling: true, vae_tile_overlap: 0.0, steps: 50, cfg: 6, seed: 0, strength: 0.8, width: 720, height: 480 },
   },
   transformersGenerator: {
     type: 'transformersGenerator',
@@ -337,7 +338,7 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
     outputs: [
       { id: 'video_out', label: 'Video', type: 'video_tensor' },
     ],
-    defaultData: { model: 'cogvideox-2b', scheduler: '', vae_tiling: true, vae_tile_overlap: 0.0, steps: 50, cfg: 6, seed: 0, strength: 0.8, width: 720, height: 480 },
+    defaultData: { model: 'cogvideox-2b', scheduler: '', execution_mode: 'local', vae_tiling: true, vae_tile_overlap: 0.0, steps: 50, cfg: 6, seed: 0, strength: 0.8, width: 720, height: 480 },
     paletteHidden: true,
   },
   samplingParams: {

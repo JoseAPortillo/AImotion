@@ -38,6 +38,7 @@ export async function startGeneration(
     seed: number
     scheduler: string
     model: string
+    execution_mode: string
     vae_tiling: boolean
     vae_tile_overlap: number
     num_frames?: number
@@ -60,6 +61,7 @@ export async function startGeneration(
   formData.append('seed', String(params.seed))
   if (params.scheduler) formData.append('scheduler', params.scheduler)
   formData.append('model', params.model)
+  formData.append('execution_mode', params.execution_mode)
   formData.append('vae_tiling', String(params.vae_tiling))
   formData.append('vae_tile_overlap', String(params.vae_tile_overlap))
   if (params.num_frames != null) formData.append('num_frames', String(params.num_frames))

@@ -203,6 +203,7 @@ function AppInner() {
         seed: genNode.seed ?? 0,
         scheduler: genNode.scheduler || '',
         model: genNode.model || 'cogvideox-2b',
+        execution_mode: genNode.execution_mode || 'local',
         vae_tiling: genNode.vae_tiling ?? true,
         vae_tile_overlap: genNode.vae_tile_overlap ?? 0.0,
       }, videoNode?.file)
