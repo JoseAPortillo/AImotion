@@ -162,10 +162,10 @@ function DiffuserGeneratorNode(props: NodeProps) {
     fetch('/models')
       .then(r => r.json())
       .then(data => {
-        const filtered = (data.models || []).filter(
-          (m: ModelEntry) => m.runner === 'diffusers' && m.type !== 'future' && m.type !== 'installable'
+        const all = (data.models || []).filter(
+          (m: ModelEntry) => m.type !== 'future' && m.type !== 'installable'
         )
-        setModels(filtered)
+        setModels(all)
         setModelsLoaded(true)
       })
       .catch(() => setModelsLoaded(true))
@@ -175,7 +175,12 @@ function DiffuserGeneratorNode(props: NodeProps) {
     fetchModels()
   }, [fetchModels])
 
-  const modelConfig = models.find(m => m.key === data.model)
+  const isCloud = data.execution_mode === 'cloud'
+  const visibleModels = useMemo(() =>
+    models.filter(m => isCloud ? m.type === 'api' : m.type !== 'api'),
+    [models, isCloud],
+  )
+  const modelConfig = visibleModels.find(m => m.key === data.model)
   const availableScheds = modelConfig?.schedulers || []
   const defaultSched = modelConfig?.default_scheduler || ''
 
@@ -440,12 +445,41 @@ function DiffuserGeneratorNode(props: NodeProps) {
       )
     }>
       <div style={{ padding: '4px 6px', fontSize: 10, color: '#ccc' }}>
-        <ModelSelect
-          value={data.model}
-          models={models}
-          onChange={handleModelChange}
-          placeholder={modelsLoaded ? 'No models' : 'Loading...'}
-        />
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <ModelSelect
+              value={data.model}
+              models={visibleModels}
+              onChange={handleModelChange}
+              placeholder={modelsLoaded ? (isCloud ? 'No cloud models' : 'No local models') : 'Loading...'}
+            />
+          </div>
+          <button
+            onClick={() => {
+              const newMode = isCloud ? 'local' : 'cloud'
+              const m = models.find(m => newMode === 'cloud' ? m.type === 'api' : m.type !== 'api')
+              updateNodeData(props.id, {
+                execution_mode: newMode,
+                model: m?.key || '',
+                scheduler: '',
+              })
+            }}
+            title={isCloud ? 'Switch to Local mode' : 'Switch to Cloud mode'}
+            style={{
+              padding: '3px 6px',
+              borderRadius: 4,
+              border: '1px solid #444',
+              fontSize: 10,
+              cursor: 'pointer',
+              background: isCloud ? '#1e3a5f' : '#2a2a2a',
+              color: isCloud ? '#60a5fa' : '#ccc',
+              whiteSpace: 'nowrap',
+              lineHeight: 1.2,
+            }}
+          >
+            {isCloud ? '☁ Cloud' : '💻 Local'}
+          </button>
+        </div>
 
         {modelConfig && (
           <div style={{ marginTop: 4, padding: 4, background: '#131313', borderRadius: 4, fontSize: 9, color: '#777', lineHeight: 1.5 }}>
