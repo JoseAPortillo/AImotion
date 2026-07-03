@@ -210,7 +210,8 @@ class ModelCatalog:
 
     def _make_installed_variant(self, inst) -> ModelVariant:
         family = self._find_family_for_installed(inst)
-        inputs = family.inputs if family else _infer_inputs(inst.pipeline_class)
+        inferred = _infer_inputs(inst.pipeline_class)
+        inputs = inferred | (family.inputs if family else {})
         defaults = inst.defaults or (family.defaults if family else {"steps": 50, "cfg": 7.0})
         schedulers = inst.schedulers or (family.schedulers if family else {})
         default_scheduler = inst.default_scheduler or (family.default_scheduler if family else "")
