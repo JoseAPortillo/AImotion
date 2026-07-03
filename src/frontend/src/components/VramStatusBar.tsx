@@ -28,15 +28,30 @@ export default function VramStatusBar() {
   }, [])
 
   const blocked = !data || !data.gpu_available
-
   const pct = data?.vram_percent ?? 0
   const used = data?.vram_used_gb ?? 0
   const total = data?.vram_total_gb ?? 0
 
-  let barColor = '#4ade80'
-  if (blocked) barColor = '#555'
-  else if (data!.alert || pct > 85) barColor = '#ef4444'
-  else if (pct > 65) barColor = '#facc15'
+  const stripeBg = (color: string) => `repeating-linear-gradient(
+    -45deg,
+    ${color} 0px,
+    ${color} 3px,
+    ${color}99 3px,
+    ${color}99 6px
+  )`
+
+  let usedColor = '#5dade2'
+  let freeColor = '#1a2a3e'
+  if (blocked) {
+    usedColor = '#444'
+    freeColor = '#1a1a1a'
+  } else if (data!.alert || pct > 85) {
+    usedColor = '#e74c3c'
+    freeColor = '#2e1a1a'
+  } else if (pct > 65) {
+    usedColor = '#f39c12'
+    freeColor = '#2e261a'
+  }
 
   return (
     <div
@@ -47,7 +62,6 @@ export default function VramStatusBar() {
         fontSize: 12,
         color: '#888',
         background: '#111',
-        borderRadius: 4,
         padding: '3px 10px',
         border: blocked ? '1px solid #2a2a2a' : '1px solid #333',
         whiteSpace: 'nowrap',
@@ -58,10 +72,9 @@ export default function VramStatusBar() {
       <span style={{ fontWeight: 600, color: blocked ? '#555' : '#aaa' }}>VRAM</span>
       <div
         style={{
-          width: 75,
-          height: 8,
-          background: '#222',
-          borderRadius: 3,
+          width: 120,
+          height: 12,
+          background: freeColor,
           overflow: 'hidden',
         }}
       >
@@ -69,9 +82,8 @@ export default function VramStatusBar() {
           style={{
             width: blocked ? 100 : `${Math.min(pct, 100)}%`,
             height: '100%',
-            background: barColor,
-            borderRadius: 3,
-            transition: 'width .3s, background .3s',
+            background: stripeBg(usedColor),
+            transition: 'width .3s',
           }}
         />
       </div>
