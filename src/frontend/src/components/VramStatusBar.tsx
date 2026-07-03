@@ -32,26 +32,8 @@ export default function VramStatusBar() {
   const used = data?.vram_used_gb ?? 0
   const total = data?.vram_total_gb ?? 0
 
-  const stripeBg = (color: string) => `repeating-linear-gradient(
-    -45deg,
-    ${color} 0px,
-    ${color} 3px,
-    ${color}99 3px,
-    ${color}99 6px
-  )`
-
-  let usedColor = '#5dade2'
-  let freeColor = '#1a2a3e'
-  if (blocked) {
-    usedColor = '#444'
-    freeColor = '#1a1a1a'
-  } else if (data!.alert || pct > 85) {
-    usedColor = '#e74c3c'
-    freeColor = '#2e1a1a'
-  } else if (pct > 65) {
-    usedColor = '#f39c12'
-    freeColor = '#2e261a'
-  }
+  const color = blocked ? '#555' : '#5dade2'
+  const freeBg = blocked ? '#1a1a1a' : '#142438'
 
   return (
     <div
@@ -74,7 +56,7 @@ export default function VramStatusBar() {
         style={{
           width: 120,
           height: 12,
-          background: freeColor,
+          background: freeBg,
           overflow: 'hidden',
         }}
       >
@@ -82,7 +64,8 @@ export default function VramStatusBar() {
           style={{
             width: blocked ? 100 : `${Math.min(pct, 100)}%`,
             height: '100%',
-            background: stripeBg(usedColor),
+            backgroundImage: `radial-gradient(circle, ${color} 1px, transparent 1px)`,
+            backgroundSize: '4px 4px',
             transition: 'width .3s',
           }}
         />
