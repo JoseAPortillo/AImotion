@@ -4,8 +4,13 @@ from app.services.runners.registry import RunnerRegistry
 
 
 def test_adapters_status_no_diffusers(client):
-    resp = client.get("/adapters/status")
-    assert resp.status_code == 503
+    prev = RunnerRegistry._instances.pop("diffusers", None)
+    try:
+        resp = client.get("/adapters/status")
+        assert resp.status_code == 503
+    finally:
+        if prev:
+            RunnerRegistry.register("diffusers", prev)
 
 
 @pytest.fixture

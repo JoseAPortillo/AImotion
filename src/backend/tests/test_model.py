@@ -11,6 +11,7 @@ def test_model_imports():
 @pytest.mark.integration
 def test_model_loads():
     """Load the actual LTX-Video model. Requires GPU and model weights."""
+    pytest.importorskip("torch")
     import torch
     if not torch.cuda.is_available():
         pytest.skip("CUDA not available")
@@ -24,6 +25,7 @@ def test_model_loads():
 @pytest.mark.integration
 def test_model_generates_output():
     """Generate a short video with LTX-Video. Requires GPU."""
+    pytest.importorskip("torch")
     import torch
     if not torch.cuda.is_available():
         pytest.skip("CUDA not available")

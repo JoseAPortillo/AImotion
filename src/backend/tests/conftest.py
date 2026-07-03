@@ -11,6 +11,10 @@ from app.services.runners.base import BaseRunner
 
 class MockRunner(BaseRunner):
     runner_key = "mock"
+    def __init__(self):
+        from unittest.mock import MagicMock
+        self._gen = MagicMock()
+        self._gen._active_lora = None
     async def generate(self, params, progress_callback=None, cancel_event=None):
         from app.services.runners.base import GenerateResult
         return GenerateResult(url="/mock/output.png", media_type="image")

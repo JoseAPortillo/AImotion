@@ -32,6 +32,7 @@ class TestVramEndpoint:
 
     @pytest.mark.integration
     def test_vram_gpu_values(self, client):
+        pytest.importorskip("torch")
         import torch
         if not torch.cuda.is_available():
             pytest.skip("CUDA not available")

@@ -25,6 +25,7 @@ def test_health_gpu_field_types(client):
 @pytest.mark.integration
 def test_health_gpu_detection(client):
     """When CUDA is available, GPU fields should be populated."""
+    pytest.importorskip("torch")
     import torch
     if not torch.cuda.is_available():
         pytest.skip("CUDA not available")

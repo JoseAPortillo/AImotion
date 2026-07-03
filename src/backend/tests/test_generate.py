@@ -104,6 +104,6 @@ def test_generate_width_exceeds_max(client, sample_video):
         resp = client.post(
             "/generate",
             files={"video": ("test.mp4", f, "video/mp4")},
-            data={"prompt": "test", "width": 1024},
+            data={"prompt": "test", "width": 2048},
         )
     assert resp.status_code == 422
