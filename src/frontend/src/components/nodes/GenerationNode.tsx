@@ -6,6 +6,7 @@ import NodeWrapper, { CollapsibleSection, InfoLabel, FIELD_DESCS } from './NodeW
 import { useGraphStore } from '../../store/graph'
 import { useToastStore } from '../../store/toast'
 import { startGeneration, pollTask, cancelTask, type TaskStatus } from '../../api/backend'
+import ModelSelect from '../ModelSelect'
 
 const schedLabels: Record<string, string> = {
   cogvideox_ddim: 'DDIM',
@@ -138,8 +139,7 @@ function GenerationNode(props: NodeProps) {
       ? `Default (${schedLabels[defaultSched] || defaultSched})`
       : 'Default'
 
-  const handleModelChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    const key = e.target.value
+  const handleModelChange = useCallback((key: string) => {
     const cfg = models.find(m => m.key === key)
     const defs = cfg?.defaults || {}
     const inputs = cfg?.inputs || {}
@@ -357,23 +357,12 @@ function GenerationNode(props: NodeProps) {
       )
     }>
       <div style={{ padding: '4px 6px', fontSize: 10, color: '#ccc' }}>
-        <select
+        <ModelSelect
           value={data.model}
+          models={models}
           onChange={handleModelChange}
-          onFocus={fetchModels}
-          style={selectStyle}
-        >
-          {!modelsLoaded && <option value="">Loading...</option>}
-          {modelsLoaded && models.length === 0 && <option value="">No models</option>}
-          {models.map(m => (
-            <option key={m.key} value={m.key}>
-              {m.name}
-            </option>
-          ))}
-          {modelsLoaded && models.length > 0 && data.model && !models.find(m => m.key === data.model) && (
-            <option value={data.model} disabled>{data.model} (unavailable)</option>
-          )}
-        </select>
+          placeholder={modelsLoaded ? 'No models' : 'Loading...'}
+        />
 
         {modelConfig && (
           <div style={{ marginTop: 4, padding: 4, background: '#131313', borderRadius: 4, fontSize: 9, color: '#777', lineHeight: 1.5 }}>

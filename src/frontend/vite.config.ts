@@ -11,6 +11,8 @@ export default defineConfig({
       '/results': 'http://localhost:8000',
       '/prompt': 'http://localhost:8000',
       '/models': 'http://localhost:8000',
+      '/hardware': 'http://localhost:8000',
+      '/credentials': 'http://localhost:8000',
     },
   },
 })

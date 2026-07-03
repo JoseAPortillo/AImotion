@@ -19,6 +19,8 @@ import { NODE_DEFINITIONS, getPortTypeFromHandle } from './types/nodes'
 import Sidebar from './components/Sidebar'
 import NodeInspector from './components/NodeInspector'
 import ModelManager from './components/ModelManager'
+import CredentialManager from './components/CredentialManager'
+import VramStatusBar from './components/VramStatusBar'
 import { useCallback, useEffect, useState, useRef, type DragEvent } from 'react'
 import { checkHealth, startGeneration, pollTask, type TaskStatus } from './api/backend'
 import type { PromptData, ImageInputData, VideoInputData, GenerationData } from './types/nodes'
@@ -315,11 +317,15 @@ function AppInner() {
               {generating ? 'Generating...' : 'Generate'}
             </button>
           </Panel>
-          <Panel position="bottom-center" style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center', marginBottom: 4 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#555', letterSpacing: 1 }}>AImotion</div>
+          <Panel position="top-center">
+            <VramStatusBar />
+          </Panel>
+          <Panel position="bottom-center" style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 4 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#555', letterSpacing: 1 }}>AImation</div>
             <div style={{ fontSize: 9, color: '#444' }}>beta v0.1.0</div>
           </Panel>
-          <Panel position="top-right">
+          <Panel position="top-right" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <CredentialManager />
             <ModelManager backendOk={backendOk} />
           </Panel>
         </ReactFlow>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useGraphStore } from '../store/graph'
+import ModelSelect from './ModelSelect'
 import {
   NODE_DEFINITIONS,
   RESOLUTION_PRESETS,
@@ -333,8 +334,7 @@ export default function NodeInspector() {
         const scheds = modelCfg?.schedulers || []
         const defSched = modelCfg?.default_scheduler || ''
 
-        const handleModel = (e: React.ChangeEvent<HTMLSelectElement>) => {
-          const key = e.target.value
+        const handleModel = (key: string) => {
           const cfg = models.find(m => m.key === key)
           handleChange('model', key)
           handleChange('scheduler', cfg?.default_scheduler || '')
@@ -345,16 +345,12 @@ export default function NodeInspector() {
             <FieldWrap>
               <Label desc={FIELD_DESCS.model}>
                 Model
-                <select style={inputStyle} value={data.model} onChange={handleModel}>
-                  {!modelsLoaded && <option value="">Loading...</option>}
-                  {modelsLoaded && models.length === 0 && <option value="">No models</option>}
-                  {models.map(m => (
-                    <option key={m.key} value={m.key}>{m.name}</option>
-                  ))}
-                  {modelsLoaded && data.model && !models.find(m => m.key === data.model) && (
-                    <option value={data.model} disabled>{data.model} (unavailable)</option>
-                  )}
-                </select>
+                <ModelSelect
+                  value={data.model}
+                  models={models}
+                  onChange={handleModel}
+                  placeholder={modelsLoaded ? 'No models' : 'Loading...'}
+                />
               </Label>
             </FieldWrap>
 
