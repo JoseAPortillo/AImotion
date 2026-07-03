@@ -27,15 +27,15 @@ export default function VramStatusBar() {
     return () => { cancelled = true; clearInterval(iv) }
   }, [])
 
-  if (!data || !data.gpu_available) return null
+  const blocked = !data || !data.gpu_available
 
-  const pct = data.vram_percent ?? 0
-  const used = data.vram_used_gb ?? 0
-  const total = data.vram_total_gb ?? 0
-  const free = data.vram_free_gb ?? 0
+  const pct = data?.vram_percent ?? 0
+  const used = data?.vram_used_gb ?? 0
+  const total = data?.vram_total_gb ?? 0
 
   let barColor = '#4ade80'
-  if (data.alert || pct > 85) barColor = '#ef4444'
+  if (blocked) barColor = '#555'
+  else if (data!.alert || pct > 85) barColor = '#ef4444'
   else if (pct > 65) barColor = '#facc15'
 
   return (
@@ -49,12 +49,13 @@ export default function VramStatusBar() {
         background: '#111',
         borderRadius: 4,
         padding: '3px 10px',
-        border: '1px solid #333',
+        border: blocked ? '1px solid #2a2a2a' : '1px solid #333',
         whiteSpace: 'nowrap',
+        opacity: blocked ? 0.6 : 1,
       }}
-      title={data.message ?? `${data.gpu_name ?? 'GPU'}`}
+      title={blocked ? (!data ? 'Checking GPU...' : 'No GPU available') : (data!.message ?? `${data!.gpu_name ?? 'GPU'}`)}
     >
-      <span style={{ fontWeight: 600, color: '#aaa' }}>VRAM</span>
+      <span style={{ fontWeight: 600, color: blocked ? '#555' : '#aaa' }}>VRAM</span>
       <div
         style={{
           width: 75,
@@ -66,7 +67,7 @@ export default function VramStatusBar() {
       >
         <div
           style={{
-            width: `${Math.min(pct, 100)}%`,
+            width: blocked ? 100 : `${Math.min(pct, 100)}%`,
             height: '100%',
             background: barColor,
             borderRadius: 3,
@@ -74,8 +75,8 @@ export default function VramStatusBar() {
           }}
         />
       </div>
-      <span style={{ color: pct > 65 ? barColor : '#888' }}>
-        {used.toFixed(1)} / {total.toFixed(0)} GB
+      <span style={{ color: blocked ? '#555' : '#888' }}>
+        {blocked ? (!data ? 'checking...' : 'blocked') : `${used.toFixed(1)} / ${total.toFixed(0)} GB`}
       </span>
     </div>
   )
