@@ -10,7 +10,7 @@ def test_health_response_shape(client):
     resp = client.get("/health")
     data = resp.json()
     assert data["status"] == "ok"
-    assert data["service"] == "AImotion API"
+    assert data["service"] == "AImation API"
     assert "gpu_available" in data
 
 

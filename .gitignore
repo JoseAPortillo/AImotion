@@ -6,4 +6,6 @@ __pycache__/
 .env
 src/backend/uploads/
 src/backend/results/
+.credentials.key
+credentials.json
 .run_backend.ps1

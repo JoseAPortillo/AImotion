@@ -73,95 +73,18 @@ def _infer_params_from_signature(cls: type) -> dict | None:
     return params if params else None
 
 
-def _apply_family_defaults(pipeline_class: str, params: dict):
-    if "CogVideoX" in pipeline_class:
-        params.setdefault("num_frames", {"has_default": True, "default": 49})
-        params.setdefault("max_sequence_length", {"has_default": True, "default": 226})
-    elif "Wan" in pipeline_class:
-        params.setdefault("num_frames", {"has_default": True, "default": 81})
-        params.setdefault("width", {"has_default": True, "default": 832})
-        params.setdefault("height", {"has_default": True, "default": 480})
-        params.setdefault("max_sequence_length", {"has_default": True, "default": 512})
-    elif pipeline_class in ("LTXPipeline",):
-        params.setdefault("width", {"has_default": True, "default": 704})
-        params.setdefault("height", {"has_default": True, "default": 512})
-        params.setdefault("num_frames", {"has_default": True, "default": 97})
-        params.setdefault("max_sequence_length", {"has_default": True, "default": 256})
-
-
 def infer_pipeline_params(pipeline_class: str) -> dict | None:
     if not pipeline_class:
         return None
 
-    params = None
     try:
         cls = _resolve_pipeline_class(pipeline_class)
         if cls is not None:
-            params = _infer_params_from_signature(cls)
+            return _infer_params_from_signature(cls)
     except Exception as e:
         logger.warning("Dynamic pipeline inspection failed for %s: %s", pipeline_class, e)
 
-    if params is None:
-        params = _legacy_infer_pipeline_params(pipeline_class)
-
-    if params:
-        _apply_family_defaults(pipeline_class, params)
-
-    return params
-
-
-def _legacy_infer_pipeline_params(pipeline_class: str) -> dict | None:
-    if not pipeline_class:
-        return None
-
-    params: dict[str, dict] = {}
-    params["prompt"] = {"has_default": False, "default": None}
-    params["num_inference_steps"] = {"has_default": True, "default": 50}
-    params["guidance_scale"] = {"has_default": True, "default": 7.0}
-
-    if "StableVideoDiffusion" in pipeline_class:
-        del params["prompt"]
-        del params["guidance_scale"]
-        params["image"] = {"has_default": False, "default": None}
-        params["num_frames"] = {"has_default": True, "default": 25}
-        params["width"] = {"has_default": True, "default": 1024}
-        params["height"] = {"has_default": True, "default": 576}
-        params["min_guidance_scale"] = {"has_default": True, "default": 1.0}
-        params["max_guidance_scale"] = {"has_default": True, "default": 3.0}
-        params["decode_chunk_size"] = {"has_default": True, "default": 14}
-        params["fps"] = {"has_default": True, "default": 7}
-        params["motion_bucket_id"] = {"has_default": True, "default": 127}
-        params["noise_aug_strength"] = {"has_default": True, "default": 0.02}
-    elif "ImageToVideo" in pipeline_class:
-        params["image"] = {"has_default": False, "default": None}
-        params["strength"] = {"has_default": True, "default": 0.8}
-    elif "VideoToVideo" in pipeline_class:
-        params["video"] = {"has_default": False, "default": None}
-        params["strength"] = {"has_default": True, "default": 0.8}
-    elif "Img2Img" in pipeline_class:
-        params["image"] = {"has_default": False, "default": None}
-        params["strength"] = {"has_default": True, "default": 0.8}
-
-    if "CogVideoX" in pipeline_class:
-        params["num_frames"] = {"has_default": True, "default": 49}
-        params["max_sequence_length"] = {"has_default": True, "default": 226}
-    elif "Wan" in pipeline_class:
-        params["num_frames"] = {"has_default": True, "default": 81}
-        params["width"] = {"has_default": True, "default": 832}
-        params["height"] = {"has_default": True, "default": 480}
-        params["max_sequence_length"] = {"has_default": True, "default": 512}
-    elif "StableVideoDiffusion" in pipeline_class:
-        pass
-    elif "StableDiffusionXL" in pipeline_class or "StableDiffusion" in pipeline_class:
-        params["width"] = {"has_default": True, "default": 1024}
-        params["height"] = {"has_default": True, "default": 1024}
-    elif pipeline_class in ("LTXPipeline",):
-        params["width"] = {"has_default": True, "default": 704}
-        params["height"] = {"has_default": True, "default": 512}
-        params["num_frames"] = {"has_default": True, "default": 97}
-        params["max_sequence_length"] = {"has_default": True, "default": 256}
-
-    return params
+    return None
 
 
 class DiffusersGenerator:
@@ -174,7 +97,7 @@ class DiffusersGenerator:
     # ---- loading ----
 
     def _load_pipe(self, model_name: str, dtype, token=None, pipeline_class_name: str | None = None):
-        from diffusers import DiffusionPipeline, StableDiffusionXLPipeline, StableDiffusionPipeline
+        from diffusers import DiffusionPipeline
         from huggingface_hub import HfApi, hf_hub_download
 
         mod_cls = None
@@ -206,7 +129,7 @@ class DiffusersGenerator:
             logger.info(f"Pipeline loaded on {self.device}: {type(pipe).__name__}({model_name})")
             return pipe
 
-        # Single-file checkpoint
+        # Single-file checkpoint — try generic auto-detect first
         checkpoint_file = weight_files[0]
         logger.info(f"Detected single-file checkpoint: {checkpoint_file}")
         local_path = hf_hub_download(
@@ -216,32 +139,67 @@ class DiffusersGenerator:
         )
         logger.info(f"Downloaded checkpoint to: {local_path}")
 
-        # Fast path — try vanilla load first (checkpoint may have all components)
-        for pipe_cls in (StableDiffusionXLPipeline, StableDiffusionPipeline):
-            try:
-                pipe = pipe_cls.from_single_file(local_path, torch_dtype=dtype)
-                logger.info(f"Loaded as {pipe_cls.__name__} from single file (full checkpoint)")
-                pipe.to(self.device)
-                if hasattr(pipe, "vae") and hasattr(pipe.vae, "enable_tiling"):
-                    try:
-                        pipe.vae.enable_tiling()
-                    except Exception:
-                        logger.debug(f"VAE tiling not supported for {type(pipe.vae).__name__}")
-                self._log_vram()
-                logger.info(f"Pipeline loaded on {self.device}: {type(pipe).__name__}({model_name})")
-                return pipe
-            except Exception:
-                logger.info(f"{pipe_cls.__name__} vanilla load failed, will retry with components")
+        pipe = self._try_load_single_file(local_path, dtype, mod_cls)
+        if pipe is not None:
+            pipe.to(self.device)
+            self._enable_vae_tiling(pipe)
+            self._log_vram()
+            logger.info(f"Pipeline loaded on {self.device}: {type(pipe).__name__}({model_name})")
+            return pipe
 
-        # Slow path — checkpoint is missing one or more subcomponents; load everything from base models
-        logger.info("Loading all components from base models...")
+        # Last resort: component-by-component loading for SDXL/SD single-file checkpoints
+        # that are missing subcomponent weights in the checkpoint itself.
+        pipe = self._try_load_single_file_with_components(local_path, dtype)
+        if pipe is not None:
+            pipe.to(self.device)
+            self._enable_vae_tiling(pipe)
+            self._log_vram()
+            logger.info(f"Pipeline loaded on {self.device}: {type(pipe).__name__}({model_name})")
+            return pipe
+
+        raise ValueError(
+            f"Could not load {model_name} — tried auto-detect via {mod_cls or 'DiffusionPipeline'}, "
+            f"and component-wise fallback for SDXL/SD."
+        )
+
+    @staticmethod
+    def _enable_vae_tiling(pipe):
+        if hasattr(pipe, "vae") and hasattr(pipe.vae, "enable_tiling"):
+            try:
+                pipe.vae.enable_tiling()
+            except Exception:
+                logger.debug(f"VAE tiling not supported for {type(pipe.vae).__name__}")
+
+    @staticmethod
+    def _try_load_single_file(local_path: str, dtype, pipe_cls: type | None = None):
+        from diffusers import DiffusionPipeline
+
+        if pipe_cls is not None and hasattr(pipe_cls, "from_single_file"):
+            try:
+                return pipe_cls.from_single_file(local_path, torch_dtype=dtype)
+            except Exception as e:
+                logger.info(f"Explicit {pipe_cls.__name__} from_single_file failed: {e}")
+
+        try:
+            return DiffusionPipeline.from_single_file(local_path, torch_dtype=dtype)
+        except Exception as e:
+            logger.info(f"Auto-detect from_single_file failed: {e}")
+
+        return None
+
+    @staticmethod
+    def _try_load_single_file_with_components(local_path: str, dtype):
+        from diffusers import StableDiffusionXLPipeline, StableDiffusionPipeline
         from diffusers import AutoencoderKL, UNet2DConditionModel
         from transformers import CLIPTextModel, CLIPTextModelWithProjection, CLIPTokenizer
 
+        logger.info("Trying SDXL component-by-component loading as last resort...")
         try:
             vae = AutoencoderKL.from_pretrained("madebyollin/sdxl-vae-fp16-fix", torch_dtype=dtype)
         except Exception:
-            vae = AutoencoderKL.from_pretrained("stabilityai/stable-diffusion-xl-base-1.0", subfolder="vae", torch_dtype=dtype)
+            vae = AutoencoderKL.from_pretrained(
+                "stabilityai/stable-diffusion-xl-base-1.0", subfolder="vae", torch_dtype=dtype,
+            )
 
         try:
             unet = UNet2DConditionModel.from_pretrained(
@@ -264,39 +222,32 @@ class DiffusersGenerator:
                 torch_dtype=dtype,
             )
             logger.info("Loaded as SDXL single-file checkpoint with all components")
+            return pipe
         except Exception as e:
-            logger.warning(f"SDXL with components failed: {e}, trying SD with components")
-            try:
-                unet = UNet2DConditionModel.from_pretrained(
-                    "runwayml/stable-diffusion-v1-5", subfolder="unet", torch_dtype=dtype,
-                )
-                text_encoder = CLIPTextModel.from_pretrained(
-                    "runwayml/stable-diffusion-v1-5", subfolder="text_encoder", torch_dtype=dtype,
-                )
-                tokenizer = CLIPTokenizer.from_pretrained("runwayml/stable-diffusion-v1-5", subfolder="tokenizer")
+            logger.warning(f"SDXL with components failed: {e}")
 
-                pipe = StableDiffusionPipeline.from_single_file(
-                    local_path,
-                    unet=unet, vae=vae,
-                    text_encoder=text_encoder, tokenizer=tokenizer,
-                    torch_dtype=dtype,
-                )
-                logger.info("Loaded as SD single-file checkpoint with all components")
-            except Exception as e2:
-                raise ValueError(
-                    f"Could not load {model_name} — tried vanilla SDXL/SD and with all components. "
-                    f"SDXL error: {e}. SD error: {e2}"
-                )
+        logger.info("Trying SD 1.5 component-by-component loading as last resort...")
+        try:
+            unet = UNet2DConditionModel.from_pretrained(
+                "runwayml/stable-diffusion-v1-5", subfolder="unet", torch_dtype=dtype,
+            )
+            text_encoder = CLIPTextModel.from_pretrained(
+                "runwayml/stable-diffusion-v1-5", subfolder="text_encoder", torch_dtype=dtype,
+            )
+            tokenizer = CLIPTokenizer.from_pretrained("runwayml/stable-diffusion-v1-5", subfolder="tokenizer")
 
-        pipe.to(self.device)
-        if hasattr(pipe, "vae") and hasattr(pipe.vae, "enable_tiling"):
-            try:
-                pipe.vae.enable_tiling()
-            except Exception:
-                logger.debug(f"VAE tiling not supported for {type(pipe.vae).__name__}")
-        self._log_vram()
-        logger.info(f"Pipeline loaded on {self.device}: {type(pipe).__name__}({model_name})")
-        return pipe
+            pipe = StableDiffusionPipeline.from_single_file(
+                local_path,
+                unet=unet, vae=vae,
+                text_encoder=text_encoder, tokenizer=tokenizer,
+                torch_dtype=dtype,
+            )
+            logger.info("Loaded as SD single-file checkpoint with all components")
+            return pipe
+        except Exception as e2:
+            logger.warning(f"SD with components failed: {e2}")
+
+        return None
 
     def _ensure_pipe(self, model_key: str):
         from app.services.generator import get_model_config

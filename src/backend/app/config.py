@@ -7,7 +7,7 @@ class Settings(BaseSettings):
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
 
-    app_name: str = "AImotion API"
+    app_name: str = "AImation API"
     debug: bool = True
     upload_dir: str = "uploads"
     results_dir: str = "results"

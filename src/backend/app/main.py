@@ -11,7 +11,10 @@ from app.api.prompt import router as prompt_router
 from app.api.vlm import router as vlm_router
 from app.api.llm import router as llm_router
 from app.api.adapters import router as adapters_router
+from app.api.graph import router as graph_router
+from app.api.hardware import router as hardware_router
 from app.api.models import router as models_router
+from app.api.credentials import router as credentials_router
 from app.config import settings
 from app.services.runners.registry import RunnerRegistry
 from app.services.runners.diffusers import DiffusersRunner
@@ -36,9 +39,9 @@ async def lifespan(app: FastAPI):
     RunnerRegistry.register("api", APIRunner())
     logger.info("Built-in runners registered")
 
-    logger.info("AImotion backend started")
+    logger.info("AImation backend started")
     yield
-    logger.info("AImotion backend shutting down")
+    logger.info("AImation backend shutting down")
 
 
 app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
@@ -50,7 +53,10 @@ app.include_router(prompt_router)
 app.include_router(vlm_router)
 app.include_router(llm_router)
 app.include_router(adapters_router)
+app.include_router(graph_router)
+app.include_router(hardware_router)
 app.include_router(models_router)
+app.include_router(credentials_router)
 
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(static_dir, exist_ok=True)

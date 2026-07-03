@@ -5,6 +5,26 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.config import settings
+from app.services.runners.registry import RunnerRegistry
+from app.services.runners.base import BaseRunner
+
+
+class MockRunner(BaseRunner):
+    runner_key = "mock"
+    async def generate(self, params, progress_callback=None, cancel_event=None):
+        from app.services.runners.base import GenerateResult
+        return GenerateResult(url="/mock/output.png", media_type="image")
+    def load(self, model_key):
+        pass
+    def unload(self):
+        pass
+    def get_accepted_params(self, model_key):
+        return {}
+
+
+RunnerRegistry.register("diffusers", MockRunner())
+RunnerRegistry.register("gguf", MockRunner())
+RunnerRegistry.register("api", MockRunner())
 
 
 @pytest.fixture
