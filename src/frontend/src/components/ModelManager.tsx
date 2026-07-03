@@ -75,6 +75,12 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
   const [progress, setProgress] = useState<InstallProgress | null>(null)
   const [modelTab, setModelTab] = useState<'installed' | 'builtin' | 'other'>('installed')
   const [customCacheDir, setCustomCacheDir] = useState('')
+  const [creds, setCreds] = useState<Record<string, boolean>>({})
+  const [editingCred, setEditingCred] = useState<string | null>(null)
+  const [credInput, setCredInput] = useState('')
+  const [savingCred, setSavingCred] = useState<string | null>(null)
+  const [addingCustom, setAddingCustom] = useState(false)
+  const [customInput, setCustomInput] = useState('')
   const ref = useRef<HTMLDivElement>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const mountedRef = useRef(true)
@@ -87,15 +93,22 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
 
   const fetchAll = useCallback(async () => {
     try {
-      const [mRes, hRes] = await Promise.all([
+      const [mRes, hRes, cRes] = await Promise.all([
         fetch('/models'),
         fetch('/models/status'),
+        fetch('/credentials'),
       ])
       if (mRes.ok) {
         const data = await mRes.json()
         setModels(data.models || [])
       }
       if (hRes.ok) setHealth(await hRes.json())
+      if (cRes.ok) {
+        const cd = await cRes.json()
+        const map: Record<string, boolean> = {}
+        for (const s of (cd.services || [])) map[s] = true
+        setCreds(map)
+      }
     } catch { /* offline */ }
   }, [])
 
@@ -275,6 +288,35 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
       await fetch(`/models/${modelKey}`, { method: 'DELETE' })
       await fetchAll()
     } catch { /* ignore */ }
+  }
+
+  const handleCredSave = async (service: string) => {
+    if (!credInput.trim()) return
+    setSavingCred(service)
+    try {
+      await fetch(`/credentials/${service}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ api_key: credInput.trim() }),
+      })
+      setEditingCred(null)
+      setCredInput('')
+      await fetchAll()
+    } catch { /* ignore */ }
+    setSavingCred(null)
+  }
+
+  const handleCredDelete = async (service: string) => {
+    await fetch(`/credentials/${service}`, { method: 'DELETE' })
+    await fetchAll()
+  }
+
+  const handleAddCustom = () => {
+    const name = customInput.trim().toLowerCase()
+    if (!name) return
+    setEditingCred(name)
+    setCredInput('')
+    setCustomInput('')
   }
 
   const handleSaveAlias = async (modelKey: string) => {
@@ -702,21 +744,117 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
               )}
 
               {modelTab === 'other' && (
-                other.length === 0 ? (
-                  <div style={{ fontSize: 11, color: '#666', padding: '8px', textAlign: 'center' }}>
-                    No API or pending models
-                  </div>
-                ) : (
-                  other.map(m => (
-                    <div key={m.key} style={{ display: 'flex', gap: 6, padding: '4px 8px', fontSize: 12, opacity: 0.5 }}>
-                      <span style={{ fontWeight: 600 }}>{m.name}</span>
-                      <span style={{ fontSize: 10, color: '#666', marginLeft: 'auto', textAlign: 'right' }}>
-                        {m.type === 'api' ? 'API' : m.type === 'installable' ? 'Installable' : 'Pending integration'}
-                        {m.hf_name && <span style={{ display: 'block', fontSize: 9, color: '#555' }}>{m.hf_name}</span>}
-                      </span>
+                (() => {
+                  const defaultServices = ['kling', 'seedance2']
+                  const extraServices = Object.keys(creds).filter(s => !defaultServices.includes(s))
+                  const allServices = [...defaultServices, ...extraServices]
+
+                  return (
+                    <div>
+                      <div style={{ maxHeight: 200, overflowY: 'auto', marginBottom: 6 }}>
+                        {allServices.map(service => {
+                          const configured = creds[service] ?? false
+                          return (
+                            <div key={service} style={{
+                              display: 'flex', alignItems: 'center', gap: 6,
+                              padding: '4px 6px', fontSize: 12,
+                              borderBottom: '1px solid #222',
+                            }}>
+                              <span style={{ flex: 1, textTransform: 'capitalize', color: '#ccc' }}>{service}</span>
+                              {editingCred === service ? (
+                                <div style={{ display: 'flex', gap: 4, flex: 1, justifyContent: 'flex-end' }}>
+                                  <input
+                                    autoFocus
+                                    type="password"
+                                    value={credInput}
+                                    onChange={e => setCredInput(e.target.value)}
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter') handleCredSave(service)
+                                      if (e.key === 'Escape') { setEditingCred(null); setCredInput('') }
+                                    }}
+                                    style={{
+                                      flex: 1, background: '#0f0f0f', border: '1px solid #555',
+                                      borderRadius: 3, padding: '2px 4px', fontSize: 11,
+                                      color: '#ccc', outline: 'none',
+                                    }}
+                                    placeholder="Paste API key..."
+                                  />
+                                  <button onClick={() => handleCredSave(service)} disabled={savingCred === service}
+                                    style={{ padding: '2px 6px', borderRadius: 3, border: '1px solid #444', cursor: 'pointer', background: '#4ade80', color: '#0f0f0f', fontSize: 10, lineHeight: 1.3 }}>
+                                    {savingCred === service ? '...' : 'Save'}
+                                  </button>
+                                  <button onClick={() => { setEditingCred(null); setCredInput('') }}
+                                    style={{ padding: '2px 6px', borderRadius: 3, border: '1px solid #444', cursor: 'pointer', background: '#111', color: '#ccc', fontSize: 10, lineHeight: 1.3 }}>
+                                    Cancel
+                                  </button>
+                                </div>
+                              ) : (
+                                <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                                  <span style={{ fontSize: 10, color: configured ? '#4ade80' : '#555' }}>
+                                    {configured ? '✓ configured' : '—'}
+                                  </span>
+                                  <button onClick={() => { setEditingCred(service); setCredInput('') }}
+                                    style={{ padding: '2px 6px', borderRadius: 3, border: '1px solid #444', cursor: 'pointer', background: '#111', color: '#888', fontSize: 10, lineHeight: 1.3 }}>
+                                    {configured ? 'Update' : 'Set'}
+                                  </button>
+                                  {configured && (
+                                    <button onClick={() => handleCredDelete(service)}
+                                      style={{ padding: '2px 6px', borderRadius: 3, border: '1px solid #444', cursor: 'pointer', background: '#111', color: '#ef4444', fontSize: 10, lineHeight: 1.3 }}>
+                                      Del
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+
+                      {addingCustom ? (
+                        <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
+                          <input
+                            autoFocus
+                            value={customInput}
+                            onChange={e => setCustomInput(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') { handleAddCustom(); setAddingCustom(false) }
+                              if (e.key === 'Escape') { setAddingCustom(false); setCustomInput('') }
+                            }}
+                            style={{
+                              flex: 1, background: '#0f0f0f', border: '1px solid #555',
+                              borderRadius: 3, padding: '3px 6px', fontSize: 11,
+                              color: '#ccc', outline: 'none',
+                            }}
+                            placeholder="Provider name..."
+                          />
+                          <button onClick={() => { handleAddCustom(); setAddingCustom(false) }}
+                            disabled={!customInput.trim()}
+                            style={{ padding: '2px 8px', borderRadius: 3, border: '1px solid #444', cursor: 'pointer', background: '#2563eb', color: '#fff', fontSize: 10, lineHeight: 1.3 }}>
+                            Add
+                          </button>
+                          <button onClick={() => { setAddingCustom(false); setCustomInput('') }}
+                            style={{ padding: '2px 8px', borderRadius: 3, border: '1px solid #444', cursor: 'pointer', background: '#111', color: '#ccc', fontSize: 10, lineHeight: 1.3 }}>
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button onClick={() => setAddingCustom(true)}
+                          style={{
+                            width: '100%', padding: '3px 0', marginBottom: 6,
+                            borderRadius: 3, border: '1px dashed #444',
+                            background: 'transparent', color: '#888', fontSize: 11,
+                            cursor: 'pointer',
+                          }}>
+                          + Add provider
+                        </button>
+                      )}
+
+                      <div style={{ fontSize: 9, color: '#555', lineHeight: 1.4 }}>
+                        Keys are encrypted at rest. Used by cloud API providers (Kling, Seedance, etc.).
+                      </div>
                     </div>
-                  ))
-                )
+                  )
+                })()
               )}
 
               {/* Actions */}

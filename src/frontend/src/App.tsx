@@ -19,7 +19,6 @@ import { NODE_DEFINITIONS, getPortTypeFromHandle } from './types/nodes'
 import Sidebar from './components/Sidebar'
 import NodeInspector from './components/NodeInspector'
 import ModelManager from './components/ModelManager'
-import CredentialManager from './components/CredentialManager'
 import VramStatusBar from './components/VramStatusBar'
 import { useCallback, useEffect, useState, useRef, type DragEvent } from 'react'
 import { checkHealth, startGeneration, pollTask, type TaskStatus } from './api/backend'
@@ -326,7 +325,6 @@ function AppInner() {
             <div style={{ fontSize: 9, color: '#444' }}>beta v0.1.0</div>
           </Panel>
           <Panel position="top-right" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <CredentialManager />
             <ModelManager backendOk={backendOk} />
           </Panel>
         </ReactFlow>
