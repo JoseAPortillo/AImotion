@@ -73,7 +73,7 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
   const [taskId, setTaskId] = useState<string | null>(null)
   const [installingHfName, setInstallingHfName] = useState<string | null>(null)
   const [progress, setProgress] = useState<InstallProgress | null>(null)
-  const [modelTab, setModelTab] = useState<'installed' | 'builtin' | 'other'>('installed')
+  const [modelTab, setModelTab] = useState<'installed' | 'other'>('installed')
   const [customCacheDir, setCustomCacheDir] = useState('')
   const [creds, setCreds] = useState<Record<string, boolean>>({})
   const [editingCred, setEditingCred] = useState<string | null>(null)
@@ -338,7 +338,6 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
   }
 
   const installed = models.filter(m => m.type === 'installed')
-  const builtin = models.filter(m => m.type === 'builtin')
   const other = models.filter(m => m.type === 'future' || m.type === 'api' || m.type === 'installable')
 
   return (
@@ -562,10 +561,8 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
                 display: 'flex', gap: 2, marginBottom: 6,
                 borderBottom: '1px solid #2a2a2a', paddingBottom: 2,
               }}>
-                {(['installed', 'builtin', 'other'] as const).map(t => {
-                  const count = t === 'installed' ? installed.length
-                    : t === 'builtin' ? builtin.filter(m => m.cached).length
-                    : other.length
+                {(['installed', 'other'] as const).map(t => {
+                  const count = t === 'installed' ? installed.length : other.length
                   return (
                     <div
                       key={t}
@@ -581,7 +578,7 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
                         textTransform: 'capitalize',
                       }}
                     >
-                      {t === 'builtin' ? 'Built-in' : t === 'other' ? 'API' : 'Installed'}
+                      {t === 'other' ? 'API' : 'Installed'}
                       {count > 0 && (
                         <span style={{ marginLeft: 4, fontSize: 10, opacity: 0.7 }}>({count})</span>
                       )}
@@ -708,39 +705,6 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
                     })()}
                   </>
                 )
-              )}
-
-              {modelTab === 'builtin' && (
-                <>
-                  {builtin.filter(m => m.cached).length === 0 ? (
-                    <div style={{ fontSize: 11, color: '#666', padding: '8px', textAlign: 'center' }}>
-                      {builtin.filter(m => !m.cached).length > 0
-                        ? `${builtin.filter(m => !m.cached).map(m => m.name).join(', ')} — not cached`
-                        : 'No built-in models'}
-                    </div>
-                  ) : (
-                    builtin.filter(m => m.cached).map(m => (
-                      <div key={m.key} style={{
-                        display: 'flex', alignItems: 'center', gap: 6,
-                        padding: '6px 8px', borderRadius: 6, fontSize: 12,
-                        background: m.loaded ? '#0a1a0a' : 'transparent',
-                      }}>
-                        <span style={{ fontWeight: 600, minWidth: 110 }}>{m.name}</span>
-                        {m.schedulers.length > 0 && (
-                          <span style={{ fontSize: 10, color: '#666' }}>{m.schedulers.join(', ')}</span>
-                        )}
-                        <div style={{ marginLeft: 'auto', display: 'flex', gap: 4, alignItems: 'center' }}>
-                          {m.loaded && <span style={{ fontSize: 10, color: '#4ade80' }}>Loaded</span>}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                  {builtin.filter(m => !m.cached).length > 0 && (
-                    <div style={{ fontSize: 11, color: '#666', padding: '4px 8px' }}>
-                      {builtin.filter(m => !m.cached).map(m => m.name).join(', ')} — not cached
-                    </div>
-                  )}
-                </>
               )}
 
               {modelTab === 'other' && (
