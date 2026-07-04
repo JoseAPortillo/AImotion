@@ -49,23 +49,6 @@
     "installed_at": "2026-06-30T12:39:32.307387"
   },
   {
-    "key": "thudm_cogvideox_5b_i2v",
-    "hf_name": "THUDM/CogVideoX-5b-I2V",
-    "alias": "CogVideoX-5b-I2V",
-    "pipeline_class": "CogVideoXImageToVideoPipeline",
-    "dtype": "bfloat16",
-    "schedulers": {
-      "scheduler": "CogVideoXDDIMScheduler"
-    },
-    "default_scheduler": "scheduler",
-    "needs_token": false,
-    "defaults": {
-      "steps": 50,
-      "cfg": 7.0
-    },
-    "installed_at": "2026-06-30T16:27:53.055380"
-  },
-  {
     "key": "quantstack_wan2.2_ti2v_5b_gguf",
     "hf_name": "QuantStack/Wan2.2-TI2V-5B-GGUF",
     "alias": "Wan2.2-TI2V-5B-GGUF",
@@ -126,5 +109,22 @@
       "max_seq": 512
     },
     "installed_at": "2026-07-02T19:40:17.823268"
+  },
+  {
+    "key": "zai_org_cogvideox_5b_i2v",
+    "hf_name": "zai-org/CogVideoX-5b-I2V",
+    "alias": "CogVideoX-5b-I2V",
+    "pipeline_class": "CogVideoXImageToVideoPipeline",
+    "dtype": "bfloat16",
+    "schedulers": {
+      "scheduler": "CogVideoXDDIMScheduler"
+    },
+    "default_scheduler": "scheduler",
+    "needs_token": false,
+    "defaults": {
+      "steps": 50,
+      "cfg": 7.0
+    },
+    "installed_at": "2026-07-03T12:19:42.228030"
   }
 ]
