@@ -113,7 +113,9 @@ class ModelVariant:
 
     @property
     def defaults(self) -> dict:
-        return self._data.get("defaults") or self._family.defaults
+        variant_defs = self._data.get("defaults") or {}
+        family_defs = self._family.defaults
+        return {**family_defs, **variant_defs}
 
     @property
     def inputs(self) -> dict:

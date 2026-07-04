@@ -518,8 +518,8 @@ class DiffusersGenerator:
             raise ValueError(f"Unsupported model: {model}")
 
         d = model_cfg["defaults"]
-        w = width if "width" in d else None
-        h = height if "height" in d else None
+        w = width
+        h = height
         s = steps or d.get("steps", 50)
         c = cfg or d.get("cfg", 6.0)
         fps_val = fps or d.get("fps", 8)
@@ -549,6 +549,11 @@ class DiffusersGenerator:
         logger.info(f"video_frames: {video_frames is not None}, length: {len(video_frames) if video_frames else 0}")
         if video_frames:
             logger.info(f"First frame size: {video_frames[0].size}")
+            if w is not None and h is not None:
+                orig = video_frames[0].size
+                if orig != (w, h):
+                    video_frames[0] = video_frames[0].resize((w, h), Image.LANCZOS)
+                    logger.info(f"Resized video frame from {orig} to ({w}, {h})")
 
         pipe_kwargs = self._build_pipe_kwargs(
             pipe, prompt, negative_prompt, video_frames, strength,

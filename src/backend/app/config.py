@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     upload_dir: str = "uploads"
     results_dir: str = "results"
     max_upload_size_mb: int = 500
-    result_ttl_minutes: int = 60
+    result_ttl_minutes: int = 1440
     max_video_duration_sec: int = 30
     default_width: int = 720
     default_height: int = 480
