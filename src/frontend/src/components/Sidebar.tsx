@@ -16,7 +16,8 @@ const ALL_PORT_TYPES = [
 
 interface NodeGroup {
   label: string
-  nodes: NodeType[]
+  nodes?: NodeType[]
+  children?: NodeGroup[]
 }
 
 const NODE_GROUPS: NodeGroup[] = [
@@ -26,7 +27,24 @@ const NODE_GROUPS: NodeGroup[] = [
   },
   {
     label: 'Models',
-    nodes: ['textToImage', 'textToVideo', 'imageToVideo', 'videoToVideo', 'imageToImage', 'transformersGenerator', 'vlmNode', 'llmGenerator'],
+    children: [
+      {
+        label: 'Diffusers',
+        nodes: ['textToImage', 'textToVideo', 'imageToVideo', 'videoToVideo', 'imageToImage'],
+      },
+      {
+        label: 'Transformers',
+        nodes: ['transformersGenerator'],
+      },
+      {
+        label: 'Vision',
+        nodes: ['vlmNode'],
+      },
+      {
+        label: 'LLM',
+        nodes: ['llmGenerator'],
+      },
+    ],
   },
   {
     label: 'Adapters',
@@ -99,21 +117,21 @@ function NodeItem({ nodeType }: { nodeType: NodeType }) {
   )
 }
 
-function CollapsibleGroup({ group, defaultOpen = true }: { group: NodeGroup; defaultOpen?: boolean }) {
+function CollapsibleGroup({ group, defaultOpen = true, isSubGroup = false }: { group: NodeGroup; defaultOpen?: boolean; isSubGroup?: boolean }) {
   const [isOpen, setIsOpen] = useState(defaultOpen)
 
   return (
-    <div style={{ marginBottom: 8 }}>
+    <div style={{ marginBottom: 8, marginLeft: isSubGroup ? 12 : 0 }}>
       <button
         onClick={() => setIsOpen(!isOpen)}
         style={{
           width: '100%',
           background: 'none',
           border: 'none',
-          color: '#a0a0a0',
-          fontSize: 12,
+          color: isSubGroup ? '#888' : '#a0a0a0',
+          fontSize: isSubGroup ? 11 : 12,
           fontWeight: 600,
-          padding: '6px 0',
+          padding: isSubGroup ? '4px 0' : '6px 0',
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
@@ -122,15 +140,18 @@ function CollapsibleGroup({ group, defaultOpen = true }: { group: NodeGroup; def
           letterSpacing: '0.5px',
         }}
       >
-        <span style={{ fontSize: 10, transition: 'transform 0.2s', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+        <span style={{ fontSize: isSubGroup ? 9 : 10, transition: 'transform 0.2s', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>
           ▶
         </span>
         {group.label}
       </button>
       {isOpen && (
         <div style={{ marginTop: 4 }}>
-          {group.nodes.map((nodeType) => (
+          {group.nodes?.map((nodeType) => (
             <NodeItem key={nodeType} nodeType={nodeType} />
+          ))}
+          {group.children?.map((child) => (
+            <CollapsibleGroup key={child.label} group={child} defaultOpen={true} isSubGroup={true} />
           ))}
         </div>
       )}
