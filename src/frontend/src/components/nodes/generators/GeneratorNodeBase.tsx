@@ -91,11 +91,12 @@ function GeneratorNodeBase(props: NodeBaseProps) {
       def={def}
       selected={props.selected}
       style={{ width: props.width, height: props.height }}
-      headerRight={base.modelConfig && (
-        <span style={{ fontSize: 9, opacity: 0.8, background: 'rgba(0,0,0,0.3)', padding: '1px 4px', borderRadius: 3 }}>
-          {base.modelConfig.name}
+      headerLabel="Diffuser Generator"
+      headerRight={
+        <span style={{ fontSize: 9, opacity: 0.9, background: 'rgba(0,0,0,0.3)', padding: '1px 5px', borderRadius: 3 }}>
+          {def.label}
         </span>
-      )}
+      }
       handles={
         <>
           {def.inputs.map((inp, i) => {
@@ -124,7 +125,7 @@ function GeneratorNodeBase(props: NodeBaseProps) {
               </Handle>
             )
           })}
-          <Handle type="source" position={Position.Right} id="video_out" style={{ top: '50%', background: props.outputColor }}>
+          <Handle type="source" position={Position.Right} id={def.outputs[0]?.id || 'video_out'} style={{ top: '50%', background: props.outputColor }}>
             <div style={{ position: 'absolute', right: -6, top: -2, transform: 'translateX(100%)', fontSize: 9, color: props.outputColor, whiteSpace: 'nowrap' }}>
               {props.outputLabel}
             </div>

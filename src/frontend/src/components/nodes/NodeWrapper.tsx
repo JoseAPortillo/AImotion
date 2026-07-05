@@ -6,6 +6,7 @@ interface NodeWrapperProps {
   def: { color: string; label: string }
   selected: boolean
   style?: React.CSSProperties
+  headerLabel?: string
   headerRight?: ReactNode
   footer?: ReactNode
   handles?: ReactNode
@@ -137,7 +138,7 @@ const scrollbarStyles = `
   }
 `
 
-function NodeWrapper({ children, def, selected, headerRight, footer, handles, style: propStyle, progressBar }: NodeWrapperProps) {
+function NodeWrapper({ children, def, selected, headerLabel, headerRight, footer, handles, style: propStyle, progressBar }: NodeWrapperProps) {
   const nodeId = useNodeId()
   const node = useStore(s => (nodeId ? s.nodeLookup.get(nodeId) : undefined))
 
@@ -155,7 +156,7 @@ function NodeWrapper({ children, def, selected, headerRight, footer, handles, st
       <style>{scrollbarStyles}</style>
       {selected && <NodeResizer handleStyle={{ width: 8, height: 8, borderRadius: '50%', background: '#888', zIndex: 10 }} />}
       <div style={{ background: def.color, padding: '4px 8px', fontSize: 10, fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderRadius: '8px 8px 0 0', overflow: 'hidden', flexShrink: 0 }}>
-        <span>{def.label}</span>
+        <span>{headerLabel ?? def.label}</span>
         {headerRight}
       </div>
       <div className="node-content" style={contentStyle}>
