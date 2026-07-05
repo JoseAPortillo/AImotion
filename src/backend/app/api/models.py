@@ -424,10 +424,9 @@ def _inputs_from_pipeline(pipeline_class: str) -> dict:
 
 def _accepts_from_pipeline(pipeline_class: str) -> dict:
     inputs = _inputs_from_pipeline(pipeline_class)
-    has_video = any("video" in k.lower() for k in inputs.keys())
     return {
         "image": "image" in inputs,
-        "video": has_video,
+        "video": "video" in inputs,
         "strength": "strength" in inputs,
     }
 
@@ -457,10 +456,10 @@ def _build_variant_entry(variant) -> dict:
 async def list_models():
     results = []
     installed_list = list_installed()
-    installed_hf = {inst.hf_name for inst in installed_list if inst.hf_name}
+    installed_keys = {inst.key for inst in installed_list}
     for v in catalog.all_variants():
         if v.type in ("builtin", "future", "api", "installable"):
-            if v.hf_name and v.hf_name in installed_hf:
+            if v.key in installed_keys:
                 continue
             results.append(_build_variant_entry(v))
     for inst in installed_list:

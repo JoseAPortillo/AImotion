@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState, useEffect, useRef } from 'react'
+import { flushSync } from 'react-dom'
 import type { GenerationData, PromptData, ModelEntry } from '../types/nodes'
 import { useGraphStore } from '../store/graph'
 import { useToastStore } from '../store/toast'
@@ -58,7 +59,9 @@ export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorB
       .then(r => r.json())
       .then(d => {
         const all = (d.models || []).filter(
-          (m: ModelEntry) => m.type !== 'future' && m.type !== 'installable'
+          (m: ModelEntry) =>
+            m.type !== 'future'
+            && (m.type !== 'installable' || m.runner === 'diffusers' || m.runner === 'wan2.2')
         )
         setModels(all)
         setModelsLoaded(true)
@@ -158,9 +161,11 @@ export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorB
       }
     }
 
-    setGenRunning(true)
-    setProgress(0)
-    setEtaSec(null)
+    flushSync(() => {
+      setGenRunning(true)
+      setProgress(0)
+      setEtaSec(null)
+    })
     startTimeRef.current = Date.now()
     taskIdRef.current = ''
     try {
@@ -181,6 +186,11 @@ export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorB
           vae_tile_overlap: data.vae_tile_overlap ?? 0.0,
           num_frames: data.num_frames,
           max_sequence_length: data.max_sequence_length,
+          noise_aug_strength: data.noise_aug_strength ?? (data.strength ?? 0.8),
+          fps: data.fps,
+          motion_bucket_id: data.motion_bucket_id,
+          min_guidance_scale: data.min_guidance_scale,
+          max_guidance_scale: data.max_guidance_scale,
           extraParams,
         },
         videoFile,

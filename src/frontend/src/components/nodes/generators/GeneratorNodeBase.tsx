@@ -5,6 +5,8 @@ import { NODE_DEFINITIONS, getHandleColor, type NodeType, type GenerationData, t
 import NodeWrapper, { CollapsibleSection, InfoLabel, FIELD_DESCS } from '../NodeWrapper'
 import { useGeneratorBase, formatEta, schedLabels } from '../../../hooks/useGeneratorBase'
 import ModelSelect from '../../ModelSelect'
+import NumberInput from '../../NumberInput'
+import { useGraphStore } from '../../../store/graph'
 
 type ResPreset = { label: string; w: number; h: number }
 
@@ -238,37 +240,26 @@ function GeneratorNodeBase(props: NodeBaseProps) {
         <CollapsibleSection title="Básicos" defaultOpen={true}>
           <div style={{ marginTop: 2 }}>
             <InfoLabel label="Steps" desc={FIELD_DESCS.steps} />
-            <input
-              type="number"
-              step={1}
-              min={1}
-              max={200}
+            <NumberInput
               value={data.steps ?? 50}
-              onChange={(e) => base.updateNodeData(props.id, { steps: parseInt(e.target.value, 10) || 1 } as Partial<GenerationData>)}
-              style={selectStyle}
+              min={1} max={200}
+              onChange={(v) => base.updateNodeData(props.id, { steps: v } as Partial<GenerationData>)}
             />
           </div>
           <div style={{ marginTop: 4 }}>
             <InfoLabel label="CFG" desc={FIELD_DESCS.cfg} />
-            <input
-              type="number"
-              step={0.5}
-              min={1}
-              max={20}
+            <NumberInput
               value={data.cfg ?? 6}
-              onChange={(e) => base.updateNodeData(props.id, { cfg: parseFloat(e.target.value) || 1 } as Partial<GenerationData>)}
-              style={selectStyle}
+              min={1} max={20} step={0.5}
+              onChange={(v) => base.updateNodeData(props.id, { cfg: v } as Partial<GenerationData>)}
             />
           </div>
           <div style={{ marginTop: 4 }}>
             <InfoLabel label="Seed" desc={FIELD_DESCS.seed} />
-            <input
-              type="number"
-              step={1}
-              min={0}
+            <NumberInput
               value={data.seed ?? 0}
-              onChange={(e) => base.updateNodeData(props.id, { seed: parseInt(e.target.value, 10) || 0 } as Partial<GenerationData>)}
-              style={selectStyle}
+              min={0}
+              onChange={(v) => base.updateNodeData(props.id, { seed: v } as Partial<GenerationData>)}
             />
           </div>
           <div style={{ marginTop: 4 }}>
@@ -322,26 +313,18 @@ function GeneratorNodeBase(props: NodeBaseProps) {
                 <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
                   <div style={{ flex: 1 }}>
                     <span style={{ fontSize: 8, color: '#888' }}>width</span>
-                    <input
-                      type="number"
-                      step={1}
+                    <NumberInput
                       value={currentW}
-                      onChange={(e) => base.updateNodeData(props.id, { width: parseInt(e.target.value, 10) } as Partial<GenerationData>)}
-                      min={wInp.min}
-                      max={wInp.max}
-                      style={{ ...selectStyle, width: '100%', marginTop: 1 }}
+                      min={wInp.min} max={wInp.max}
+                      onChange={(v) => base.updateNodeData(props.id, { width: v } as Partial<GenerationData>)}
                     />
                   </div>
                   <div style={{ flex: 1 }}>
                     <span style={{ fontSize: 8, color: '#888' }}>height</span>
-                    <input
-                      type="number"
-                      step={1}
+                    <NumberInput
                       value={currentH}
-                      onChange={(e) => base.updateNodeData(props.id, { height: parseInt(e.target.value, 10) } as Partial<GenerationData>)}
-                      min={hInp.min}
-                      max={hInp.max}
-                      style={{ ...selectStyle, width: '100%', marginTop: 1 }}
+                      min={hInp.min} max={hInp.max}
+                      onChange={(v) => base.updateNodeData(props.id, { height: v } as Partial<GenerationData>)}
                     />
                   </div>
                 </div>
@@ -383,21 +366,43 @@ function GeneratorNodeBase(props: NodeBaseProps) {
               return (
                 <div key={name} style={{ marginTop: 4 }}>
                   <InfoLabel label={name.replace(/_/g, ' ')} desc={desc} />
-                  <input
-                    type="number"
-                    step={isFloat ? 'any' : 1}
+                  <NumberInput
                     value={(data[name as keyof GenerationData] ?? inp.default) as number}
-                    onChange={(e) => base.updateNodeData(props.id, { [name]: isFloat ? parseFloat(e.target.value) : parseInt(e.target.value, 10) } as Partial<GenerationData>)}
                     min={inp.min}
                     max={inp.max}
-                    style={selectStyle}
+                    step={isFloat ? 0.01 : 1}
+                    onChange={(v) => base.updateNodeData(props.id, { [name]: v } as Partial<GenerationData>)}
                   />
                 </div>
               )
             })}
         </CollapsibleSection>
+
+        <PreviewSection />
       </div>
     </NodeWrapper>
+  )
+}
+
+function PreviewSection() {
+  const outputUrl = useGraphStore((s) => s.outputUrl)
+  const resultType = useGraphStore((s) => s.resultType)
+  const isImage = resultType === 'image' || (!resultType && outputUrl?.endsWith('.png'))
+  if (!outputUrl) return null
+  return (
+    <CollapsibleSection title="Preview" defaultOpen={false}>
+      <div style={{ marginTop: 4, textAlign: 'center' }}>
+        {isImage ? (
+          <img src={outputUrl} alt="Generated"
+            style={{ width: '100%', maxWidth: 200, maxHeight: 200, borderRadius: 4, display: 'block', margin: '0 auto' }}
+          />
+        ) : (
+          <video src={outputUrl} controls autoPlay loop
+            style={{ width: '100%', maxWidth: 200, maxHeight: 160, borderRadius: 4, display: 'block', margin: '0 auto' }}
+          />
+        )}
+      </div>
+    </CollapsibleSection>
   )
 }
 

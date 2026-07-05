@@ -1,5 +1,6 @@
 import os
 import logging
+import warnings
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -26,6 +27,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+warnings.filterwarnings("ignore", message=".*unsafe pickle serialization.*")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

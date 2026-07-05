@@ -43,6 +43,11 @@ export async function startGeneration(
     vae_tile_overlap: number
     num_frames?: number
     max_sequence_length?: number
+    noise_aug_strength?: number
+    fps?: number
+    motion_bucket_id?: number
+    min_guidance_scale?: number
+    max_guidance_scale?: number
     extraParams?: Record<string, number | string | boolean>
   },
   videoFile?: File,
@@ -66,6 +71,11 @@ export async function startGeneration(
   formData.append('vae_tile_overlap', String(params.vae_tile_overlap))
   if (params.num_frames != null) formData.append('num_frames', String(params.num_frames))
   if (params.max_sequence_length != null) formData.append('max_sequence_length', String(params.max_sequence_length))
+  if (params.noise_aug_strength != null) formData.append('noise_aug_strength', String(params.noise_aug_strength))
+  if (params.fps != null) formData.append('fps', String(params.fps))
+  if (params.motion_bucket_id != null) formData.append('motion_bucket_id', String(params.motion_bucket_id))
+  if (params.min_guidance_scale != null) formData.append('min_guidance_scale', String(params.min_guidance_scale))
+  if (params.max_guidance_scale != null) formData.append('max_guidance_scale', String(params.max_guidance_scale))
   if (params.extraParams && Object.keys(params.extraParams).length > 0) {
     formData.append('extra_params', JSON.stringify(params.extraParams))
   }

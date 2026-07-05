@@ -22,10 +22,19 @@ task_manager = TaskManager()
 solver = GraphSolver()
 
 
+_GEN_NODE_TYPES = {"imageGen", "videoGen", "textToImage", "textToVideo", "imageToVideo", "videoToVideo", "imageToImage"}
+
 def _find_node_by_type(ctx: dict, ntype: str) -> dict | None:
+    for nid in ctx["order"]:		
+        node = ctx["nodes"][nid]		
+        if node.get("type") == ntype:		
+            return node		
+    return None		
+
+def _find_gen_node(ctx: dict) -> dict | None:
     for nid in ctx["order"]:
         node = ctx["nodes"][nid]
-        if node.get("type") == ntype:
+        if node.get("type") in _GEN_NODE_TYPES:
             return node
     return None
 
@@ -53,9 +62,9 @@ def _resolve_input(
 
 
 def _graph_to_generation_params(graph: dict, ctx: dict) -> dict:
-    gen_node = _find_node_by_type(ctx, "imageGen") or _find_node_by_type(ctx, "videoGen")
+    gen_node = _find_gen_node(ctx)
     if gen_node is None:
-        raise HTTPException(status_code=422, detail="Graph must have an imageGen or videoGen node")
+        raise HTTPException(status_code=422, detail="Graph must have a generation node (textToImage, videoGen, etc.)")
 
     data = gen_node.get("data", {})
     is_video = gen_node.get("type") == "videoGen"
@@ -119,7 +128,7 @@ async def _execute_graph(task_id: str, graph: dict):
         node_outputs: dict[str, dict[str, Any]] = {}
 
         model_cfg = None
-        gen_node = _find_node_by_type(ctx, "imageGen") or _find_node_by_type(ctx, "videoGen")
+        gen_node = _find_gen_node(ctx)
         if gen_node:
             model = gen_node.get("data", {}).get("model", settings.model_type)
             model_cfg = get_model_config(model)
@@ -141,13 +150,19 @@ async def _execute_graph(task_id: str, graph: dict):
             if ntype == "inputText":
                 node_outputs[nid] = node.get("outputs", {})
 
-            elif ntype in ("imageGen", "videoGen"):
+            elif ntype in _GEN_NODE_TYPES:
                 params = _graph_to_generation_params(graph, ctx)
 
                 video_frames = None
-                resolved_image = _resolve_input(nid, "ref_image", ctx, node_outputs) or \
-                                _resolve_input(nid, "image", ctx, node_outputs)
-                if resolved_image and os.path.exists(str(resolved_image)):
+                resolved_video = _resolve_input(nid, "video_in", ctx, node_outputs)
+                resolved_image = resolved_video or \
+                    _resolve_input(nid, "image_in", ctx, node_outputs) or \
+                    _resolve_input(nid, "ref_image", ctx, node_outputs) or \
+                    _resolve_input(nid, "image", ctx, node_outputs)
+                if resolved_video and os.path.exists(str(resolved_video)):
+                    from app.services.generator import extract_frames
+                    video_frames = extract_frames(str(resolved_video), max_frames=params.get("num_frames", 49))
+                elif resolved_image and os.path.exists(str(resolved_image)):
                     from PIL import Image as PILImage
                     video_frames = [PILImage.open(str(resolved_image)).convert("RGB")]
 
