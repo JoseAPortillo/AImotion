@@ -36,6 +36,10 @@ import DenoisingStrengthNode from './components/nodes/DenoisingStrengthNode'
 import OutputNode from './components/nodes/OutputNode'
 import PreviewNode from './components/nodes/PreviewNode'
 import DiffuserGeneratorNode from './components/nodes/generators/DiffuserGeneratorNode'
+import TextToImageNode from './components/nodes/generators/TextToImageNode'
+import TextToVideoNode from './components/nodes/generators/TextToVideoNode'
+import ImageToVideoNode from './components/nodes/generators/ImageToVideoNode'
+import VideoToVideoNode from './components/nodes/generators/VideoToVideoNode'
 import TransformersGeneratorNode from './components/nodes/generators/TransformersGeneratorNode'
 import VLMNode from './components/nodes/generators/VLMNode'
 import LLMGeneratorNode from './components/nodes/generators/LLMGeneratorNode'
@@ -49,6 +53,10 @@ const nodeTypes: NodeTypes = {
   audioInput: AudioInputNode,
   prompt: PromptNode,
   diffuserGenerator: DiffuserGeneratorNode,
+  textToImage: TextToImageNode,
+  textToVideo: TextToVideoNode,
+  imageToVideo: ImageToVideoNode,
+  videoToVideo: VideoToVideoNode,
   transformersGenerator: TransformersGeneratorNode,
   vlmNode: VLMNode,
   llmGenerator: LLMGeneratorNode,
