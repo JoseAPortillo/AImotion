@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, AsyncMock
 
 
 def test_vlm_analyze_rejects_missing_image(client):
@@ -31,7 +31,7 @@ def test_vlm_analyze_rejects_oversized_file(client):
     assert resp.status_code == 413
 
 
-@patch("app.api.vlm._call_vlm")
+@patch("app.api.vlm._call_vlm", new_callable=AsyncMock)
 def test_vlm_analyze_valid_request(mock_call, client):
     mock_call.return_value = "A beautiful sunset over mountains"
     resp = client.post(
@@ -44,7 +44,7 @@ def test_vlm_analyze_valid_request(mock_call, client):
     assert data["result"] == "A beautiful sunset over mountains"
 
 
-@patch("app.api.vlm._call_vlm")
+@patch("app.api.vlm._call_vlm", new_callable=AsyncMock)
 def test_vlm_analyze_default_prompt(mock_call, client):
     mock_call.return_value = "An image with various elements"
     resp = client.post(
@@ -57,7 +57,7 @@ def test_vlm_analyze_default_prompt(mock_call, client):
 
 
 @patch("app.api.vlm.VLM_MODELS", ["nonexistent-model"])
-@patch("app.api.vlm._call_vlm", side_effect=Exception("model not found"))
+@patch("app.api.vlm._call_vlm", new_callable=AsyncMock, side_effect=Exception("model not found"))
 def test_vlm_analyze_all_models_fail(mock_call, client, monkeypatch):
     monkeypatch.setattr("app.api.vlm.VLM_MODELS", ["nonexistent-model"])
     resp = client.post(
