@@ -18,6 +18,35 @@ export type NodeType =
   | 'denoisingStrength'
   | 'output'
   | 'preview'
+  | 'textToImage'
+  | 'textToVideo'
+  | 'imageToVideo'
+  | 'videoToVideo'
+
+export interface ModelEntry {
+  key: string
+  name: string
+  runner: string
+  schedulers: string[]
+  default_scheduler: string
+  type: string
+  pipeline_class?: string
+  is_video?: boolean
+  accepts?: {
+    image: boolean
+    video: boolean
+    strength: boolean
+  }
+  defaults?: Record<string, unknown>
+  inputs?: Record<string, {
+    required: boolean
+    type: string
+    default?: unknown
+    hidden?: boolean
+    min?: number
+    max?: number
+  }>
+}
 
 export type PortType =
   | 'video_tensor'
@@ -191,6 +220,13 @@ export function getEdgeStyle(portType: PortType | null): React.CSSProperties {
   }
 }
 
+export const MODALITY_FILTERS: Record<string, (m: ModelEntry) => boolean> = {
+  textToImage: (m) => m.is_video !== true && !m.accepts?.image && !m.accepts?.video,
+  textToVideo: (m) => m.is_video === true && !m.accepts?.image && !m.accepts?.video,
+  imageToVideo: (m) => m.is_video === true && m.accepts?.image === true,
+  videoToVideo: (m) => m.accepts?.video === true,
+}
+
 export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
   videoInput: {
     type: 'videoInput',
@@ -232,6 +268,7 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
     label: 'Diffuser Generator',
     color: '#f59e0b',
     description: 'Generates images/video using HuggingFace diffusers models (CogVideoX, LTX-Video, SDXL, Flux...).',
+    paletteHidden: true,
     inputs: [
       { id: 'video_in', label: 'Video', type: 'video_tensor' },
       { id: 'image_in', label: 'Image', type: 'video_tensor' },
@@ -377,5 +414,63 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
     description: 'Displays the generated video output in real time.',
     inputs: [{ id: 'video_in', label: 'Video', type: 'video_tensor' }],
     outputs: [],
+  },
+  textToImage: {
+    type: 'textToImage',
+    label: 'Text-to-Image',
+    color: '#f97316',
+    description: 'Generate an image from a text prompt using diffusion models.',
+    inputs: [
+      { id: 'prompt_pos', label: 'Positive Prompt', type: 'prompt' },
+      { id: 'prompt_neg', label: 'Negative Prompt', type: 'prompt' },
+    ],
+    outputs: [
+      { id: 'image_out', label: 'Image', type: 'video_tensor' },
+    ],
+    defaultData: { model: '', scheduler: '', execution_mode: 'local', vae_tiling: true, vae_tile_overlap: 0.0, steps: 50, cfg: 6, seed: 0, strength: 0.8, width: 1024, height: 1024 },
+  },
+  textToVideo: {
+    type: 'textToVideo',
+    label: 'Text-to-Video',
+    color: '#4ade80',
+    description: 'Generate a video from a text prompt using diffusion models.',
+    inputs: [
+      { id: 'prompt_pos', label: 'Positive Prompt', type: 'prompt' },
+      { id: 'prompt_neg', label: 'Negative Prompt', type: 'prompt' },
+    ],
+    outputs: [
+      { id: 'video_out', label: 'Video', type: 'video_tensor' },
+    ],
+    defaultData: { model: 'cogvideox-2b', scheduler: '', execution_mode: 'local', vae_tiling: true, vae_tile_overlap: 0.0, steps: 50, cfg: 6, seed: 0, strength: 0.8, width: 720, height: 480 },
+  },
+  imageToVideo: {
+    type: 'imageToVideo',
+    label: 'Image-to-Video',
+    color: '#a855f7',
+    description: 'Generate a video from an image and text prompt using image-to-video models.',
+    inputs: [
+      { id: 'image_in', label: 'Image', type: 'video_tensor' },
+      { id: 'prompt_pos', label: 'Positive Prompt', type: 'prompt' },
+      { id: 'prompt_neg', label: 'Negative Prompt', type: 'prompt' },
+    ],
+    outputs: [
+      { id: 'video_out', label: 'Video', type: 'video_tensor' },
+    ],
+    defaultData: { model: '', scheduler: '', execution_mode: 'local', vae_tiling: true, vae_tile_overlap: 0.0, steps: 50, cfg: 6, seed: 0, strength: 0.8, width: 720, height: 480 },
+  },
+  videoToVideo: {
+    type: 'videoToVideo',
+    label: 'Video-to-Video',
+    color: '#ef4444',
+    description: 'Transform an input video using text-guided video-to-video models.',
+    inputs: [
+      { id: 'video_in', label: 'Video', type: 'video_tensor' },
+      { id: 'prompt_pos', label: 'Positive Prompt', type: 'prompt' },
+      { id: 'prompt_neg', label: 'Negative Prompt', type: 'prompt' },
+    ],
+    outputs: [
+      { id: 'video_out', label: 'Video', type: 'video_tensor' },
+    ],
+    defaultData: { model: '', scheduler: '', execution_mode: 'local', vae_tiling: true, vae_tile_overlap: 0.0, steps: 50, cfg: 6, seed: 0, strength: 0.8, width: 720, height: 480 },
   },
 }
