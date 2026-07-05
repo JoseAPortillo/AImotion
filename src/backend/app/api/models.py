@@ -633,30 +633,14 @@ async def unload_models():
 
 @router.get("/status")
 async def models_status():
-    gpu = {}
-    try:
-        import torch
-        torch_ok = True
-    except ModuleNotFoundError:
-        torch_ok = False
-    if torch_ok and torch.cuda.is_available():
-        device = torch.cuda.current_device()
-        name = torch.cuda.get_device_name(device)
-        props = torch.cuda.get_device_properties(device)
-        total = getattr(props, "total_memory", 0) / (1024 ** 3)
-        free = (
-            torch.cuda.mem_get_info(device)[0] / (1024 ** 3)
-            if hasattr(torch.cuda, "mem_get_info")
-            else total * 0.7
-        )
-        gpu = {
-            "gpu_available": True,
-            "gpu_name": name,
-            "vram_total_gb": round(total, 1),
-            "vram_free_gb": round(free, 1),
-        }
-    else:
-        gpu = {"gpu_available": False}
+    from app.api.hardware import _get_vram_info
+    vram = _get_vram_info()
+    gpu = {
+        "gpu_available": vram.get("gpu_available", False),
+        "gpu_name": vram.get("gpu_name"),
+        "vram_total_gb": vram.get("vram_total_gb"),
+        "vram_free_gb": vram.get("vram_free_gb"),
+    }
     return {
         **gpu,
         "current_model": _video_generator._current_model_key,
