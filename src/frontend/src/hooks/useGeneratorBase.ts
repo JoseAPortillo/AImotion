@@ -54,6 +54,9 @@ export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorB
   const startTimeRef = useRef(0)
   const taskIdRef = useRef('')
   const previewTaskIdRef = useRef('')
+  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastPreviewKeyRef = useRef<string>('')
+  const previewAbortRef = useRef(false)
   const [models, setModels] = useState<ModelEntry[]>([])
   const [modelsLoaded, setModelsLoaded] = useState(false)
 
@@ -249,7 +252,10 @@ export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorB
     } catch { /* ignore */ }
   }, [])
 
-  const handlePreview = useCallback(async () => {
+  const runPreview = useCallback(async () => {
+    if (genRunning) return
+    if (!data.model) return
+
     const genEdges = edges.filter((e) => e.target === nodeId)
     const getNode = (edge: typeof genEdges[0]) => nodes.find((n) => n.id === edge.source)
 
@@ -259,6 +265,9 @@ export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorB
     const imageEdge = genEdges.find((e) => e.targetHandle === 'image_in')
 
     const promptData = promptEdgePos ? getNode(promptEdgePos)?.data as PromptData | undefined : undefined
+    const promptText = promptData?.positive || ''
+    if (!promptText) return
+
     const videoNode = videoEdge ? getNode(videoEdge) : undefined
     const imageNode = imageEdge ? getNode(imageEdge) : undefined
 
@@ -290,25 +299,26 @@ export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorB
       }
     }
 
-    flushSync(() => {
-      setPreviewRunning(true)
-      setPreviewUrl(null)
-    })
-    const startTime = Date.now()
-    previewTaskIdRef.current = ''
+    previewAbortRef.current = true
+    if (previewTaskIdRef.current) {
+      try { await cancelTask(previewTaskIdRef.current) } catch { /* ignore */ }
+    }
+    previewAbortRef.current = false
+
+    setPreviewRunning(true)
     try {
       const task = await startGeneration(
-        promptData?.positive || '',
+        promptText,
         promptEdgeNeg ? (getNode(promptEdgeNeg)?.data as PromptData | undefined)?.negative || '' : '',
         {
           width: 256,
           height: 256,
-          steps: 10,
+          steps: 6,
           cfg: data.cfg ?? 6,
           strength: data.strength ?? 0.8,
           seed: data.seed ?? 0,
           scheduler: data.scheduler || '',
-          model: data.model || 'cogvideox-2b',
+          model: data.model,
           execution_mode: data.execution_mode || 'local',
           vae_tiling: data.vae_tiling ?? true,
           vae_tile_overlap: data.vae_tile_overlap ?? 0.0,
@@ -326,27 +336,68 @@ export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorB
       )
 
       previewTaskIdRef.current = task.task_id
-      let status: TaskStatus
+      let status: TaskStatus | undefined
       do {
         await new Promise((r) => setTimeout(r, 1500))
+        if (previewAbortRef.current) break
         status = await pollTask(task.task_id)
-
         if (status.status === 'cancelled') break
       } while (status.status === 'pending' || status.status === 'running')
 
-      if (status.status === 'cancelled') {
-        addToast('Preview cancelled', 'info')
-      } else if (status.status === 'completed' && status.result_url) {
+      if (!previewAbortRef.current && status && status.status === 'completed' && status.result_url) {
         setPreviewUrl(status.result_url)
-      } else {
-        addToast(`Preview failed: ${status.error || 'unknown error'}`, 'error')
       }
-    } catch (err: any) {
-      addToast(`Preview error: ${err.message}`, 'error')
+    } catch {
+      // silent fail for preview
     } finally {
       setPreviewRunning(false)
     }
-  }, [nodeId, data, nodes, edges, modelConfig, addToast])
+  }, [nodeId, data, nodes, edges, modelConfig, genRunning])
+
+  // Auto-preview with debounce when key params change
+  const previewDeps = useMemo(() => {
+    const genEdges = edges.filter((e) => e.target === nodeId)
+    const promptEdge = genEdges.find((e) => e.targetHandle === 'prompt_pos')
+    const promptNode = promptEdge ? nodes.find((n) => n.id === promptEdge.source) : undefined
+    const promptText = (promptNode?.data as PromptData)?.positive || ''
+    const negEdge = genEdges.find((e) => e.targetHandle === 'prompt_neg')
+    const negNode = negEdge ? nodes.find((n) => n.id === negEdge.source) : undefined
+    const negText = (negNode?.data as PromptData)?.negative || ''
+    const hasImage = genEdges.some((e) => e.targetHandle === 'image_in')
+    const hasVideo = genEdges.some((e) => e.targetHandle === 'video_in')
+    return `${data.model}|${data.seed}|${data.cfg}|${data.strength}|${data.scheduler}|${promptText}|${negText}|${hasImage}|${hasVideo}`
+  }, [edges, nodes, nodeId, data.model, data.seed, data.cfg, data.strength, data.scheduler])
+
+  useEffect(() => {
+    if (genRunning) return
+    if (!data.model) return
+    if (!previewDeps) return
+
+    if (previewDeps === lastPreviewKeyRef.current) return
+    lastPreviewKeyRef.current = previewDeps
+
+    if (previewTimerRef.current) clearTimeout(previewTimerRef.current)
+
+    const hasPrompt = previewDeps.split('|')[5]
+    if (!hasPrompt) return
+
+    previewTimerRef.current = setTimeout(() => {
+      runPreview()
+    }, 2500)
+
+    return () => {
+      if (previewTimerRef.current) clearTimeout(previewTimerRef.current)
+    }
+  }, [previewDeps, data.model, genRunning, runPreview])
+
+  // Cancel preview when generation starts
+  useEffect(() => {
+    if (genRunning && previewTaskIdRef.current) {
+      previewAbortRef.current = true
+      cancelTask(previewTaskIdRef.current).catch(() => {})
+      setPreviewRunning(false)
+    }
+  }, [genRunning])
 
   return {
     models,
@@ -365,7 +416,6 @@ export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorB
     handleModelChange,
     handleGenWorkflow,
     handleCancel,
-    handlePreview,
     handleModeToggle,
     updateNodeData,
     nodes,

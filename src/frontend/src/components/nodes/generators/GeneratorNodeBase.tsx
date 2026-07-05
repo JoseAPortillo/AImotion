@@ -168,41 +168,22 @@ function GeneratorNodeBase(props: NodeBaseProps) {
             Cancel
           </button>
         ) : (
-          <div style={{ display: 'flex', gap: 4 }}>
-            <button
-              onClick={base.handlePreview}
-              disabled={base.previewRunning}
-              style={{
-                flex: 1,
-                padding: '4px 0',
-                borderRadius: 4,
-                border: 'none',
-                fontSize: 10,
-                fontWeight: 600,
-                cursor: base.previewRunning ? 'not-allowed' : 'pointer',
-                background: base.previewRunning ? '#333' : '#6366f1',
-                color: base.previewRunning ? '#888' : '#fff',
-              }}
-            >
-              {base.previewRunning ? 'Preview...' : 'Preview'}
-            </button>
-            <button
-              onClick={base.handleGenWorkflow}
-              style={{
-                flex: 2,
-                padding: '4px 0',
-                borderRadius: 4,
-                border: 'none',
-                fontSize: 10,
-                fontWeight: 600,
-                cursor: 'pointer',
-                background: '#4ade80',
-                color: '#0f0f0f',
-              }}
-            >
-              Generate ▶
-            </button>
-          </div>
+          <button
+            onClick={base.handleGenWorkflow}
+            style={{
+              width: '100%',
+              padding: '4px 0',
+              borderRadius: 4,
+              border: 'none',
+              fontSize: 10,
+              fontWeight: 600,
+              cursor: 'pointer',
+              background: '#4ade80',
+              color: '#0f0f0f',
+            }}
+          >
+            Generate ▶
+          </button>
         )
       }
     >
@@ -397,17 +378,29 @@ function GeneratorNodeBase(props: NodeBaseProps) {
             })}
         </CollapsibleSection>
 
-        {base.previewUrl && (
+        {(base.previewRunning || base.previewUrl) && (
           <CollapsibleSection title="Preview" defaultOpen={true}>
             <div style={{ marginTop: 4, textAlign: 'center' }}>
-              {base.previewUrl.endsWith('.png') || base.previewUrl.endsWith('.jpg') ? (
-                <img src={base.previewUrl} alt="Preview"
-                  style={{ width: '100%', maxWidth: 200, maxHeight: 200, borderRadius: 4, display: 'block', margin: '0 auto' }}
-                />
-              ) : (
-                <video src={base.previewUrl} controls autoPlay loop
-                  style={{ width: '100%', maxWidth: 200, maxHeight: 160, borderRadius: 4, display: 'block', margin: '0 auto' }}
-                />
+              {base.previewRunning && !base.previewUrl && (
+                <div style={{ padding: '12px 0', fontSize: 10, color: '#6366f1' }}>
+                  Generating preview...
+                </div>
+              )}
+              {base.previewUrl && (
+                <>
+                  {base.previewUrl.endsWith('.png') || base.previewUrl.endsWith('.jpg') ? (
+                    <img src={base.previewUrl} alt="Preview"
+                      style={{ width: '100%', maxWidth: 200, maxHeight: 200, borderRadius: 4, display: 'block', margin: '0 auto', opacity: base.previewRunning ? 0.5 : 1 }}
+                    />
+                  ) : (
+                    <video src={base.previewUrl} controls autoPlay loop
+                      style={{ width: '100%', maxWidth: 200, maxHeight: 160, borderRadius: 4, display: 'block', margin: '0 auto', opacity: base.previewRunning ? 0.5 : 1 }}
+                    />
+                  )}
+                  {base.previewRunning && (
+                    <div style={{ fontSize: 9, color: '#6366f1', marginTop: 2 }}>Updating...</div>
+                  )}
+                </>
               )}
             </div>
           </CollapsibleSection>
