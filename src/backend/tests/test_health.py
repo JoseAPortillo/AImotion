@@ -22,6 +22,13 @@ def test_health_gpu_field_types(client):
     assert data["vram_total_gb"] is None or isinstance(data["vram_total_gb"], (int, float))
 
 
+def test_health_has_same_vram_fields_as_hardware(client):
+    health = client.get("/health").json()
+    vram = client.get("/hardware/vram").json()
+    for field in ["gpu_available", "gpu_name", "vram_total_gb", "vram_free_gb"]:
+        assert health[field] == vram[field], f"Mismatch in {field}"
+
+
 @pytest.mark.integration
 def test_health_gpu_detection(client):
     """When CUDA is available, GPU fields should be populated."""
