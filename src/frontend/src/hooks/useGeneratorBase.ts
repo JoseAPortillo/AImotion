@@ -47,10 +47,13 @@ export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorB
   const setOutputUrl = useGraphStore((s) => s.setOutputUrl)
   const addToast = useToastStore((s) => s.addToast)
   const [genRunning, setGenRunning] = useState(false)
+  const [previewRunning, setPreviewRunning] = useState(false)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [progress, setProgress] = useState(0)
   const [etaSec, setEtaSec] = useState<number | null>(null)
   const startTimeRef = useRef(0)
   const taskIdRef = useRef('')
+  const previewTaskIdRef = useRef('')
   const [models, setModels] = useState<ModelEntry[]>([])
   const [modelsLoaded, setModelsLoaded] = useState(false)
 
@@ -246,6 +249,105 @@ export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorB
     } catch { /* ignore */ }
   }, [])
 
+  const handlePreview = useCallback(async () => {
+    const genEdges = edges.filter((e) => e.target === nodeId)
+    const getNode = (edge: typeof genEdges[0]) => nodes.find((n) => n.id === edge.source)
+
+    const promptEdgePos = genEdges.find((e) => e.targetHandle === 'prompt_pos')
+    const promptEdgeNeg = genEdges.find((e) => e.targetHandle === 'prompt_neg')
+    const videoEdge = genEdges.find((e) => e.targetHandle === 'video_in')
+    const imageEdge = genEdges.find((e) => e.targetHandle === 'image_in')
+
+    const promptData = promptEdgePos ? getNode(promptEdgePos)?.data as PromptData | undefined : undefined
+    const videoNode = videoEdge ? getNode(videoEdge) : undefined
+    const imageNode = imageEdge ? getNode(imageEdge) : undefined
+
+    const getFileFromNodeData = async (nodeData: any): Promise<File | undefined> => {
+      if (!nodeData) return undefined
+      if (nodeData.file instanceof File) return nodeData.file
+      if (nodeData.fileDataUrl) {
+        const response = await fetch(nodeData.fileDataUrl)
+        const blob = await response.blob()
+        return new File([blob], nodeData.fileName || 'file', { type: blob.type })
+      }
+      return undefined
+    }
+
+    const imageFile = await getFileFromNodeData(imageNode?.data)
+    const videoFile = await getFileFromNodeData(videoNode?.data)
+
+    const extraParams: Record<string, number | string | boolean> = {}
+    if (modelConfig?.inputs) {
+      const fixedFields = new Set(['width', 'height', 'steps', 'cfg', 'strength', 'seed', 'scheduler', 'model', 'vae_tiling', 'vae_tile_overlap', 'num_frames', 'max_sequence_length', 'decode_chunk_size', 'noise_aug_strength', 'min_guidance_scale', 'max_guidance_scale', 'fps', 'motion_bucket_id'])
+      for (const [name, inp] of Object.entries(modelConfig.inputs)) {
+        if (inp.hidden) continue
+        if (fixedFields.has(name)) continue
+        if (inp.type !== 'int' && inp.type !== 'float') continue
+        const val = (data as Record<string, unknown>)[name]
+        if (val !== undefined && val !== null) {
+          extraParams[name] = val as number
+        }
+      }
+    }
+
+    flushSync(() => {
+      setPreviewRunning(true)
+      setPreviewUrl(null)
+    })
+    const startTime = Date.now()
+    previewTaskIdRef.current = ''
+    try {
+      const task = await startGeneration(
+        promptData?.positive || '',
+        promptEdgeNeg ? (getNode(promptEdgeNeg)?.data as PromptData | undefined)?.negative || '' : '',
+        {
+          width: 256,
+          height: 256,
+          steps: 10,
+          cfg: data.cfg ?? 6,
+          strength: data.strength ?? 0.8,
+          seed: data.seed ?? 0,
+          scheduler: data.scheduler || '',
+          model: data.model || 'cogvideox-2b',
+          execution_mode: data.execution_mode || 'local',
+          vae_tiling: data.vae_tiling ?? true,
+          vae_tile_overlap: data.vae_tile_overlap ?? 0.0,
+          num_frames: data.num_frames,
+          max_sequence_length: data.max_sequence_length,
+          noise_aug_strength: data.noise_aug_strength ?? (data.strength ?? 0.8),
+          fps: data.fps,
+          motion_bucket_id: data.motion_bucket_id,
+          min_guidance_scale: data.min_guidance_scale,
+          max_guidance_scale: data.max_guidance_scale,
+          extraParams,
+        },
+        videoFile,
+        imageFile,
+      )
+
+      previewTaskIdRef.current = task.task_id
+      let status: TaskStatus
+      do {
+        await new Promise((r) => setTimeout(r, 1500))
+        status = await pollTask(task.task_id)
+
+        if (status.status === 'cancelled') break
+      } while (status.status === 'pending' || status.status === 'running')
+
+      if (status.status === 'cancelled') {
+        addToast('Preview cancelled', 'info')
+      } else if (status.status === 'completed' && status.result_url) {
+        setPreviewUrl(status.result_url)
+      } else {
+        addToast(`Preview failed: ${status.error || 'unknown error'}`, 'error')
+      }
+    } catch (err: any) {
+      addToast(`Preview error: ${err.message}`, 'error')
+    } finally {
+      setPreviewRunning(false)
+    }
+  }, [nodeId, data, nodes, edges, modelConfig, addToast])
+
   return {
     models,
     modelsLoaded,
@@ -253,6 +355,8 @@ export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorB
     modelConfig,
     isCloud,
     genRunning,
+    previewRunning,
+    previewUrl,
     progress,
     etaSec,
     availableScheds,
@@ -261,6 +365,7 @@ export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorB
     handleModelChange,
     handleGenWorkflow,
     handleCancel,
+    handlePreview,
     handleModeToggle,
     updateNodeData,
     nodes,
