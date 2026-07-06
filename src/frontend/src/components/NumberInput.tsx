@@ -63,11 +63,20 @@ export default function NumberInput({ value, onChange, min, max, step = 1, style
           width: '100%',
           textAlign: 'center',
           MozAppearance: 'textfield',
+          WebkitAppearance: 'none',
+          appearance: 'none',
           height: 22,
           boxSizing: 'border-box',
         }}
       />
       <button type="button" onClick={inc} style={btnStyle}>+</button>
+      <style>{`
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button {
+          -webkit-appearance: none;
+          margin: 0;
+        }
+      `}</style>
     </div>
   )
 }

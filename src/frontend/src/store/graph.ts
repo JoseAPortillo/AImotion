@@ -146,6 +146,11 @@ export const useGraphStore = create<GraphState>((set, get) => ({
       return m ? Math.max(max, parseInt(m[1], 10)) : max
     }, 0)
     nodeCounter = maxNum
-    set({ nodes: wfNodes, edges: wfEdges, selectedNode: null, outputUrl: null, resultType: null })
+    const nodesWithSize = wfNodes.map((n) => ({
+      ...n,
+      width: n.width ?? NODE_DEFAULT_SIZE[n.type as NodeType]?.width ?? 260,
+      height: n.height ?? NODE_DEFAULT_SIZE[n.type as NodeType]?.height ?? 320,
+    }))
+    set({ nodes: nodesWithSize, edges: wfEdges, selectedNode: null, outputUrl: null, resultType: null })
   },
 }))

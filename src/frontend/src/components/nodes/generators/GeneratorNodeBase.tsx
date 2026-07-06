@@ -1,12 +1,12 @@
-import { memo, useEffect, useMemo, type ReactNode } from 'react'
+import { memo, useEffect, useMemo } from 'react'
 import type { NodeProps } from '@xyflow/react'
 import { Handle, Position } from '@xyflow/react'
 import { NODE_DEFINITIONS, getHandleColor, type NodeType, type GenerationData, type ModelEntry } from '../../../types/nodes'
 import NodeWrapper, { CollapsibleSection, InfoLabel, FIELD_DESCS } from '../NodeWrapper'
 import { useGeneratorBase, formatEta, schedLabels } from '../../../hooks/useGeneratorBase'
+import { useAutoPreview } from '../../../hooks/useAutoPreview'
 import ModelSelect from '../../ModelSelect'
 import NumberInput from '../../NumberInput'
-import { useGraphStore } from '../../../store/graph'
 
 type ResPreset = { label: string; w: number; h: number }
 
@@ -77,6 +77,7 @@ function GeneratorNodeBase(props: NodeBaseProps) {
   const def = NODE_DEFINITIONS[props.type as NodeType]
   const data = props.data as GenerationData
   const base = useGeneratorBase({ nodeId: props.id, data, modalityFilter: props.modalityFilter })
+  const autoPreview = useAutoPreview({ nodeId: props.id, data })
 
   const activeInputs = useMemo(() => new Set(props.activeInputs), [props.activeInputs])
 
@@ -378,26 +379,26 @@ function GeneratorNodeBase(props: NodeBaseProps) {
             })}
         </CollapsibleSection>
 
-        {(base.previewRunning || base.previewUrl) && (
-          <CollapsibleSection title="Preview" defaultOpen={true}>
+        {(autoPreview.previewRunning || autoPreview.previewUrl) && (
+          <CollapsibleSection title="Auto Preview" defaultOpen={true}>
             <div style={{ marginTop: 4, textAlign: 'center' }}>
-              {base.previewRunning && !base.previewUrl && (
+              {autoPreview.previewRunning && !autoPreview.previewUrl && (
                 <div style={{ padding: '12px 0', fontSize: 10, color: '#6366f1' }}>
                   Generating preview...
                 </div>
               )}
-              {base.previewUrl && (
+              {autoPreview.previewUrl && (
                 <>
-                  {base.previewUrl.endsWith('.png') || base.previewUrl.endsWith('.jpg') ? (
-                    <img src={base.previewUrl} alt="Preview"
-                      style={{ width: '100%', maxWidth: 200, maxHeight: 200, borderRadius: 4, display: 'block', margin: '0 auto', opacity: base.previewRunning ? 0.5 : 1 }}
+                  {autoPreview.previewUrl.endsWith('.png') || autoPreview.previewUrl.endsWith('.jpg') ? (
+                    <img src={autoPreview.previewUrl} alt="Preview"
+                      style={{ width: '100%', maxWidth: 200, maxHeight: 200, borderRadius: 4, display: 'block', margin: '0 auto', opacity: autoPreview.previewRunning ? 0.5 : 1 }}
                     />
                   ) : (
-                    <video src={base.previewUrl} controls autoPlay loop
-                      style={{ width: '100%', maxWidth: 200, maxHeight: 160, borderRadius: 4, display: 'block', margin: '0 auto', opacity: base.previewRunning ? 0.5 : 1 }}
+                    <video src={autoPreview.previewUrl} controls autoPlay loop
+                      style={{ width: '100%', maxWidth: 200, maxHeight: 160, borderRadius: 4, display: 'block', margin: '0 auto', opacity: autoPreview.previewRunning ? 0.5 : 1 }}
                     />
                   )}
-                  {base.previewRunning && (
+                  {autoPreview.previewRunning && (
                     <div style={{ fontSize: 9, color: '#6366f1', marginTop: 2 }}>Updating...</div>
                   )}
                 </>
@@ -406,31 +407,8 @@ function GeneratorNodeBase(props: NodeBaseProps) {
           </CollapsibleSection>
         )}
 
-        <PreviewSection />
       </div>
     </NodeWrapper>
-  )
-}
-
-function PreviewSection() {
-  const outputUrl = useGraphStore((s) => s.outputUrl)
-  const resultType = useGraphStore((s) => s.resultType)
-  const isImage = resultType === 'image' || (!resultType && outputUrl?.endsWith('.png'))
-  if (!outputUrl) return null
-  return (
-    <CollapsibleSection title="Preview" defaultOpen={false}>
-      <div style={{ marginTop: 4, textAlign: 'center' }}>
-        {isImage ? (
-          <img src={outputUrl} alt="Generated"
-            style={{ width: '100%', maxWidth: 200, maxHeight: 200, borderRadius: 4, display: 'block', margin: '0 auto' }}
-          />
-        ) : (
-          <video src={outputUrl} controls autoPlay loop
-            style={{ width: '100%', maxWidth: 200, maxHeight: 160, borderRadius: 4, display: 'block', margin: '0 auto' }}
-          />
-        )}
-      </div>
-    </CollapsibleSection>
   )
 }
 

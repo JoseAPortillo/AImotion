@@ -47,16 +47,10 @@ export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorB
   const setOutputUrl = useGraphStore((s) => s.setOutputUrl)
   const addToast = useToastStore((s) => s.addToast)
   const [genRunning, setGenRunning] = useState(false)
-  const [previewRunning, setPreviewRunning] = useState(false)
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [progress, setProgress] = useState(0)
   const [etaSec, setEtaSec] = useState<number | null>(null)
   const startTimeRef = useRef(0)
   const taskIdRef = useRef('')
-  const previewTaskIdRef = useRef('')
-  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const lastPreviewKeyRef = useRef<string>('')
-  const previewAbortRef = useRef(false)
   const [models, setModels] = useState<ModelEntry[]>([])
   const [modelsLoaded, setModelsLoaded] = useState(false)
 
@@ -252,153 +246,6 @@ export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorB
     } catch { /* ignore */ }
   }, [])
 
-  const runPreview = useCallback(async () => {
-    if (genRunning) return
-    if (!data.model) return
-
-    const genEdges = edges.filter((e) => e.target === nodeId)
-    const getNode = (edge: typeof genEdges[0]) => nodes.find((n) => n.id === edge.source)
-
-    const promptEdgePos = genEdges.find((e) => e.targetHandle === 'prompt_pos')
-    const promptEdgeNeg = genEdges.find((e) => e.targetHandle === 'prompt_neg')
-    const videoEdge = genEdges.find((e) => e.targetHandle === 'video_in')
-    const imageEdge = genEdges.find((e) => e.targetHandle === 'image_in')
-
-    const promptData = promptEdgePos ? getNode(promptEdgePos)?.data as PromptData | undefined : undefined
-    const promptText = promptData?.positive || ''
-    if (!promptText) return
-
-    const videoNode = videoEdge ? getNode(videoEdge) : undefined
-    const imageNode = imageEdge ? getNode(imageEdge) : undefined
-
-    const getFileFromNodeData = async (nodeData: any): Promise<File | undefined> => {
-      if (!nodeData) return undefined
-      if (nodeData.file instanceof File) return nodeData.file
-      if (nodeData.fileDataUrl) {
-        const response = await fetch(nodeData.fileDataUrl)
-        const blob = await response.blob()
-        return new File([blob], nodeData.fileName || 'file', { type: blob.type })
-      }
-      return undefined
-    }
-
-    const imageFile = await getFileFromNodeData(imageNode?.data)
-    const videoFile = await getFileFromNodeData(videoNode?.data)
-
-    const extraParams: Record<string, number | string | boolean> = {}
-    if (modelConfig?.inputs) {
-      const fixedFields = new Set(['width', 'height', 'steps', 'cfg', 'strength', 'seed', 'scheduler', 'model', 'vae_tiling', 'vae_tile_overlap', 'num_frames', 'max_sequence_length', 'decode_chunk_size', 'noise_aug_strength', 'min_guidance_scale', 'max_guidance_scale', 'fps', 'motion_bucket_id'])
-      for (const [name, inp] of Object.entries(modelConfig.inputs)) {
-        if (inp.hidden) continue
-        if (fixedFields.has(name)) continue
-        if (inp.type !== 'int' && inp.type !== 'float') continue
-        const val = (data as Record<string, unknown>)[name]
-        if (val !== undefined && val !== null) {
-          extraParams[name] = val as number
-        }
-      }
-    }
-
-    previewAbortRef.current = true
-    if (previewTaskIdRef.current) {
-      try { await cancelTask(previewTaskIdRef.current) } catch { /* ignore */ }
-    }
-    previewAbortRef.current = false
-
-    setPreviewRunning(true)
-    try {
-      const task = await startGeneration(
-        promptText,
-        promptEdgeNeg ? (getNode(promptEdgeNeg)?.data as PromptData | undefined)?.negative || '' : '',
-        {
-          width: 256,
-          height: 256,
-          steps: 6,
-          cfg: data.cfg ?? 6,
-          strength: data.strength ?? 0.8,
-          seed: data.seed ?? 0,
-          scheduler: data.scheduler || '',
-          model: data.model,
-          execution_mode: data.execution_mode || 'local',
-          vae_tiling: data.vae_tiling ?? true,
-          vae_tile_overlap: data.vae_tile_overlap ?? 0.0,
-          num_frames: data.num_frames,
-          max_sequence_length: data.max_sequence_length,
-          noise_aug_strength: data.noise_aug_strength ?? (data.strength ?? 0.8),
-          fps: data.fps,
-          motion_bucket_id: data.motion_bucket_id,
-          min_guidance_scale: data.min_guidance_scale,
-          max_guidance_scale: data.max_guidance_scale,
-          extraParams,
-        },
-        videoFile,
-        imageFile,
-      )
-
-      previewTaskIdRef.current = task.task_id
-      let status: TaskStatus | undefined
-      do {
-        await new Promise((r) => setTimeout(r, 1500))
-        if (previewAbortRef.current) break
-        status = await pollTask(task.task_id)
-        if (status.status === 'cancelled') break
-      } while (status.status === 'pending' || status.status === 'running')
-
-      if (!previewAbortRef.current && status && status.status === 'completed' && status.result_url) {
-        setPreviewUrl(status.result_url)
-      }
-    } catch {
-      // silent fail for preview
-    } finally {
-      setPreviewRunning(false)
-    }
-  }, [nodeId, data, nodes, edges, modelConfig, genRunning])
-
-  // Auto-preview with debounce when key params change
-  const previewDeps = useMemo(() => {
-    const genEdges = edges.filter((e) => e.target === nodeId)
-    const promptEdge = genEdges.find((e) => e.targetHandle === 'prompt_pos')
-    const promptNode = promptEdge ? nodes.find((n) => n.id === promptEdge.source) : undefined
-    const promptText = (promptNode?.data as PromptData)?.positive || ''
-    const negEdge = genEdges.find((e) => e.targetHandle === 'prompt_neg')
-    const negNode = negEdge ? nodes.find((n) => n.id === negEdge.source) : undefined
-    const negText = (negNode?.data as PromptData)?.negative || ''
-    const hasImage = genEdges.some((e) => e.targetHandle === 'image_in')
-    const hasVideo = genEdges.some((e) => e.targetHandle === 'video_in')
-    return `${data.model}|${data.seed}|${data.cfg}|${data.strength}|${data.scheduler}|${promptText}|${negText}|${hasImage}|${hasVideo}`
-  }, [edges, nodes, nodeId, data.model, data.seed, data.cfg, data.strength, data.scheduler])
-
-  useEffect(() => {
-    if (genRunning) return
-    if (!data.model) return
-    if (!previewDeps) return
-
-    if (previewDeps === lastPreviewKeyRef.current) return
-    lastPreviewKeyRef.current = previewDeps
-
-    if (previewTimerRef.current) clearTimeout(previewTimerRef.current)
-
-    const hasPrompt = previewDeps.split('|')[5]
-    if (!hasPrompt) return
-
-    previewTimerRef.current = setTimeout(() => {
-      runPreview()
-    }, 2500)
-
-    return () => {
-      if (previewTimerRef.current) clearTimeout(previewTimerRef.current)
-    }
-  }, [previewDeps, data.model, genRunning, runPreview])
-
-  // Cancel preview when generation starts
-  useEffect(() => {
-    if (genRunning && previewTaskIdRef.current) {
-      previewAbortRef.current = true
-      cancelTask(previewTaskIdRef.current).catch(() => {})
-      setPreviewRunning(false)
-    }
-  }, [genRunning])
-
   return {
     models,
     modelsLoaded,
@@ -406,8 +253,6 @@ export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorB
     modelConfig,
     isCloud,
     genRunning,
-    previewRunning,
-    previewUrl,
     progress,
     etaSec,
     availableScheds,
