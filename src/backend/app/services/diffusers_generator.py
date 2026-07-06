@@ -366,8 +366,7 @@ class DiffusersGenerator:
 
         if "generator" in valid:
             gen = torch.Generator(device=self.device)
-            if seed > 0:
-                gen.manual_seed(seed)
+            gen.manual_seed(seed)
             kw["generator"] = gen
 
         if negative_prompt and "negative_prompt" in valid:
