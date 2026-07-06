@@ -461,6 +461,8 @@ async def list_models():
         if v.type in ("builtin", "future", "api", "installable"):
             if v.key in installed_keys:
                 continue
+            if v.hf_name is None or not is_model_cached(v.hf_name):
+                continue
             results.append(_build_variant_entry(v))
     for inst in installed_list:
         variant = catalog.get_variant(inst.key)

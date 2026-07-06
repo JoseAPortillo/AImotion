@@ -195,26 +195,9 @@ function GeneratorNodeBase(props: NodeBaseProps) {
               value={data.model}
               models={base.visibleModels}
               onChange={base.handleModelChange}
-              placeholder={base.modelsLoaded ? (base.isCloud ? 'No cloud models' : 'No local models') : 'Loading...'}
+              placeholder={base.modelsLoaded ? 'No models available' : 'Loading...'}
             />
           </div>
-          <button
-            onClick={base.handleModeToggle}
-            title={base.isCloud ? 'Switch to Local mode' : 'Switch to Cloud mode'}
-            style={{
-              padding: '3px 6px',
-              borderRadius: 4,
-              border: '1px solid #444',
-              fontSize: 10,
-              cursor: 'pointer',
-              background: base.isCloud ? '#1e3a5f' : '#2a2a2a',
-              color: base.isCloud ? '#60a5fa' : '#ccc',
-              whiteSpace: 'nowrap',
-              lineHeight: 1.2,
-            }}
-          >
-            {base.isCloud ? '☁ Cloud' : '💻 Local'}
-          </button>
         </div>
 
         {base.modelConfig && (

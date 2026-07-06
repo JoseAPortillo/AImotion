@@ -34,3 +34,5 @@ settings = Settings()
 import os
 os.environ["HF_HOME"] = settings.model_cache_dir
 os.environ["HF_HUB_CACHE"] = settings.model_cache_dir
+if settings.hf_token:
+    os.environ["HF_TOKEN"] = settings.hf_token

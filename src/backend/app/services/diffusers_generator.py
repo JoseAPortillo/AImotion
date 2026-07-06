@@ -115,11 +115,9 @@ class DiffusersGenerator:
             pipe = pipe_cls.from_pretrained(
                 model_name, torch_dtype=dtype, token=token,
             )
-            if hasattr(pipe, "enable_model_cpu_offload"):
-                pipe.enable_model_cpu_offload()
+            pipe.to(self.device)
+            if hasattr(pipe, "enable_attention_slicing"):
                 pipe.enable_attention_slicing()
-            else:
-                pipe.to(self.device)
             if hasattr(pipe, "vae") and hasattr(pipe.vae, "enable_tiling"):
                 try:
                     pipe.vae.enable_tiling()

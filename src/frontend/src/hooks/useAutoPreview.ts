@@ -11,6 +11,7 @@ interface UseAutoPreviewOptions {
 export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
   const nodes = useGraphStore((s) => s.nodes)
   const edges = useGraphStore((s) => s.edges)
+  const updateNodeData = useGraphStore((s) => s.updateNodeData)
 
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [previewRunning, setPreviewRunning] = useState(false)
@@ -79,7 +80,7 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
         {
           width: data.width ?? 720,
           height: data.height ?? 480,
-          steps: 6,
+          steps: 12,
           cfg: data.cfg ?? 6,
           strength: data.strength ?? 0.8,
           seed: data.seed ?? 0,
@@ -129,6 +130,12 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
     if (timerRef.current) {
       clearTimeout(timerRef.current)
       timerRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    if (data.seed === 0 || data.seed == null) {
+      updateNodeData(nodeId, { seed: Math.floor(Math.random() * 2147483647) + 1 } as Partial<GenerationData>)
     }
   }, [])
 

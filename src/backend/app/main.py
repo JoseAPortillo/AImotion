@@ -2,9 +2,25 @@ import os
 import logging
 import warnings
 from contextlib import asynccontextmanager
+from pathlib import Path
+
+# Set HF_TOKEN from .env BEFORE any other import to avoid huggingface_hub warning
+_env_path = Path(__file__).resolve().parent.parent / ".env"
+if _env_path.exists():
+    for line in _env_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, _, v = line.partition("=")
+            k = k.strip()
+            v = v.strip().strip("\"'")
+            if k == "HF_TOKEN" and v:
+                os.environ["HF_TOKEN"] = v
+                break
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+
+from app.config import settings
 
 from app.api.health import router as health_router
 from app.api.generate import router as generate_router, results_router, task_manager
@@ -16,7 +32,6 @@ from app.api.graph import router as graph_router
 from app.api.hardware import router as hardware_router
 from app.api.models import router as models_router
 from app.api.credentials import router as credentials_router
-from app.config import settings
 from app.services.runners.registry import RunnerRegistry
 from app.services.runners.diffusers import DiffusersRunner
 from app.services.runners.gguf import GGUFRunner

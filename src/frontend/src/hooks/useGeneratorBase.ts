@@ -73,14 +73,9 @@ export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorB
     fetchModels()
   }, [fetchModels])
 
-  const isCloud = data.execution_mode === 'cloud'
-
   const visibleModels = useMemo(() =>
-    models.filter(m => {
-      if (isCloud ? m.type !== 'api' : m.type === 'api') return false
-      return modalityFilter(m)
-    }),
-    [models, isCloud, modalityFilter],
+    models.filter(m => modalityFilter(m)),
+    [models, modalityFilter],
   )
 
   const modelConfig = visibleModels.find(m => m.key === data.model)
@@ -91,16 +86,6 @@ export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorB
     : defaultSched
       ? `Default (${schedLabels[defaultSched] || defaultSched})`
       : 'Default'
-
-  const handleModeToggle = useCallback(() => {
-    const newMode = isCloud ? 'local' : 'cloud'
-    const m = models.find(m => newMode === 'cloud' ? m.type === 'api' : m.type !== 'api')
-    updateNodeData(nodeId, {
-      execution_mode: newMode,
-      model: modalityFilter(m ?? models[0]) ? m?.key : '',
-      scheduler: '',
-    })
-  }, [nodeId, models, isCloud, updateNodeData, modalityFilter])
 
   const handleModelChange = useCallback((key: string) => {
     const cfg = models.find(m => m.key === key)
@@ -251,7 +236,6 @@ export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorB
     modelsLoaded,
     visibleModels,
     modelConfig,
-    isCloud,
     genRunning,
     progress,
     etaSec,
@@ -261,7 +245,6 @@ export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorB
     handleModelChange,
     handleGenWorkflow,
     handleCancel,
-    handleModeToggle,
     updateNodeData,
     nodes,
     edges,
