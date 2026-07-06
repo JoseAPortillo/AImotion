@@ -30,8 +30,8 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
     const negText = (negNode?.data as PromptData)?.negative || ''
     const hasImage = genEdges.some((e) => e.targetHandle === 'image_in')
     const hasVideo = genEdges.some((e) => e.targetHandle === 'video_in')
-    return `${data.model}|${data.seed}|${data.cfg}|${data.strength}|${data.scheduler}|${promptText}|${negText}|${hasImage}|${hasVideo}`
-  }, [edges, nodes, nodeId, data.model, data.seed, data.cfg, data.strength, data.scheduler])
+    return `${data.model}|${data.seed}|${data.cfg}|${data.strength}|${data.scheduler}|${data.width}|${data.height}|${promptText}|${negText}|${hasImage}|${hasVideo}`
+  }, [edges, nodes, nodeId, data.model, data.seed, data.cfg, data.strength, data.scheduler, data.width, data.height])
 
   const run = useCallback(async () => {
     if (!data.model) return
@@ -77,9 +77,9 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
         promptText,
         promptEdgeNeg ? (getNode(promptEdgeNeg)?.data as PromptData | undefined)?.negative || '' : '',
         {
-          width: 384,
-          height: 384,
-          steps: 12,
+          width: data.width ?? 720,
+          height: data.height ?? 480,
+          steps: 6,
           cfg: data.cfg ?? 6,
           strength: data.strength ?? 0.8,
           seed: data.seed ?? 0,
