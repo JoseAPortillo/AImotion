@@ -300,6 +300,9 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
         weight_exts = (".safetensors", ".bin", ".pt", ".pth", ".gguf", ".ggufs")
         weight_files = [f for f in files if f.endswith(weight_exts)]
 
+        has_model_index = "model_index.json" in files
+        checkpoint_file = weight_files[0] if weight_files and not has_model_index else ""
+
         if not weight_files:
             task.status = "error"
             task.error_msg = f"Model '{hf_name}' has no weight files"
@@ -381,6 +384,8 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
             needs_token=False,
             defaults=defaults,
             installed_at=datetime.now().isoformat(),
+            repo_files=files,
+            checkpoint_file=checkpoint_file,
         )
         add_installed(model)
 
