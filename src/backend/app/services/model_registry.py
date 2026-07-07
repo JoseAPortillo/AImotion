@@ -22,6 +22,8 @@ class InstalledModel:
     needs_token: bool
     defaults: dict
     installed_at: str
+    repo_files: list[str] | None = None
+    checkpoint_file: str = ""
 
 
 def _load_registry() -> list[dict]:
@@ -80,6 +82,28 @@ def generate_key(hf_name: str) -> str:
         key = f"{safe}_{i}"
         i += 1
     return key
+
+
+def get_cached_repo_info(hf_name: str) -> dict | None:
+    """Return cached repo file info for an installed model, without hitting HF API."""
+    for e in _load_registry():
+        if e.get("hf_name") == hf_name and e.get("repo_files"):
+            return {
+                "repo_files": e["repo_files"],
+                "checkpoint_file": e.get("checkpoint_file", ""),
+            }
+    return None
+
+
+def update_repo_info(hf_name: str, repo_files: list[str], checkpoint_file: str = ""):
+    """Persist repo file list alongside the installed model entry."""
+    entries = _load_registry()
+    for e in entries:
+        if e.get("hf_name") == hf_name:
+            e["repo_files"] = repo_files
+            e["checkpoint_file"] = checkpoint_file
+            break
+    _save_registry(entries)
 
 
 def hf_cache_path() -> str:

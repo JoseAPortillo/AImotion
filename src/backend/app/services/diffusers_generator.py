@@ -99,21 +99,33 @@ class DiffusersGenerator:
     def _load_pipe(self, model_name: str, dtype, token=None, pipeline_class_name: str | None = None):
         from diffusers import DiffusionPipeline
         from huggingface_hub import HfApi, hf_hub_download
+        from app.services.model_registry import get_cached_repo_info, is_model_cached
 
         mod_cls = None
         if pipeline_class_name:
             import importlib
             mod_cls = getattr(importlib.import_module("diffusers"), pipeline_class_name, None)
-        
-        api = HfApi()
-        files = api.list_repo_files(model_name)
-        weight_files = [f for f in files if f.endswith(('.safetensors', '.ckpt'))]
-        has_model_index = 'model_index.json' in files
-        
-        if has_model_index or not weight_files:
+
+        # Use cached repo file list to avoid HF API call on every load
+        repo_info = get_cached_repo_info(model_name)
+        if repo_info:
+            files = repo_info["repo_files"]
+            checkpoint_file = repo_info.get("checkpoint_file", "")
+            has_model_index = "model_index.json" in files
+        else:
+            api = HfApi()
+            files = api.list_repo_files(model_name)
+            weight_files = [f for f in files if f.endswith(('.safetensors', '.ckpt'))]
+            has_model_index = 'model_index.json' in files
+            checkpoint_file = weight_files[0] if weight_files and not has_model_index else ""
+
+        model_is_cached = is_model_cached(model_name)
+
+        if has_model_index or not checkpoint_file:
             pipe_cls = mod_cls or DiffusionPipeline
             pipe = pipe_cls.from_pretrained(
                 model_name, torch_dtype=dtype, token=token,
+                local_files_only=model_is_cached,
             )
             pipe.to(self.device)
             if hasattr(pipe, "enable_attention_slicing"):
@@ -128,12 +140,18 @@ class DiffusersGenerator:
             return pipe
 
         # Single-file checkpoint — try generic auto-detect first
-        checkpoint_file = weight_files[0]
+        if not checkpoint_file:
+            api = HfApi()
+            files = api.list_repo_files(model_name)
+            weight_files = [f for f in files if f.endswith(('.safetensors', '.ckpt'))]
+            checkpoint_file = weight_files[0] if weight_files else ""
+
         logger.info(f"Detected single-file checkpoint: {checkpoint_file}")
         local_path = hf_hub_download(
             repo_id=model_name,
             filename=checkpoint_file,
             token=token,
+            local_files_only=model_is_cached,
         )
         logger.info(f"Downloaded checkpoint to: {local_path}")
 
