@@ -151,6 +151,7 @@ function DiffuserGeneratorNode(props: NodeProps) {
   const nodes = useGraphStore((s) => s.nodes)
   const edges = useGraphStore((s) => s.edges)
   const setOutputUrl = useGraphStore((s) => s.setOutputUrl)
+  const setNodeOutput = useGraphStore((s) => s.setNodeOutput)
   const addToast = useToastStore((s) => s.addToast)
   const [genRunning, setGenRunning] = useState(false)
   const [progress, setProgress] = useState(0)
@@ -337,6 +338,7 @@ function DiffuserGeneratorNode(props: NodeProps) {
         setProgress(100)
         setEtaSec(null)
         setOutputUrl(status.result_url, status.result_type)
+        setNodeOutput(props.id, status.result_url, status.result_type || 'image')
       } else {
         addToast(`Workflow failed: ${status.error || 'unknown error'}`, 'error')
       }
@@ -346,7 +348,7 @@ function DiffuserGeneratorNode(props: NodeProps) {
       setGenRunning(false)
       setEtaSec(null)
     }
-  }, [props.id, data, nodes, edges, setOutputUrl])
+  }, [props.id, data, nodes, edges, setOutputUrl, setNodeOutput])
 
   const handleCancel = useCallback(async () => {
     if (!taskIdRef.current) return

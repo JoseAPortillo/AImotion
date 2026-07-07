@@ -28,6 +28,7 @@ import type { PromptData, ImageInputData, VideoInputData, GenerationData } from 
 import ToastContainer from './components/Toast'
 import ErrorBoundary from './components/ErrorBoundary'
 import { useToastStore } from './store/toast'
+import { saveWorkflowToDirectory, downloadWorkflowJson, loadWorkflowFromDirectory, hasDirectorySupport } from './utils/workflowIO'
 import ImageInputNode from './components/nodes/ImageInputNode'
 import VideoInputNode from './components/nodes/VideoInputNode'
 import AudioInputNode from './components/nodes/AudioInputNode'
@@ -291,9 +292,13 @@ function AppInner() {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const setOutputUrl = useGraphStore((s) => s.setOutputUrl)
+  const setNodeOutput = useGraphStore((s) => s.setNodeOutput)
   const addToast = useToastStore((s) => s.addToast)
   const clearAll = useGraphStore((s) => s.clearAll)
   const loadWorkflow = useGraphStore((s) => s.loadWorkflow)
+  const nodeOutputs = useGraphStore((s) => s.nodeOutputs)
+  const outputUrl = useGraphStore((s) => s.outputUrl)
+  const resultType = useGraphStore((s) => s.resultType)
   const openRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -304,23 +309,43 @@ function AppInner() {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const handleSave = useCallback(() => {
-    const workflow = {
-      version: 1,
-      nodes: nodes.map(({ id, type, position, data, width, height }) => ({ id, type, position, data, width, height })),
-      edges: edges.map(({ id, source, target, sourceHandle, targetHandle, style }) => ({ id, source, target, sourceHandle, targetHandle, style })),
+  const handleSave = useCallback(async () => {
+    if (hasDirectorySupport()) {
+      try {
+        await saveWorkflowToDirectory(nodes, edges, nodeOutputs, outputUrl, resultType)
+        addToast('Workflow saved', 'success')
+        return
+      } catch (err: any) {
+        if (err?.name === 'AbortError' || err?.name === 'SecurityError') return
+      }
     }
-    const blob = new Blob([JSON.stringify(workflow, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `workflow-${Date.now()}.json`
-    a.click()
-    URL.revokeObjectURL(url)
+    downloadWorkflowJson(nodes, edges, nodeOutputs, outputUrl, resultType)
     addToast('Workflow saved', 'success')
-  }, [nodes, edges])
+  }, [nodes, edges, nodeOutputs, outputUrl, resultType, addToast])
 
-  const handleOpen = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleOpen = useCallback(async () => {
+    if (hasDirectorySupport()) {
+      try {
+        const { workflow, mediaBlobs } = await loadWorkflowFromDirectory()
+        const restoration: Record<string, { url: string; type: 'image' | 'video' }> = {}
+        for (const [nodeId, entry] of Object.entries(mediaBlobs)) {
+          restoration[nodeId] = { url: URL.createObjectURL(entry.blob), type: entry.type }
+        }
+        loadWorkflow(workflow.nodes, workflow.edges, {
+          nodeOutputs: Object.keys(restoration).length > 0 ? restoration : undefined,
+          outputUrl: workflow.outputUrl ?? null,
+          resultType: workflow.resultType ?? null,
+        })
+        addToast('Workflow loaded', 'success')
+        return
+      } catch (err: any) {
+        if (err?.name === 'AbortError') return
+      }
+    }
+    openRef.current?.click()
+  }, [loadWorkflow, addToast])
+
+  const handleOpenFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     try {
@@ -330,13 +355,24 @@ function AppInner() {
         addToast('Invalid workflow file', 'error')
         return
       }
-      loadWorkflow(wf.nodes, wf.edges)
+      const restoration: Record<string, { url: string; type: 'image' | 'video' }> = {}
+      if (wf.media) {
+        for (const [nodeId, media] of Object.entries(wf.media)) {
+          const m = media as { path: string; type: 'image' | 'video' }
+          if (m.path) restoration[nodeId] = { url: m.path, type: m.type }
+        }
+      }
+      loadWorkflow(wf.nodes, wf.edges, {
+        nodeOutputs: Object.keys(restoration).length > 0 ? restoration : undefined,
+        outputUrl: wf.outputUrl ?? null,
+        resultType: wf.resultType ?? null,
+      })
       addToast(`Workflow loaded: ${file.name}`, 'success')
     } catch {
       addToast('Failed to load workflow file', 'error')
     }
     e.target.value = ''
-  }, [loadWorkflow])
+  }, [loadWorkflow, addToast])
 
   const handleNew = useCallback(() => {
     if (nodes.length === 0 && edges.length === 0) return
@@ -348,10 +384,11 @@ function AppInner() {
 
   const handleGenerate = useCallback(async () => {
     const promptNode = nodes.find((n) => n.type === 'prompt')?.data as PromptData | undefined
-    const genNode = (nodes.find((n) => n.type === 'diffuserGenerator')?.data || nodes.find((n) => n.type === 'generation')?.data) as GenerationData | undefined
+    const genNodeData = (nodes.find((n) => n.type === 'diffuserGenerator')?.data || nodes.find((n) => n.type === 'generation')?.data) as GenerationData | undefined
+    const genNode = nodes.find((n) => n.type === 'diffuserGenerator') || nodes.find((n) => n.type === 'generation')
     const videoNode = nodes.find((n) => n.type === 'videoInput')?.data as VideoInputData | undefined
 
-    if (!promptNode?.positive || !genNode) {
+    if (!promptNode?.positive || !genNodeData || !genNode) {
       addToast('Add at least a Prompt and a Diffuser Generator node to the graph', 'info')
       return
     }
@@ -359,17 +396,17 @@ function AppInner() {
     setGenerating(true)
     try {
       const task = await startGeneration(promptNode.positive, promptNode.negative || '', {
-        width: genNode.width ?? 720,
-        height: genNode.height ?? 480,
-        steps: genNode.steps ?? 50,
-        cfg: genNode.cfg ?? 6,
-        strength: genNode.strength ?? 0.8,
-        seed: genNode.seed ?? 0,
-        scheduler: genNode.scheduler || '',
-        model: genNode.model || 'cogvideox-2b',
-        execution_mode: genNode.execution_mode || 'local',
-        vae_tiling: genNode.vae_tiling ?? true,
-        vae_tile_overlap: genNode.vae_tile_overlap ?? 0.0,
+        width: genNodeData.width ?? 720,
+        height: genNodeData.height ?? 480,
+        steps: genNodeData.steps ?? 50,
+        cfg: genNodeData.cfg ?? 6,
+        strength: genNodeData.strength ?? 0.8,
+        seed: genNodeData.seed ?? 0,
+        scheduler: genNodeData.scheduler || '',
+        model: genNodeData.model || 'cogvideox-2b',
+        execution_mode: genNodeData.execution_mode || 'local',
+        vae_tiling: genNodeData.vae_tiling ?? true,
+        vae_tile_overlap: genNodeData.vae_tile_overlap ?? 0.0,
       }, videoNode?.file)
 
       let status: TaskStatus
@@ -380,6 +417,7 @@ function AppInner() {
 
       if (status.status === 'completed' && status.result_url) {
         setOutputUrl(status.result_url)
+        setNodeOutput(genNode.id, status.result_url, status.result_type || 'image')
       } else {
         addToast(`Generation failed: ${status.error || 'unknown error'}`, 'error')
       }
@@ -388,7 +426,7 @@ function AppInner() {
     } finally {
       setGenerating(false)
     }
-  }, [nodes, setOutputUrl])
+  }, [nodes, setOutputUrl, setNodeOutput])
 
   return (
     <div style={{ display: 'flex', height: '100vh', background: '#0f0f0f', color: '#e0e0e0' }}>
@@ -478,12 +516,12 @@ function AppInner() {
                     style={{ padding: '8px 14px', fontSize: 12, cursor: 'pointer', color: '#ccc', borderBottom: '1px solid #2a2a2a' }}
                   >Save</div>
                   <div
-                    onClick={() => { openRef.current?.click(); setMenuOpen(false) }}
+                    onClick={() => { handleOpen(); setMenuOpen(false) }}
                     style={{ padding: '8px 14px', fontSize: 12, cursor: 'pointer', color: '#ccc' }}
                   >Open</div>
                 </div>
               )}
-              <input ref={openRef} type="file" accept=".json" onChange={handleOpen} style={{ display: 'none' }} />
+              <input ref={openRef} type="file" accept=".json,.aimation" onChange={handleOpenFile} style={{ display: 'none' }} />
             </div>
             <button
               onClick={handleGenerate}

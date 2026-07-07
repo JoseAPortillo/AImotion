@@ -53,7 +53,15 @@ interface GraphState {
   setNodeOutput: (nodeId: string, url: string, type: 'image' | 'video') => void
   removeNode: (nodeId: string) => void
   clearAll: () => void
-  loadWorkflow: (wfNodes: AppNode[], wfEdges: Edge[]) => void
+  loadWorkflow: (
+    wfNodes: AppNode[],
+    wfEdges: Edge[],
+    restoration?: {
+      nodeOutputs?: Record<string, { url: string; type: 'image' | 'video' }>
+      outputUrl?: string | null
+      resultType?: 'image' | 'video' | null
+    },
+  ) => void
   addNodesToGroup: (groupId: string, childIds: string[]) => void
   removeNodesFromGroup: (groupId: string, childIds: string[]) => void
   toggleGroupCollapse: (groupId: string) => void
@@ -171,7 +179,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
 
   clearAll: () => set({ nodes: [], edges: [], selectedNode: null, outputUrl: null, resultType: null, nodeOutputs: {} }),
 
-  loadWorkflow: (wfNodes, wfEdges) => {
+  loadWorkflow: (wfNodes, wfEdges, restoration) => {
     const maxNum = wfNodes.reduce((max, n) => {
       const m = n.id.match(/_(\d+)$/)
       return m ? Math.max(max, parseInt(m[1], 10)) : max
@@ -200,7 +208,14 @@ export const useGraphStore = create<GraphState>((set, get) => ({
         style: collapsedChildren.has(n.id) ? { ...n.style, display: 'none' as const } : n.style,
       }
     })
-    set({ nodes: nodesWithSize, edges: wfEdges, selectedNode: null, outputUrl: null, resultType: null, nodeOutputs: {} })
+    set({
+      nodes: nodesWithSize,
+      edges: wfEdges,
+      selectedNode: null,
+      outputUrl: restoration?.outputUrl ?? null,
+      resultType: restoration?.resultType ?? null,
+      nodeOutputs: restoration?.nodeOutputs ?? {},
+    })
   },
 
   addNodesToGroup: (groupId, childIds) => {
