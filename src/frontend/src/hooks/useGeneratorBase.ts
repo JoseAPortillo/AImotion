@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState, useEffect, useRef } from 'react'
 import { flushSync } from 'react-dom'
-import type { GenerationData, PromptData, ModelEntry } from '../types/nodes'
+import type { GenerationData, PromptData, ModelEntry, GroupNodeData } from '../types/nodes'
 import { useGraphStore } from '../store/graph'
 import { useToastStore } from '../store/toast'
 import { startGeneration, pollTask, cancelTask, type TaskStatus } from '../api/backend'
@@ -129,8 +129,39 @@ export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorB
       return undefined
     }
 
-    const imageFile = await getFileFromNodeData(imageNode?.data)
-    const videoFile = await getFileFromNodeData(videoNode?.data)
+    const resolveNodeFile = async (sourceNodeId: string): Promise<File | undefined> => {
+      const store = useGraphStore.getState()
+      const sourceNode = store.nodes.find((n) => n.id === sourceNodeId)
+      if (!sourceNode) return undefined
+
+      // Direct file from node data
+      const file = await getFileFromNodeData(sourceNode.data)
+      if (file) return file
+
+      // If source is a group, resolve from stored node output
+      if (sourceNode.type === 'groupNode') {
+        const output = store.nodeOutputs[sourceNodeId]
+        if (output?.url) {
+          const response = await fetch(output.url)
+          const blob = await response.blob()
+          return new File([blob], 'group-output', { type: blob.type })
+        }
+        // Try children
+        const childIds = (sourceNode.data as GroupNodeData).childIds || []
+        for (const cid of childIds) {
+          const childOutput = store.nodeOutputs[cid]
+          if (childOutput?.url) {
+            const response = await fetch(childOutput.url)
+            const blob = await response.blob()
+            return new File([blob], 'group-output', { type: blob.type })
+          }
+        }
+      }
+      return undefined
+    }
+
+    const imageFile = imageEdge ? await resolveNodeFile(imageEdge.source) : undefined
+    const videoFile = videoEdge ? await resolveNodeFile(videoEdge.source) : undefined
 
     const extraParams: Record<string, number | string | boolean> = {}
     if (modelConfig?.inputs) {
@@ -212,6 +243,7 @@ export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorB
         setProgress(100)
         setEtaSec(null)
         setOutputUrl(status.result_url, status.result_type)
+        useGraphStore.getState().setNodeOutput(nodeId, status.result_url, status.result_type || 'image')
       } else {
         addToast(`Workflow failed: ${status.error || 'unknown error'}`, 'error')
       }

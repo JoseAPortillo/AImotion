@@ -23,6 +23,7 @@ export type NodeType =
   | 'imageToVideo'
   | 'videoToVideo'
   | 'imageToImage'
+  | 'groupNode'
 
 export interface ModelEntry {
   key: string
@@ -163,6 +164,17 @@ export interface OutputData extends Record<string, unknown> {
   format: 'mp4' | 'gif'
 }
 
+export interface GroupNodeData extends Record<string, unknown> {
+  collapsed: boolean
+  childIds: string[]
+  label?: string
+  previewUrl?: string
+  previewType?: 'image' | 'video'
+  expandedWidth?: number
+  expandedHeight?: number
+  expandedX?: number
+}
+
 export type NodeData =
   | ImageInputData
   | VideoInputData
@@ -176,6 +188,7 @@ export type NodeData =
   | ControlNetData
   | TransformersData
   | OutputData
+  | GroupNodeData
 
 export type AppNode = Node<NodeData, NodeType>
 
@@ -489,5 +502,15 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
       { id: 'image_out', label: 'Image', type: 'video_tensor' },
     ],
     defaultData: { model: '', scheduler: '', execution_mode: 'local', vae_tiling: true, vae_tile_overlap: 0.0, steps: 30, cfg: 7, seed: 42, strength: 0.8, width: 1024, height: 1024 },
+  },
+  groupNode: {
+    type: 'groupNode',
+    label: 'Group',
+    color: '#6b7280',
+    description: 'Group nodes together. Collapse to show only the generated preview.',
+    inputs: [],
+    outputs: [{ id: 'output', label: 'Output', type: 'video_tensor' }],
+    defaultData: { collapsed: false, childIds: [], label: 'Group' },
+    defaultSize: { width: 400, height: 400 },
   },
 }

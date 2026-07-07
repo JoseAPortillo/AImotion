@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState, useEffect, useRef } from 'react'
 import { startGeneration, pollTask, cancelTask } from '../api/backend'
 import { useGraphStore } from '../store/graph'
-import type { GenerationData, PromptData, ModelEntry } from '../types/nodes'
+import type { GenerationData, PromptData, ModelEntry, GroupNodeData } from '../types/nodes'
 
 interface UseAutoPreviewOptions {
   nodeId: string
@@ -48,22 +48,47 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
     const promptText = promptData?.positive || ''
     if (!promptText) return
 
-    const videoNode = videoEdge ? getNode(videoEdge) : undefined
-    const imageNode = imageEdge ? getNode(imageEdge) : undefined
-
-    const getFileFromNodeData = async (n: any): Promise<File | undefined> => {
-      if (!n?.data) return undefined
-      if (n.data.file instanceof File) return n.data.file
-      if (n.data.fileDataUrl) {
-        const r = await fetch(n.data.fileDataUrl)
+    const getFileFromNodeData = async (nodeData: any): Promise<File | undefined> => {
+      if (!nodeData) return undefined
+      if (nodeData.file instanceof File) return nodeData.file
+      if (nodeData.fileDataUrl) {
+        const r = await fetch(nodeData.fileDataUrl)
         const blob = await r.blob()
-        return new File([blob], n.data.fileName || 'file', { type: blob.type })
+        return new File([blob], nodeData.fileName || 'file', { type: blob.type })
       }
       return undefined
     }
 
-    const imageFile = await getFileFromNodeData(imageNode)
-    const videoFile = await getFileFromNodeData(videoNode)
+    const resolveNodeFile = async (sourceNodeId: string): Promise<File | undefined> => {
+      const store = useGraphStore.getState()
+      const sourceNode = store.nodes.find((n) => n.id === sourceNodeId)
+      if (!sourceNode) return undefined
+
+      const file = await getFileFromNodeData(sourceNode.data)
+      if (file) return file
+
+      if (sourceNode.type === 'groupNode') {
+        const output = store.nodeOutputs[sourceNodeId]
+        if (output?.url) {
+          const r = await fetch(output.url)
+          const blob = await r.blob()
+          return new File([blob], 'group-output', { type: blob.type })
+        }
+        const childIds = (sourceNode.data as GroupNodeData).childIds || []
+        for (const cid of childIds) {
+          const childOutput = store.nodeOutputs[cid]
+          if (childOutput?.url) {
+            const r = await fetch(childOutput.url)
+            const blob = await r.blob()
+            return new File([blob], 'group-output', { type: blob.type })
+          }
+        }
+      }
+      return undefined
+    }
+
+    const imageFile = imageEdge ? await resolveNodeFile(imageEdge.source) : undefined
+    const videoFile = videoEdge ? await resolveNodeFile(videoEdge.source) : undefined
 
     abortRef.current = true
     if (taskIdRef.current) {

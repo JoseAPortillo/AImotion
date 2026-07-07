@@ -58,6 +58,10 @@ const NODE_GROUPS: NodeGroup[] = [
     label: 'Outputs',
     nodes: ['output', 'preview'],
   },
+  {
+    label: 'Groups',
+    nodes: ['groupNode'],
+  },
 ]
 
 function NodeItem({ nodeType }: { nodeType: NodeType }) {

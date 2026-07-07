@@ -12,10 +12,11 @@ import {
   type EdgeChange,
   type Connection,
   type Edge,
+  applyNodeChanges,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useGraphStore } from './store/graph'
-import type { NodeType, AppNode } from './types/nodes'
+import type { NodeType, AppNode, GroupNodeData } from './types/nodes'
 import { NODE_DEFINITIONS, getPortTypeFromHandle } from './types/nodes'
 import Sidebar from './components/Sidebar'
 import NodeInspector from './components/NodeInspector'
@@ -48,6 +49,7 @@ import LLMGeneratorNode from './components/nodes/generators/LLMGeneratorNode'
 import CVTaskProcessorNode from './components/nodes/processors/CVTaskProcessorNode'
 import LoadLoRANode from './components/nodes/adapters/LoadLoRANode'
 import ApplyControlNetNode from './components/nodes/adapters/ApplyControlNetNode'
+import GroupNode from './components/nodes/GroupNode'
 
 const nodeTypes: NodeTypes = {
   videoInput: VideoInputNode,
@@ -71,6 +73,7 @@ const nodeTypes: NodeTypes = {
   denoisingStrength: DenoisingStrengthNode,
   output: OutputNode,
   preview: PreviewNode,
+  groupNode: GroupNode,
 }
 
 export default function App() {
@@ -89,11 +92,49 @@ function AppInner() {
 
   const nodes = useGraphStore((s) => s.nodes)
   const edges = useGraphStore((s) => s.edges)
-  const onNodesChange = useGraphStore((s) => s.onNodesChange)
   const onEdgesChange = useGraphStore((s) => s.onEdgesChange)
   const onConnect = useGraphStore((s) => s.onConnect)
   const addNode = useGraphStore((s) => s.addNode)
   const selectNode = useGraphStore((s) => s.selectNode)
+  const addNodesToGroup = useGraphStore((s) => s.addNodesToGroup)
+  const createGroupFromSelection = useGraphStore((s) => s.createGroupFromSelection)
+
+  const handleNodesChange = useCallback((changes: NodeChange[]) => {
+    useGraphStore.setState((state) => {
+      let newNodes = applyNodeChanges(changes, state.nodes) as AppNode[]
+      // Normalize z-index so non-group nodes are always above groups
+      newNodes = newNodes.map((n) => {
+        if (n.type === 'groupNode' && (n.zIndex ?? 0) !== -100) return { ...n, zIndex: -100 }
+        if (n.type !== 'groupNode' && (n.zIndex ?? 0) < 100) return { ...n, zIndex: 100 }
+        return n
+      })
+      for (const change of changes) {
+        if (change.type === 'position' && change.position) {
+          const oldNode = state.nodes.find((n) => n.id === change.id)
+          const newNode = newNodes.find((n) => n.id === change.id)
+          if (oldNode && newNode && oldNode.type === 'groupNode') {
+            const dx = newNode.position.x - oldNode.position.x
+            const dy = newNode.position.y - oldNode.position.y
+            if (dx !== 0 || dy !== 0) {
+              const childIds: string[] = (oldNode.data as GroupNodeData).childIds ?? []
+              for (let i = 0; i < newNodes.length; i++) {
+                if (childIds.includes(newNodes[i].id)) {
+                  newNodes[i] = {
+                    ...newNodes[i],
+                    position: {
+                      x: newNodes[i].position.x + dx,
+                      y: newNodes[i].position.y + dy,
+                    },
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      return { nodes: newNodes }
+    })
+  }, [])
 
   const isValidConnection = useCallback((conn: Edge | Connection) => {
     const sourceNode = nodes.find((n) => n.id === conn.source)
@@ -122,9 +163,122 @@ function AppInner() {
         y: event.clientY,
       })
 
-      addNode(type, position)
+      const newId = addNode(type, position)
+
+      if (newId) {
+        setTimeout(() => {
+          const state = useGraphStore.getState()
+
+          // If dropping a group node, absorb currently selected nodes
+          if (type === 'groupNode') {
+            const selectedIds = state.nodes
+              .filter((n) => n.selected && n.id !== newId)
+              .map((n) => n.id)
+            if (selectedIds.length > 0) {
+              const selectedNodes = state.nodes.filter((n) => selectedIds.includes(n.id))
+              const minX = Math.min(...selectedNodes.map((n) => n.position.x))
+              const minY = Math.min(...selectedNodes.map((n) => n.position.y))
+              const maxX = Math.max(...selectedNodes.map((n) => n.position.x + (n.width ?? 260)))
+              const maxY = Math.max(...selectedNodes.map((n) => n.position.y + (n.height ?? 320)))
+              const padding = 40
+              useGraphStore.setState((s) => ({
+                nodes: s.nodes.map((n) =>
+                  n.id === newId
+                    ? { ...n, position: { x: minX - padding, y: minY - padding }, width: maxX - minX + padding * 2, height: maxY - minY + padding * 2 }
+                    : n,
+                ),
+              }))
+              addNodesToGroup(newId, selectedIds)
+              return
+            }
+          }
+
+          // Otherwise, check if dropped into an existing expanded group
+          const droppedNode = state.nodes.find((n) => n.id === newId)
+          if (!droppedNode) return
+          const nx = droppedNode.position.x
+          const ny = droppedNode.position.y
+          const nw = droppedNode.width ?? 40
+          const nh = droppedNode.height ?? 40
+          const groups = state.nodes.filter(
+            (n) => n.type === 'groupNode' && !n.data.collapsed && n.id !== newId,
+          )
+          for (const g of groups) {
+            const gx = g.position.x
+            const gy = g.position.y
+            const gw = g.width ?? 400
+            const gh = g.height ?? 400
+            const overlap =
+              nx < gx + gw && nx + nw > gx && ny < gy + gh && ny + nh > gy
+            if (overlap) {
+              addNodesToGroup(g.id, [newId])
+              break
+            }
+          }
+        }, 0)
+      }
     },
-    [screenToFlowPosition, addNode],
+    [screenToFlowPosition, addNode, addNodesToGroup],
+  )
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'g') {
+        e.preventDefault()
+        const selectedIds = nodes.filter((n) => n.selected).map((n) => n.id)
+        if (selectedIds.length > 0) {
+          createGroupFromSelection(selectedIds)
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [nodes, createGroupFromSelection])
+
+  // Drag-stop: auto-add/remove node from group if dropped inside/outside bounds
+  const onNodeDragStop = useCallback(
+    (_: MouseEvent | TouchEvent, node: AppNode) => {
+      const state = useGraphStore.getState()
+      const nx = (node.position.x ?? 0) + (node.width ?? 0) / 2
+      const ny = (node.position.y ?? 0) + (node.height ?? 0) / 2
+
+      // Find which group this node belongs to, if any
+      const parentGroup = state.nodes.find(
+        (n) =>
+          n.type === 'groupNode' &&
+          (n.data as GroupNodeData).childIds?.includes(node.id),
+      )
+
+      // If belongs to a group: check if center is still inside, otherwise unlink
+      if (parentGroup) {
+        const gx = parentGroup.position.x ?? 0
+        const gy = parentGroup.position.y ?? 0
+        const gw = parentGroup.width ?? 400
+        const gh = parentGroup.height ?? 400
+        const inside = nx >= gx && nx <= gx + gw && ny >= gy && ny <= gy + gh
+        if (!inside) {
+          useGraphStore.getState().removeNodesFromGroup(parentGroup.id, [node.id])
+        }
+        return
+      }
+
+      // Not in any group: check if center is inside any expanded group
+      const groups = state.nodes.filter((n) => n.type === 'groupNode' && !n.data.collapsed)
+      for (const g of groups) {
+        if (g.id === node.id) continue
+        const gx = g.position.x ?? 0
+        const gy = g.position.y ?? 0
+        const gw = g.width ?? 400
+        const gh = g.height ?? 400
+        const inside = nx >= gx && nx <= gx + gw && ny >= gy && ny <= gy + gh
+        if (inside) {
+          useGraphStore.getState().addNodesToGroup(g.id, [node.id])
+          break
+        }
+      }
+    },
+    [],
   )
 
   useEffect(() => {
@@ -258,7 +412,7 @@ function AppInner() {
         <ReactFlow
           nodes={nodes}
           edges={edges}
-          onNodesChange={onNodesChange}
+          onNodesChange={handleNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           isValidConnection={isValidConnection}
@@ -266,11 +420,14 @@ function AppInner() {
           onDrop={handleDrop}
           onNodeClick={(_, node) => selectNode(node.id)}
           onPaneClick={() => selectNode(null)}
+          onNodeDragStop={onNodeDragStop}
           nodeTypes={nodeTypes}
           fitView
           minZoom={0.1}
           maxZoom={8}
           colorMode="dark"
+          panOnDrag
+          selectionOnDrag={false}
           style={{ background: 'transparent' }}
         >
           <Background color="#2e2e2e" gap={20} size={0.5} variant={BackgroundVariant.Lines} />
