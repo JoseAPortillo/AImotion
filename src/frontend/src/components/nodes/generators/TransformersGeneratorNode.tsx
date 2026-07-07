@@ -6,6 +6,7 @@ import NodeWrapper from '../NodeWrapper'
 import { useGraphStore } from '../../../store/graph'
 import { useToastStore } from '../../../store/toast'
 import { generateLLM } from '../../../api/backend'
+import NumberInput from '../../NumberInput'
 
 interface ModelEntry {
   key: string
@@ -155,13 +156,10 @@ function TransformersGeneratorNode(props: NodeProps) {
 
         <div style={{ marginTop: 4 }}>
           <label style={{ fontSize: 9, color: '#888', display: 'block', marginBottom: 1 }}>Max Tokens</label>
-          <input
-            type="number"
-            min={1}
-            max={32768}
-            value={data.max_tokens}
-            onChange={(e) => updateNodeData(props.id, { max_tokens: parseInt(e.target.value, 10) } as Partial<TransformersData>)}
-            style={inputStyle}
+          <NumberInput
+            value={data.max_tokens ?? 2048}
+            min={1} max={32768}
+            onChange={(v) => updateNodeData(props.id, { max_tokens: v } as Partial<TransformersData>)}
           />
         </div>
 
@@ -181,24 +179,19 @@ function TransformersGeneratorNode(props: NodeProps) {
 
         <div style={{ marginTop: 4 }}>
           <label style={{ fontSize: 9, color: '#888', display: 'block', marginBottom: 1 }}>Top-K</label>
-          <input
-            type="number"
-            min={1}
-            max={100}
-            value={data.top_k}
-            onChange={(e) => updateNodeData(props.id, { top_k: parseInt(e.target.value, 10) } as Partial<TransformersData>)}
-            style={inputStyle}
+          <NumberInput
+            value={data.top_k ?? 40}
+            min={1} max={100}
+            onChange={(v) => updateNodeData(props.id, { top_k: v } as Partial<TransformersData>)}
           />
         </div>
 
         <div style={{ marginTop: 4 }}>
           <label style={{ fontSize: 9, color: '#888', display: 'block', marginBottom: 1 }}>Seed</label>
-          <input
-            type="number"
+          <NumberInput
+            value={data.seed ?? 0}
             min={0}
-            value={data.seed}
-            onChange={(e) => updateNodeData(props.id, { seed: parseInt(e.target.value, 10) } as Partial<TransformersData>)}
-            style={inputStyle}
+            onChange={(v) => updateNodeData(props.id, { seed: v } as Partial<TransformersData>)}
           />
         </div>
 

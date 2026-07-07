@@ -1,4 +1,5 @@
 import logging
+import time
 
 from fastapi import APIRouter
 
@@ -6,8 +7,15 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/hardware", tags=["hardware"])
 
+_vram_cache: dict | None = None
+_vram_cache_ts: float = 0
+_VRAM_CACHE_TTL = 2.0
 
-def _get_vram_info() -> dict:
+
+def _get_vram_info(use_cache: bool = True) -> dict:
+    global _vram_cache, _vram_cache_ts
+    if use_cache and _vram_cache is not None and time.monotonic() - _vram_cache_ts < _VRAM_CACHE_TTL:
+        return _vram_cache
     try:
         import torch
 
@@ -51,7 +59,7 @@ def _get_vram_info() -> dict:
             messages.append(f"VRAM usage at {percent:.0f}%. Consider freeing resources.")
         message = " ".join(messages) if messages else None
 
-        return {
+        result = {
             "gpu_available": True,
             "gpu_name": name,
             "vram_total_gb": round(total_gb, 1),
@@ -61,6 +69,9 @@ def _get_vram_info() -> dict:
             "alert": alert,
             "message": message,
         }
+        _vram_cache = result
+        _vram_cache_ts = time.monotonic()
+        return result
     except Exception as e:
         logger.warning(f"Failed to read VRAM info: {e}")
         return {

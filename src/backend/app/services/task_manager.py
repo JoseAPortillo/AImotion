@@ -24,6 +24,7 @@ class GenerationTask:
         self.result_type: Optional[str] = None
         self.error: Optional[str] = None
         self.created_at = time.time()
+        self.completed_at: Optional[float] = None
         self.cancel_event = threading.Event()
 
     def to_dict(self) -> dict:
@@ -84,6 +85,7 @@ class TaskManager:
             if task:
                 task.status = TaskStatus.COMPLETED
                 task.progress = 1.0
+                task.completed_at = time.time()
                 task.result_url = result_url
                 task.result_type = result_type
 
@@ -92,6 +94,7 @@ class TaskManager:
             task = self._tasks.get(task_id)
             if task:
                 task.status = TaskStatus.FAILED
+                task.completed_at = time.time()
                 task.error = error
 
     async def cancel_task(self, task_id: str):
@@ -115,7 +118,8 @@ class TaskManager:
                     for tid, task in self._tasks.items()
                     if task.status
                     in (TaskStatus.COMPLETED, TaskStatus.FAILED)
-                    and (now - task.created_at) > ttl
+                    and task.completed_at is not None
+                    and (now - task.completed_at) > ttl
                 ]
                 for tid in expired:
                     task = self._tasks.pop(tid, None)

@@ -24,6 +24,11 @@ const NODE_DEFAULT_SIZE: Record<NodeType, { width: number; height: number }> = {
   loadLora: { width: 260, height: 180 },
   applyControlNet: { width: 260, height: 200 },
   generation: { width: 260, height: 420 },
+  textToImage: { width: 260, height: 420 },
+  textToVideo: { width: 260, height: 420 },
+  imageToVideo: { width: 260, height: 420 },
+  videoToVideo: { width: 260, height: 420 },
+  imageToImage: { width: 260, height: 420 },
   samplingParams: { width: 260, height: 180 },
   denoisingStrength: { width: 260, height: 100 },
   output: { width: 260, height: 200 },
@@ -141,6 +146,11 @@ export const useGraphStore = create<GraphState>((set, get) => ({
       return m ? Math.max(max, parseInt(m[1], 10)) : max
     }, 0)
     nodeCounter = maxNum
-    set({ nodes: wfNodes, edges: wfEdges, selectedNode: null, outputUrl: null, resultType: null })
+    const nodesWithSize = wfNodes.map((n) => ({
+      ...n,
+      width: n.width ?? NODE_DEFAULT_SIZE[n.type as NodeType]?.width ?? 260,
+      height: n.height ?? NODE_DEFAULT_SIZE[n.type as NodeType]?.height ?? 320,
+    }))
+    set({ nodes: nodesWithSize, edges: wfEdges, selectedNode: null, outputUrl: null, resultType: null })
   },
 }))

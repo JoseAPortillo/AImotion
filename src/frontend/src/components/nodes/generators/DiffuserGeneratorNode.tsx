@@ -1,4 +1,5 @@
 import { memo, useCallback, useMemo, useState, useEffect, useRef } from 'react'
+import { flushSync } from 'react-dom'
 import type { NodeProps } from '@xyflow/react'
 import { Handle, Position } from '@xyflow/react'
 import { NODE_DEFINITIONS, getHandleColor, type NodeType, type GenerationData, type PromptData } from '../../../types/nodes'
@@ -7,6 +8,7 @@ import { useGraphStore } from '../../../store/graph'
 import { useToastStore } from '../../../store/toast'
 import { startGeneration, pollTask, cancelTask, type TaskStatus } from '../../../api/backend'
 import ModelSelect from '../../ModelSelect'
+import NumberInput from '../../NumberInput'
 
 const schedLabels: Record<string, string> = {
   cogvideox_ddim: 'DDIM',
@@ -163,7 +165,9 @@ function DiffuserGeneratorNode(props: NodeProps) {
       .then(r => r.json())
       .then(data => {
         const all = (data.models || []).filter(
-          (m: ModelEntry) => m.type !== 'future' && m.type !== 'installable'
+          (m: ModelEntry) =>
+            m.type !== 'future'
+            && (m.type !== 'installable' || m.runner === 'diffusers' || m.runner === 'wan2.2')
         )
         setModels(all)
         setModelsLoaded(true)
@@ -175,11 +179,7 @@ function DiffuserGeneratorNode(props: NodeProps) {
     fetchModels()
   }, [fetchModels])
 
-  const isCloud = data.execution_mode === 'cloud'
-  const visibleModels = useMemo(() =>
-    models.filter(m => isCloud ? m.type === 'api' : m.type !== 'api'),
-    [models, isCloud],
-  )
+  const visibleModels = models
   const modelConfig = visibleModels.find(m => m.key === data.model)
   const availableScheds = modelConfig?.schedulers || []
   const defaultSched = modelConfig?.default_scheduler || ''
@@ -276,9 +276,11 @@ function DiffuserGeneratorNode(props: NodeProps) {
       }
     }
 
-    setGenRunning(true)
-    setProgress(0)
-    setEtaSec(null)
+    flushSync(() => {
+      setGenRunning(true)
+      setProgress(0)
+      setEtaSec(null)
+    })
     startTimeRef.current = Date.now()
     taskIdRef.current = ''
     try {
@@ -451,34 +453,9 @@ function DiffuserGeneratorNode(props: NodeProps) {
               value={data.model}
               models={visibleModels}
               onChange={handleModelChange}
-              placeholder={modelsLoaded ? (isCloud ? 'No cloud models' : 'No local models') : 'Loading...'}
+              placeholder={modelsLoaded ? 'No models available' : 'Loading...'}
             />
           </div>
-          <button
-            onClick={() => {
-              const newMode = isCloud ? 'local' : 'cloud'
-              const m = models.find(m => newMode === 'cloud' ? m.type === 'api' : m.type !== 'api')
-              updateNodeData(props.id, {
-                execution_mode: newMode,
-                model: m?.key || '',
-                scheduler: '',
-              })
-            }}
-            title={isCloud ? 'Switch to Local mode' : 'Switch to Cloud mode'}
-            style={{
-              padding: '3px 6px',
-              borderRadius: 4,
-              border: '1px solid #444',
-              fontSize: 10,
-              cursor: 'pointer',
-              background: isCloud ? '#1e3a5f' : '#2a2a2a',
-              color: isCloud ? '#60a5fa' : '#ccc',
-              whiteSpace: 'nowrap',
-              lineHeight: 1.2,
-            }}
-          >
-            {isCloud ? '☁ Cloud' : '💻 Local'}
-          </button>
         </div>
 
         {modelConfig && (
@@ -515,37 +492,26 @@ function DiffuserGeneratorNode(props: NodeProps) {
         <CollapsibleSection title="Básicos" defaultOpen={true}>
           <div style={{ marginTop: 2 }}>
             <InfoLabel label="Steps" desc={FIELD_DESCS.steps} />
-            <input
-              type="number"
-              step={1}
-              min={1}
-              max={200}
+            <NumberInput
               value={data.steps ?? 50}
-              onChange={(e) => updateNodeData(props.id, { steps: parseInt(e.target.value, 10) || 1 } as Partial<GenerationData>)}
-              style={selectStyle}
+              min={1} max={200}
+              onChange={(v) => updateNodeData(props.id, { steps: v } as Partial<GenerationData>)}
             />
           </div>
           <div style={{ marginTop: 4 }}>
             <InfoLabel label="CFG" desc={FIELD_DESCS.cfg} />
-            <input
-              type="number"
-              step={0.5}
-              min={1}
-              max={20}
+            <NumberInput
               value={data.cfg ?? 6}
-              onChange={(e) => updateNodeData(props.id, { cfg: parseFloat(e.target.value) || 1 } as Partial<GenerationData>)}
-              style={selectStyle}
+              min={1} max={20} step={0.5}
+              onChange={(v) => updateNodeData(props.id, { cfg: v } as Partial<GenerationData>)}
             />
           </div>
           <div style={{ marginTop: 4 }}>
             <InfoLabel label="Seed" desc={FIELD_DESCS.seed} />
-            <input
-              type="number"
-              step={1}
-              min={0}
+            <NumberInput
               value={data.seed ?? 0}
-              onChange={(e) => updateNodeData(props.id, { seed: parseInt(e.target.value, 10) || 0 } as Partial<GenerationData>)}
-              style={selectStyle}
+              min={0}
+              onChange={(v) => updateNodeData(props.id, { seed: v } as Partial<GenerationData>)}
             />
           </div>
           <div style={{ marginTop: 4 }}>
@@ -599,26 +565,18 @@ function DiffuserGeneratorNode(props: NodeProps) {
                 <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
                   <div style={{ flex: 1 }}>
                     <span style={{ fontSize: 8, color: '#888' }}>width</span>
-                    <input
-                      type="number"
-                      step={1}
+                    <NumberInput
                       value={currentW}
-                      onChange={(e) => updateNodeData(props.id, { width: parseInt(e.target.value, 10) } as Partial<GenerationData>)}
-                      min={wInp.min}
-                      max={wInp.max}
-                      style={{ ...selectStyle, width: '100%', marginTop: 1 }}
+                      min={wInp.min} max={wInp.max}
+                      onChange={(v) => updateNodeData(props.id, { width: v } as Partial<GenerationData>)}
                     />
                   </div>
                   <div style={{ flex: 1 }}>
                     <span style={{ fontSize: 8, color: '#888' }}>height</span>
-                    <input
-                      type="number"
-                      step={1}
+                    <NumberInput
                       value={currentH}
-                      onChange={(e) => updateNodeData(props.id, { height: parseInt(e.target.value, 10) } as Partial<GenerationData>)}
-                      min={hInp.min}
-                      max={hInp.max}
-                      style={{ ...selectStyle, width: '100%', marginTop: 1 }}
+                      min={hInp.min} max={hInp.max}
+                      onChange={(v) => updateNodeData(props.id, { height: v } as Partial<GenerationData>)}
                     />
                   </div>
                 </div>
@@ -660,14 +618,12 @@ function DiffuserGeneratorNode(props: NodeProps) {
               return (
                 <div key={name} style={{ marginTop: 4 }}>
                   <InfoLabel label={name.replace(/_/g, ' ')} desc={desc} />
-                  <input
-                    type="number"
-                    step={isFloat ? 'any' : 1}
+                  <NumberInput
                     value={(data[name as keyof GenerationData] ?? inp.default) as number}
-                    onChange={(e) => updateNodeData(props.id, { [name]: isFloat ? parseFloat(e.target.value) : parseInt(e.target.value, 10) } as Partial<GenerationData>)}
                     min={inp.min}
                     max={inp.max}
-                    style={selectStyle}
+                    step={isFloat ? 0.01 : 1}
+                    onChange={(v) => updateNodeData(props.id, { [name]: v } as Partial<GenerationData>)}
                   />
                 </div>
               )

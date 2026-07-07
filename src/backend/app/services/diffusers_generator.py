@@ -99,27 +99,37 @@ class DiffusersGenerator:
     def _load_pipe(self, model_name: str, dtype, token=None, pipeline_class_name: str | None = None):
         from diffusers import DiffusionPipeline
         from huggingface_hub import HfApi, hf_hub_download
+        from app.services.model_registry import get_cached_repo_info, is_model_cached
 
         mod_cls = None
         if pipeline_class_name:
             import importlib
             mod_cls = getattr(importlib.import_module("diffusers"), pipeline_class_name, None)
-        
-        api = HfApi()
-        files = api.list_repo_files(model_name)
-        weight_files = [f for f in files if f.endswith(('.safetensors', '.ckpt'))]
-        has_model_index = 'model_index.json' in files
-        
-        if has_model_index or not weight_files:
+
+        # Use cached repo file list to avoid HF API call on every load
+        repo_info = get_cached_repo_info(model_name)
+        if repo_info:
+            files = repo_info["repo_files"]
+            checkpoint_file = repo_info.get("checkpoint_file", "")
+            has_model_index = "model_index.json" in files
+        else:
+            api = HfApi()
+            files = api.list_repo_files(model_name)
+            weight_files = [f for f in files if f.endswith(('.safetensors', '.ckpt'))]
+            has_model_index = 'model_index.json' in files
+            checkpoint_file = weight_files[0] if weight_files and not has_model_index else ""
+
+        model_is_cached = is_model_cached(model_name)
+
+        if has_model_index or not checkpoint_file:
             pipe_cls = mod_cls or DiffusionPipeline
             pipe = pipe_cls.from_pretrained(
                 model_name, torch_dtype=dtype, token=token,
+                local_files_only=model_is_cached,
             )
-            if hasattr(pipe, "enable_model_cpu_offload"):
-                pipe.enable_model_cpu_offload()
+            pipe.to(self.device)
+            if hasattr(pipe, "enable_attention_slicing"):
                 pipe.enable_attention_slicing()
-            else:
-                pipe.to(self.device)
             if hasattr(pipe, "vae") and hasattr(pipe.vae, "enable_tiling"):
                 try:
                     pipe.vae.enable_tiling()
@@ -130,12 +140,18 @@ class DiffusersGenerator:
             return pipe
 
         # Single-file checkpoint — try generic auto-detect first
-        checkpoint_file = weight_files[0]
+        if not checkpoint_file:
+            api = HfApi()
+            files = api.list_repo_files(model_name)
+            weight_files = [f for f in files if f.endswith(('.safetensors', '.ckpt'))]
+            checkpoint_file = weight_files[0] if weight_files else ""
+
         logger.info(f"Detected single-file checkpoint: {checkpoint_file}")
         local_path = hf_hub_download(
             repo_id=model_name,
             filename=checkpoint_file,
             token=token,
+            local_files_only=model_is_cached,
         )
         logger.info(f"Downloaded checkpoint to: {local_path}")
 
@@ -316,7 +332,7 @@ class DiffusersGenerator:
             )
             logger.info(f"VRAM: {free:.1f} GB free / {total:.1f} GB total")
 
-    def _build_callback(self, steps: int, progress_callback, cancel_event=None):
+    def _build_callback(self, steps: int, total_phases: int, progress_callback, cancel_event=None):
         if not progress_callback:
             return None
         import asyncio
@@ -329,7 +345,7 @@ class DiffusersGenerator:
             logger.info(f"Step {current_step[0]}/{steps}")
             try:
                 asyncio.run_coroutine_threadsafe(
-                    progress_callback(current_step[0], steps), loop,
+                    progress_callback(current_step[0], total_phases), loop,
                 )
             except RuntimeError:
                 pass
@@ -351,11 +367,15 @@ class DiffusersGenerator:
         valid = set(sig.parameters.keys())
         kw: dict = {}
 
-        if "prompt" in valid:
+        if "prompt" not in valid:
+            logger.warning("Model pipeline '%s' does not accept a prompt — output will not reflect the prompt text", type(pipe).__name__)
+        else:
             kw["prompt"] = prompt
         kw["num_inference_steps"] = steps
         if "guidance_scale" in valid:
             kw["guidance_scale"] = cfg
+        if "use_dynamic_cfg" in valid and cfg > 1.0:
+            kw["use_dynamic_cfg"] = True
         if "min_guidance_scale" in valid and min_cfg is not None:
             kw["min_guidance_scale"] = min_cfg
         if "max_guidance_scale" in valid and max_cfg is not None:
@@ -364,8 +384,7 @@ class DiffusersGenerator:
 
         if "generator" in valid:
             gen = torch.Generator(device=self.device)
-            if seed > 0:
-                gen.manual_seed(seed)
+            gen.manual_seed(seed)
             kw["generator"] = gen
 
         if negative_prompt and "negative_prompt" in valid:
@@ -518,8 +537,8 @@ class DiffusersGenerator:
             raise ValueError(f"Unsupported model: {model}")
 
         d = model_cfg["defaults"]
-        w = width if "width" in d else None
-        h = height if "height" in d else None
+        w = width
+        h = height
         s = steps or d.get("steps", 50)
         c = cfg or d.get("cfg", 6.0)
         fps_val = fps or d.get("fps", 8)
@@ -537,18 +556,27 @@ class DiffusersGenerator:
         valid_pipe_params = set(sig.parameters.keys())
 
         if video_frames and "image" not in valid_pipe_params and "video" not in valid_pipe_params:
-            raise ValueError(
-                f"Model '{model}' does not support video input "
-                f"(no 'image' or 'video' parameter in {type(pipe).__name__}.__call__)"
-            )
+            has_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
+            if not has_kwargs:
+                raise ValueError(
+                    f"Model '{model}' does not support video input "
+                    f"(no 'image' or 'video' parameter in {type(pipe).__name__}.__call__)"
+                )
+            logger.debug(f"Pipeline {type(pipe).__name__}.__call__ accepts **kwargs, allowing image/video passthrough")
 
-        cb = self._build_callback(s, progress_callback, cancel_event)
+        total_phases = s + 2  # +1 warmup/encode, +1 decode/save
+        cb = self._build_callback(s, total_phases, progress_callback, cancel_event)
         if progress_callback:
-            await progress_callback(0, s)
+            await progress_callback(0, total_phases)
 
         logger.info(f"video_frames: {video_frames is not None}, length: {len(video_frames) if video_frames else 0}")
         if video_frames:
             logger.info(f"First frame size: {video_frames[0].size}")
+            if w is not None and h is not None:
+                orig = video_frames[0].size
+                if orig != (w, h):
+                    video_frames[0] = video_frames[0].resize((w, h), Image.LANCZOS)
+                    logger.info(f"Resized video frame from {orig} to ({w}, {h})")
 
         pipe_kwargs = self._build_pipe_kwargs(
             pipe, prompt, negative_prompt, video_frames, strength,
@@ -556,6 +584,13 @@ class DiffusersGenerator:
             noise_aug, fps_val, mbid, min_cfg, max_cfg, cb,
             **extra_kwargs,
         )
+
+        for pname in ("image", "video"):
+            if pname in valid_pipe_params and pname not in pipe_kwargs:
+                raise ValueError(
+                    f"Model '{type(pipe).__name__}' requires '{pname}' input "
+                    f"but none was provided. Connect a compatible input node."
+                )
 
         logger.info(f"Starting generation with {type(pipe).__name__}...")
         self._log_vram()
@@ -565,7 +600,7 @@ class DiffusersGenerator:
         output = await loop.run_in_executor(None, lambda: pipe(**pipe_kwargs))
 
         if progress_callback:
-            await progress_callback(s, s)
+            await progress_callback(s + 1, total_phases)  # decode/save
 
         logger.info("Pipeline completed, saving output...")
         self._log_vram()

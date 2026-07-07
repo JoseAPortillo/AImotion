@@ -1,6 +1,7 @@
 import {
   ReactFlow,
   Background,
+  BackgroundVariant,
   Controls,
   MiniMap,
   type NodeTypes,
@@ -36,6 +37,11 @@ import DenoisingStrengthNode from './components/nodes/DenoisingStrengthNode'
 import OutputNode from './components/nodes/OutputNode'
 import PreviewNode from './components/nodes/PreviewNode'
 import DiffuserGeneratorNode from './components/nodes/generators/DiffuserGeneratorNode'
+import TextToImageNode from './components/nodes/generators/TextToImageNode'
+import TextToVideoNode from './components/nodes/generators/TextToVideoNode'
+import ImageToVideoNode from './components/nodes/generators/ImageToVideoNode'
+import VideoToVideoNode from './components/nodes/generators/VideoToVideoNode'
+import ImageToImageNode from './components/nodes/generators/ImageToImageNode'
 import TransformersGeneratorNode from './components/nodes/generators/TransformersGeneratorNode'
 import VLMNode from './components/nodes/generators/VLMNode'
 import LLMGeneratorNode from './components/nodes/generators/LLMGeneratorNode'
@@ -49,6 +55,11 @@ const nodeTypes: NodeTypes = {
   audioInput: AudioInputNode,
   prompt: PromptNode,
   diffuserGenerator: DiffuserGeneratorNode,
+  textToImage: TextToImageNode,
+  textToVideo: TextToVideoNode,
+  imageToVideo: ImageToVideoNode,
+  videoToVideo: VideoToVideoNode,
+  imageToImage: ImageToImageNode,
   transformersGenerator: TransformersGeneratorNode,
   vlmNode: VLMNode,
   llmGenerator: LLMGeneratorNode,
@@ -142,7 +153,7 @@ function AppInner() {
   const handleSave = useCallback(() => {
     const workflow = {
       version: 1,
-      nodes: nodes.map(({ id, type, position, data }) => ({ id, type, position, data })),
+      nodes: nodes.map(({ id, type, position, data, width, height }) => ({ id, type, position, data, width, height })),
       edges: edges.map(({ id, source, target, sourceHandle, targetHandle, style }) => ({ id, source, target, sourceHandle, targetHandle, style })),
     }
     const blob = new Blob([JSON.stringify(workflow, null, 2)], { type: 'application/json' })
@@ -228,7 +239,22 @@ function AppInner() {
   return (
     <div style={{ display: 'flex', height: '100vh', background: '#0f0f0f', color: '#e0e0e0' }}>
       <Sidebar />
-      <div style={{ flex: 1, position: 'relative' }}>
+      <div style={{ flex: 1, position: 'relative', overflow: 'hidden', background: '#747474' }}>
+        <img
+          src="/aimation_logo.png"
+          alt=""
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'contain',
+            opacity: 0.12,
+            pointerEvents: 'none',
+            zIndex: 0,
+            filter: 'grayscale(100%)',
+          }}
+        />
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -242,10 +268,12 @@ function AppInner() {
           onPaneClick={() => selectNode(null)}
           nodeTypes={nodeTypes}
           fitView
+          minZoom={0.1}
+          maxZoom={8}
           colorMode="dark"
-          style={{ background: '#0f0f0f' }}
+          style={{ background: 'transparent' }}
         >
-          <Background color="#222" gap={20} />
+          <Background color="#2e2e2e" gap={20} size={0.5} variant={BackgroundVariant.Lines} />
           <Controls />
           <MiniMap
             style={{ background: '#1a1a1a' }}

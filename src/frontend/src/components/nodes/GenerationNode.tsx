@@ -118,11 +118,7 @@ function GenerationNode(props: NodeProps) {
     fetchModels()
   }, [fetchModels])
 
-  const isCloud = data.execution_mode === 'cloud'
-  const visibleModels = useMemo(() =>
-    models.filter(m => isCloud ? m.type === 'api' : m.type !== 'api'),
-    [models, isCloud],
-  )
+  const visibleModels = models
   const modelConfig = visibleModels.find(m => m.key === data.model)
   const availableScheds = modelConfig?.schedulers || []
   const defaultSched = modelConfig?.default_scheduler || ''
@@ -367,34 +363,9 @@ function GenerationNode(props: NodeProps) {
               value={data.model}
               models={visibleModels}
               onChange={handleModelChange}
-              placeholder={modelsLoaded ? (isCloud ? 'No cloud models' : 'No local models') : 'Loading...'}
+              placeholder={modelsLoaded ? 'No models available' : 'Loading...'}
             />
           </div>
-          <button
-            onClick={() => {
-              const newMode = isCloud ? 'local' : 'cloud'
-              const firstModel = models.find(m => newMode === 'cloud' ? m.type === 'api' : m.type !== 'api')
-              updateNodeData(props.id, {
-                execution_mode: newMode,
-                model: firstModel?.key || data.model,
-                scheduler: '',
-              } as Partial<GenerationData>)
-            }}
-            title={isCloud ? 'Switch to Local mode' : 'Switch to Cloud mode'}
-            style={{
-              padding: '3px 6px',
-              borderRadius: 4,
-              border: '1px solid #444',
-              fontSize: 10,
-              cursor: 'pointer',
-              background: isCloud ? '#1e3a5f' : '#2a2a2a',
-              color: isCloud ? '#60a5fa' : '#ccc',
-              whiteSpace: 'nowrap',
-              lineHeight: 1.2,
-            }}
-          >
-            {isCloud ? '☁ Cloud' : '💻 Local'}
-          </button>
         </div>
 
         {modelConfig && (

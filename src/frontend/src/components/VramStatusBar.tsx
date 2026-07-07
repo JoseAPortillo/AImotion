@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 interface VramData {
   gpu_available: boolean
@@ -11,8 +11,11 @@ interface VramData {
   message?: string | null
 }
 
+const STARTUP_DELAY = 3000
+
 export default function VramStatusBar() {
   const [data, setData] = useState<VramData | null>(null)
+  const started = useRef(false)
 
   useEffect(() => {
     let cancelled = false
@@ -22,9 +25,14 @@ export default function VramStatusBar() {
         .then(d => { if (!cancelled) setData(d) })
         .catch(() => {})
     }
-    fetchVram()
+    const timer = setTimeout(() => {
+      if (!cancelled) {
+        started.current = true
+        fetchVram()
+      }
+    }, STARTUP_DELAY)
     const iv = setInterval(fetchVram, 10000)
-    return () => { cancelled = true; clearInterval(iv) }
+    return () => { cancelled = true; clearTimeout(timer); clearInterval(iv) }
   }, [])
 
   const blocked = !data || !data.gpu_available

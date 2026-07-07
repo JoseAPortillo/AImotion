@@ -300,6 +300,9 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
         weight_exts = (".safetensors", ".bin", ".pt", ".pth", ".gguf", ".ggufs")
         weight_files = [f for f in files if f.endswith(weight_exts)]
 
+        has_model_index = "model_index.json" in files
+        checkpoint_file = weight_files[0] if weight_files and not has_model_index else ""
+
         if not weight_files:
             task.status = "error"
             task.error_msg = f"Model '{hf_name}' has no weight files"
@@ -381,6 +384,8 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
             needs_token=False,
             defaults=defaults,
             installed_at=datetime.now().isoformat(),
+            repo_files=files,
+            checkpoint_file=checkpoint_file,
         )
         add_installed(model)
 
@@ -424,10 +429,9 @@ def _inputs_from_pipeline(pipeline_class: str) -> dict:
 
 def _accepts_from_pipeline(pipeline_class: str) -> dict:
     inputs = _inputs_from_pipeline(pipeline_class)
-    has_video = any("video" in k.lower() for k in inputs.keys())
     return {
         "image": "image" in inputs,
-        "video": has_video,
+        "video": "video" in inputs,
         "strength": "strength" in inputs,
     }
 
@@ -457,10 +461,12 @@ def _build_variant_entry(variant) -> dict:
 async def list_models():
     results = []
     installed_list = list_installed()
-    installed_hf = {inst.hf_name for inst in installed_list if inst.hf_name}
+    installed_keys = {inst.key for inst in installed_list}
     for v in catalog.all_variants():
         if v.type in ("builtin", "future", "api", "installable"):
-            if v.hf_name and v.hf_name in installed_hf:
+            if v.key in installed_keys:
+                continue
+            if v.hf_name is None or not is_model_cached(v.hf_name):
                 continue
             results.append(_build_variant_entry(v))
     for inst in installed_list:
@@ -633,30 +639,14 @@ async def unload_models():
 
 @router.get("/status")
 async def models_status():
-    gpu = {}
-    try:
-        import torch
-        torch_ok = True
-    except ModuleNotFoundError:
-        torch_ok = False
-    if torch_ok and torch.cuda.is_available():
-        device = torch.cuda.current_device()
-        name = torch.cuda.get_device_name(device)
-        props = torch.cuda.get_device_properties(device)
-        total = getattr(props, "total_memory", 0) / (1024 ** 3)
-        free = (
-            torch.cuda.mem_get_info(device)[0] / (1024 ** 3)
-            if hasattr(torch.cuda, "mem_get_info")
-            else total * 0.7
-        )
-        gpu = {
-            "gpu_available": True,
-            "gpu_name": name,
-            "vram_total_gb": round(total, 1),
-            "vram_free_gb": round(free, 1),
-        }
-    else:
-        gpu = {"gpu_available": False}
+    from app.api.hardware import _get_vram_info
+    vram = _get_vram_info()
+    gpu = {
+        "gpu_available": vram.get("gpu_available", False),
+        "gpu_name": vram.get("gpu_name"),
+        "vram_total_gb": vram.get("vram_total_gb"),
+        "vram_free_gb": vram.get("vram_free_gb"),
+    }
     return {
         **gpu,
         "current_model": _video_generator._current_model_key,

@@ -9,3 +9,5 @@ src/backend/results/
 .credentials.key
 credentials.json
 .run_backend.ps1
+docs/
+uploads/

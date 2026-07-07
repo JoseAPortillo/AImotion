@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, AsyncMock
 
 
 def test_llm_generate_rejects_empty_prompt(client):
@@ -17,7 +17,7 @@ def test_llm_generate_rejects_invalid_temperature(client):
     assert resp.status_code == 422
 
 
-@patch("app.api.llm._call_ollama")
+@patch("app.api.llm._call_ollama", new_callable=AsyncMock)
 def test_llm_generate_basic(mock_call, client):
     mock_call.return_value = "Hello! How can I help you?"
     resp = client.post("/llm/generate", json={"prompt": "Say hello"})
@@ -26,7 +26,7 @@ def test_llm_generate_basic(mock_call, client):
     assert data["result"] == "Hello! How can I help you?"
 
 
-@patch("app.api.llm._call_ollama")
+@patch("app.api.llm._call_ollama", new_callable=AsyncMock)
 def test_llm_generate_with_system_prompt(mock_call, client):
     mock_call.return_value = "42"
     resp = client.post("/llm/generate", json={
@@ -40,7 +40,7 @@ def test_llm_generate_with_system_prompt(mock_call, client):
     assert data["result"] == "42"
 
 
-@patch("app.api.llm._call_ollama")
+@patch("app.api.llm._call_ollama", new_callable=AsyncMock)
 def test_llm_generate_custom_model(mock_call, client):
     mock_call.return_value = "Sure, here's a poem..."
     resp = client.post("/llm/generate", json={
@@ -53,7 +53,7 @@ def test_llm_generate_custom_model(mock_call, client):
     assert args[0] == "llama3.1:8b"
 
 
-@patch("app.api.llm._call_ollama", side_effect=Exception("model not available"))
+@patch("app.api.llm._call_ollama", new_callable=AsyncMock, side_effect=Exception("model not available"))
 def test_llm_generate_all_models_fail(mock_call, client, monkeypatch):
     monkeypatch.setattr("app.api.llm.DEFAULT_MODEL", "nonexistent")
     monkeypatch.setattr("app.api.llm.FALLBACK_MODELS", [])
@@ -61,7 +61,7 @@ def test_llm_generate_all_models_fail(mock_call, client, monkeypatch):
     assert resp.status_code == 502
 
 
-@patch("app.api.llm._call_ollama")
+@patch("app.api.llm._call_ollama", new_callable=AsyncMock)
 def test_llm_generate_with_all_params(mock_call, client):
     mock_call.return_value = "Generated text"
     resp = client.post("/llm/generate", json={

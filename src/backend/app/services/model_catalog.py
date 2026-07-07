@@ -56,10 +56,9 @@ class ModelFamily:
 
     def accepts(self) -> dict:
         inputs = self.inputs
-        has_video = any("video" in k.lower() for k in inputs.keys())
         return {
             "image": "image" in inputs,
-            "video": has_video,
+            "video": "video" in inputs,
             "strength": "strength" in inputs,
         }
 
@@ -113,7 +112,9 @@ class ModelVariant:
 
     @property
     def defaults(self) -> dict:
-        return self._data.get("defaults") or self._family.defaults
+        variant_defs = self._data.get("defaults") or {}
+        family_defs = self._family.defaults
+        return {**family_defs, **variant_defs}
 
     @property
     def inputs(self) -> dict:
@@ -126,10 +127,9 @@ class ModelVariant:
 
     def accepts(self) -> dict:
         inputs = self.inputs
-        has_video = any("video" in k.lower() for k in inputs.keys())
         return {
             "image": "image" in inputs,
-            "video": has_video,
+            "video": "video" in inputs,
             "strength": "strength" in inputs,
         }
 
@@ -192,6 +192,9 @@ class ModelCatalog:
 
     def all_variants(self) -> list[ModelVariant]:
         return list(self._by_key.values())
+
+    def get_variants_by_hf(self, hf_name: str) -> list[ModelVariant]:
+        return [v for v in self._by_key.values() if v.hf_name == hf_name]
 
     def builtin_variants(self) -> list[ModelVariant]:
         return [v for v in self._by_key.values() if v.type == "builtin"]
