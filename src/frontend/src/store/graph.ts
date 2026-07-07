@@ -43,6 +43,7 @@ interface GraphState {
   outputUrl: string | null
   resultType: 'image' | 'video' | null
   nodeOutputs: Record<string, { url: string; type: 'image' | 'video' }>
+  autoPreviews: Record<string, { url: string; type: 'image' | 'video' }>
   addNode: (type: NodeType, position: { x: number; y: number }) => string
   onNodesChange: (changes: NodeChange<AppNode>[]) => void
   onEdgesChange: (changes: EdgeChange[]) => void
@@ -51,6 +52,7 @@ interface GraphState {
   selectNode: (nodeId: string | null) => void
   setOutputUrl: (url: string | null, resultType?: 'image' | 'video' | null) => void
   setNodeOutput: (nodeId: string, url: string, type: 'image' | 'video') => void
+  setAutoPreview: (nodeId: string, url: string, type: 'image' | 'video') => void
   removeNode: (nodeId: string) => void
   clearAll: () => void
   loadWorkflow: (
@@ -58,6 +60,7 @@ interface GraphState {
     wfEdges: Edge[],
     restoration?: {
       nodeOutputs?: Record<string, { url: string; type: 'image' | 'video' }>
+      autoPreviews?: Record<string, { url: string; type: 'image' | 'video' }>
       outputUrl?: string | null
       resultType?: 'image' | 'video' | null
     },
@@ -78,6 +81,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   outputUrl: null,
   resultType: null,
   nodeOutputs: {},
+  autoPreviews: {},
 
   addNode: (type, position) => {
     const def = NODE_DEFINITIONS[type]
@@ -159,15 +163,23 @@ export const useGraphStore = create<GraphState>((set, get) => ({
     })
   },
 
+  setAutoPreview: (nodeId, url, type) => {
+    set((state) => ({
+      autoPreviews: { ...state.autoPreviews, [nodeId]: { url, type } },
+    }))
+  },
+
   removeNode: (nodeId) => {
     set((state) => {
       const node = state.nodes.find((n) => n.id === nodeId)
       const remaining = state.nodes.filter((n) => n.id !== nodeId)
       const { [nodeId]: _, ...restOutputs } = state.nodeOutputs
+      const { [nodeId]: _ap, ...restPreviews } = state.autoPreviews
       const updates: Partial<GraphState & { outputUrl: string | null; resultType: 'image' | 'video' | null }> = {
         nodes: remaining,
         edges: state.edges.filter((e) => e.source !== nodeId && e.target !== nodeId),
         nodeOutputs: restOutputs,
+        autoPreviews: restPreviews,
       }
       if (node?.type === 'preview' && !remaining.some((n) => n.type === 'preview')) {
         updates.outputUrl = null
@@ -177,7 +189,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
     })
   },
 
-  clearAll: () => set({ nodes: [], edges: [], selectedNode: null, outputUrl: null, resultType: null, nodeOutputs: {} }),
+  clearAll: () => set({ nodes: [], edges: [], selectedNode: null, outputUrl: null, resultType: null, nodeOutputs: {}, autoPreviews: {} }),
 
   loadWorkflow: (wfNodes, wfEdges, restoration) => {
     const maxNum = wfNodes.reduce((max, n) => {
@@ -215,6 +227,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
       outputUrl: restoration?.outputUrl ?? null,
       resultType: restoration?.resultType ?? null,
       nodeOutputs: restoration?.nodeOutputs ?? {},
+      autoPreviews: restoration?.autoPreviews ?? {},
     })
   },
 

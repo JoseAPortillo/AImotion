@@ -11,8 +11,20 @@ interface UseAutoPreviewOptions {
 export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
   const nodes = useGraphStore((s) => s.nodes)
   const edges = useGraphStore((s) => s.edges)
+  const autoPreviews = useGraphStore((s) => s.autoPreviews)
+  const setAutoPreview = useGraphStore((s) => s.setAutoPreview)
 
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(() => {
+    const existing = autoPreviews[nodeId]
+    return existing?.url ?? null
+  })
+
+  useEffect(() => {
+    const existing = autoPreviews[nodeId]
+    if (existing?.url) {
+      setPreviewUrl(existing.url)
+    }
+  }, [autoPreviews, nodeId])
   const [previewRunning, setPreviewRunning] = useState(false)
 
   const taskIdRef = useRef('')
@@ -136,13 +148,14 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
 
       if (!abortRef.current && status && status.status === 'completed' && status.result_url) {
         setPreviewUrl(status.result_url)
+        setAutoPreview(nodeId, status.result_url, status.result_type || 'image')
       }
     } catch {
       // silent
     } finally {
       setPreviewRunning(false)
     }
-  }, [nodeId, data, nodes, edges])
+  }, [nodeId, data, nodes, edges, setAutoPreview])
 
   const cancel = useCallback(() => {
     abortRef.current = true

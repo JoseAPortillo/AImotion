@@ -297,6 +297,7 @@ function AppInner() {
   const clearAll = useGraphStore((s) => s.clearAll)
   const loadWorkflow = useGraphStore((s) => s.loadWorkflow)
   const nodeOutputs = useGraphStore((s) => s.nodeOutputs)
+  const autoPreviews = useGraphStore((s) => s.autoPreviews)
   const outputUrl = useGraphStore((s) => s.outputUrl)
   const resultType = useGraphStore((s) => s.resultType)
   const openRef = useRef<HTMLInputElement>(null)
@@ -312,27 +313,32 @@ function AppInner() {
   const handleSave = useCallback(async () => {
     if (hasDirectorySupport()) {
       try {
-        await saveWorkflowToDirectory(nodes, edges, nodeOutputs, outputUrl, resultType)
+        await saveWorkflowToDirectory(nodes, edges, nodeOutputs, autoPreviews, outputUrl, resultType)
         addToast('Workflow saved', 'success')
         return
       } catch (err: any) {
         if (err?.name === 'AbortError' || err?.name === 'SecurityError') return
       }
     }
-    downloadWorkflowJson(nodes, edges, nodeOutputs, outputUrl, resultType)
+    downloadWorkflowJson(nodes, edges, nodeOutputs, autoPreviews, outputUrl, resultType)
     addToast('Workflow saved', 'success')
-  }, [nodes, edges, nodeOutputs, outputUrl, resultType, addToast])
+  }, [nodes, edges, nodeOutputs, autoPreviews, outputUrl, resultType, addToast])
 
   const handleOpen = useCallback(async () => {
     if (hasDirectorySupport()) {
       try {
-        const { workflow, mediaBlobs } = await loadWorkflowFromDirectory()
+        const { workflow, mediaBlobs, previewBlobs } = await loadWorkflowFromDirectory()
         const restoration: Record<string, { url: string; type: 'image' | 'video' }> = {}
         for (const [nodeId, entry] of Object.entries(mediaBlobs)) {
           restoration[nodeId] = { url: URL.createObjectURL(entry.blob), type: entry.type }
         }
+        const previewRestoration: Record<string, { url: string; type: 'image' | 'video' }> = {}
+        for (const [nodeId, entry] of Object.entries(previewBlobs)) {
+          previewRestoration[nodeId] = { url: URL.createObjectURL(entry.blob), type: entry.type }
+        }
         loadWorkflow(workflow.nodes, workflow.edges, {
           nodeOutputs: Object.keys(restoration).length > 0 ? restoration : undefined,
+          autoPreviews: Object.keys(previewRestoration).length > 0 ? previewRestoration : undefined,
           outputUrl: workflow.outputUrl ?? null,
           resultType: workflow.resultType ?? null,
         })
@@ -362,8 +368,16 @@ function AppInner() {
           if (m.path) restoration[nodeId] = { url: m.path, type: m.type }
         }
       }
+      const previewRestoration: Record<string, { url: string; type: 'image' | 'video' }> = {}
+      if (wf.autoPreviews) {
+        for (const [nodeId, media] of Object.entries(wf.autoPreviews)) {
+          const m = media as { path: string; type: 'image' | 'video' }
+          if (m.path) previewRestoration[nodeId] = { url: m.path, type: m.type }
+        }
+      }
       loadWorkflow(wf.nodes, wf.edges, {
         nodeOutputs: Object.keys(restoration).length > 0 ? restoration : undefined,
+        autoPreviews: Object.keys(previewRestoration).length > 0 ? previewRestoration : undefined,
         outputUrl: wf.outputUrl ?? null,
         resultType: wf.resultType ?? null,
       })
