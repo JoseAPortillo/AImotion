@@ -172,7 +172,7 @@ export interface GroupNodeData extends Record<string, unknown> {
   previewType?: 'image' | 'video'
   expandedWidth?: number
   expandedHeight?: number
-  expandedX?: number
+  savedChildPositions?: Record<string, { relX: number; relY: number }>
 }
 
 export type NodeData =

@@ -305,11 +305,23 @@ export const useGraphStore = create<GraphState>((set, get) => ({
       const childIds: string[] = data.childIds ?? []
       const collapsedSize = { width: 200, height: 240 }
 
+      const expW = data.expandedWidth ?? group.width ?? collapsedSize.width
+      const expH = data.expandedHeight ?? group.height ?? collapsedSize.height
+      const dx = expW - collapsedSize.width
+
       const updatedNodes = state.nodes.map((node) => {
         if (node.id === groupId) {
           if (willCollapse) {
-            const expW = node.width ?? data.expandedWidth ?? collapsedSize.width
-            const dx = expW - collapsedSize.width
+            const savedChildPositions: Record<string, { relX: number; relY: number }> = {}
+            for (const childId of childIds) {
+              const child = state.nodes.find((n) => n.id === childId)
+              if (child) {
+                savedChildPositions[childId] = {
+                  relX: child.position.x - node.position.x,
+                  relY: child.position.y - node.position.y,
+                }
+              }
+            }
             return {
               ...node,
               position: { x: node.position.x + dx, y: node.position.y },
@@ -320,22 +332,22 @@ export const useGraphStore = create<GraphState>((set, get) => ({
                 collapsed: willCollapse,
                 expandedWidth: node.width ?? data.expandedWidth,
                 expandedHeight: node.height ?? data.expandedHeight,
-                expandedX: node.position.x,
+                savedChildPositions,
               } as GroupNodeData,
             }
           }
-          const expX = data.expandedX ?? node.position.x
+          const newGroupX = node.position.x - dx
           return {
             ...node,
-            position: { x: expX, y: node.position.y },
-            width: data.expandedWidth ?? node.width,
-            height: data.expandedHeight ?? node.height,
+            position: { x: newGroupX, y: node.position.y },
+            width: expW,
+            height: expH,
             data: {
               ...node.data,
               collapsed: willCollapse,
               expandedWidth: undefined,
               expandedHeight: undefined,
-              expandedX: undefined,
+              savedChildPositions: undefined,
             } as GroupNodeData,
           }
         }
@@ -343,9 +355,18 @@ export const useGraphStore = create<GraphState>((set, get) => ({
           if (willCollapse) {
             return { ...node, hidden: true, style: { ...node.style, display: 'none' } }
           }
+          const saved = data.savedChildPositions?.[node.id]
+          const groupX = group.position.x - dx
           const { style, ...rest } = node
           const { display: _, ...cleanStyle } = style || {}
-          return { ...rest, hidden: false, style: Object.keys(cleanStyle).length ? cleanStyle : undefined }
+          return {
+            ...rest,
+            hidden: false,
+            position: saved
+              ? { x: groupX + saved.relX, y: group.position.y + saved.relY }
+              : node.position,
+            style: Object.keys(cleanStyle).length ? cleanStyle : undefined,
+          }
         }
         return node
       })

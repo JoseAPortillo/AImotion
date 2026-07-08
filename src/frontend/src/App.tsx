@@ -114,10 +114,12 @@ function AppInner() {
           const oldNode = state.nodes.find((n) => n.id === change.id)
           const newNode = newNodes.find((n) => n.id === change.id)
           if (oldNode && newNode && oldNode.type === 'groupNode') {
+            const oldData = oldNode.data as GroupNodeData
+            if (oldData.collapsed) continue
             const dx = newNode.position.x - oldNode.position.x
             const dy = newNode.position.y - oldNode.position.y
             if (dx !== 0 || dy !== 0) {
-              const childIds: string[] = (oldNode.data as GroupNodeData).childIds ?? []
+              const childIds: string[] = oldData.childIds ?? []
               for (let i = 0; i < newNodes.length; i++) {
                 if (childIds.includes(newNodes[i].id)) {
                   newNodes[i] = {

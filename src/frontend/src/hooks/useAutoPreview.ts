@@ -51,6 +51,38 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
     return `${data.model}|${data.seed}|${data.cfg}|${data.strength}|${data.scheduler}|${data.width}|${data.height}|${promptText}|${negText}|${hasImage}|${hasVideo}`
   }, [edges, nodes, nodeId, data.model, data.seed, data.cfg, data.strength, data.scheduler, data.width, data.height])
 
+  function getPreviewParams(): Record<string, unknown> {
+    const genEdges = edges.filter((e) => e.target === nodeId)
+    const hasVideo = genEdges.some((e) => e.targetHandle === 'video_in')
+    const isVideo = hasVideo || (data.num_frames ?? 0) > 1
+
+    const maxDim = 384
+    const scale = Math.min(1, maxDim / Math.max(data.width ?? 720, data.height ?? 480))
+    const pw = Math.round((data.width ?? 720) * scale)
+    const ph = Math.round((data.height ?? 480) * scale)
+
+    return {
+      width: pw,
+      height: ph,
+      steps: 6,
+      cfg: data.cfg ?? 6,
+      strength: data.strength ?? 0.8,
+      seed: data.seed ?? 0,
+      scheduler: data.scheduler || '',
+      model: data.model,
+      execution_mode: data.execution_mode || 'local',
+      vae_tiling: data.vae_tiling ?? true,
+      vae_tile_overlap: data.vae_tile_overlap ?? 0.0,
+      num_frames: isVideo ? Math.min(data.num_frames ?? 49, 8) : undefined,
+      max_sequence_length: data.max_sequence_length,
+      noise_aug_strength: data.noise_aug_strength ?? (data.strength ?? 0.8),
+      fps: data.fps,
+      motion_bucket_id: data.motion_bucket_id,
+      min_guidance_scale: data.min_guidance_scale,
+      max_guidance_scale: data.max_guidance_scale,
+    }
+  }
+
   const run = useCallback(async () => {
     if (!data.model) return
 
@@ -116,37 +148,20 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
 
     setPreviewRunning(true)
     try {
+      const previewParams = getPreviewParams()
       const task = await startGeneration(
         promptText,
         promptEdgeNeg ? (getNode(promptEdgeNeg)?.data as PromptData | undefined)?.negative || '' : '',
-        {
-          width: data.width ?? 720,
-          height: data.height ?? 480,
-          steps: 12,
-          cfg: data.cfg ?? 6,
-          strength: data.strength ?? 0.8,
-          seed: data.seed ?? 0,
-          scheduler: data.scheduler || '',
-          model: data.model,
-          execution_mode: data.execution_mode || 'local',
-          vae_tiling: data.vae_tiling ?? true,
-          vae_tile_overlap: data.vae_tile_overlap ?? 0.0,
-          num_frames: data.num_frames,
-          max_sequence_length: data.max_sequence_length,
-          noise_aug_strength: data.noise_aug_strength ?? (data.strength ?? 0.8),
-          fps: data.fps,
-          motion_bucket_id: data.motion_bucket_id,
-          min_guidance_scale: data.min_guidance_scale,
-          max_guidance_scale: data.max_guidance_scale,
-        },
+        previewParams as Parameters<typeof startGeneration>[2],
         videoFile,
         imageFile,
       )
 
       taskIdRef.current = task.task_id
+      const pollInterval = previewParams.num_frames && (previewParams.num_frames as number) > 1 ? 3000 : 1500
       let status: any
       do {
-        await new Promise((r) => setTimeout(r, 1500))
+        await new Promise((r) => setTimeout(r, pollInterval))
         if (abortRef.current) break
         status = await pollTask(task.task_id)
         if (status.status === 'cancelled') break
