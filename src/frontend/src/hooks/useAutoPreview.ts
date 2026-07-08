@@ -64,7 +64,7 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
     return {
       width: pw,
       height: ph,
-      steps: 6,
+      steps: isVideo ? 12 : 6,
       cfg: data.cfg ?? 6,
       strength: data.strength ?? 0.8,
       seed: data.seed ?? 0,

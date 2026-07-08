@@ -428,7 +428,7 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
     color: '#14b8a6',
     description: 'Displays the generated video output in real time.',
     inputs: [{ id: 'video_in', label: 'Video', type: 'video_tensor' }],
-    outputs: [],
+    outputs: [{ id: 'video_out', label: 'Output', type: 'video_tensor' }],
   },
   textToImage: {
     type: 'textToImage',

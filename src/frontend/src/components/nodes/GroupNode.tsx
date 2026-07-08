@@ -41,7 +41,7 @@ function GroupNode(props: NodeProps) {
 
   const childCount = childIds?.length ?? 0
 
-  // Collapsed: only show proxy handles for INPUT edges (outside → child)
+  // Collapsed: proxy handles for INPUT edges (outside → child)
   const inputProxyHandles = useMemo(() => {
     if (!collapsed || !childIds?.length) return null
     const childSet = new Set(childIds)
@@ -67,6 +67,36 @@ function GroupNode(props: NodeProps) {
     }
     return handles.length > 0 ? handles : null
   }, [collapsed, childIds, edges])
+
+  // Collapsed: proxy handles for OUTPUT edges (child → outside)
+  const outputProxyHandles = useMemo(() => {
+    if (!collapsed || !childIds?.length) return null
+    const childSet = new Set(childIds)
+    const handles: Array<{
+      id: string
+      color: string
+      label: string
+    }> = []
+    const seen = new Set<string>()
+
+    for (const edge of edges) {
+      if (childSet.has(edge.source) && !childSet.has(edge.target)) {
+        const key = `source:${edge.source}:${edge.sourceHandle}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        const sourceNode = nodes.find((n) => n.id === edge.source)
+        const sourceDef = sourceNode ? NODE_DEFINITIONS[sourceNode.type as NodeType] : undefined
+        const portDef = sourceDef?.outputs.find((p) => p.id === edge.sourceHandle)
+        const portType: PortType = portDef?.type ?? 'video_tensor'
+        handles.push({
+          id: key,
+          color: getHandleColor(edge.sourceHandle ?? '', portType),
+          label: edge.sourceHandle ?? '',
+        })
+      }
+    }
+    return handles.length > 0 ? handles : null
+  }, [collapsed, childIds, edges, nodes])
 
   const otherSelectedNodes = useMemo(() => {
     if (!selectedNode || selectedNode === props.id) return []
@@ -154,6 +184,38 @@ function GroupNode(props: NodeProps) {
               left: -6,
               top: -2,
               transform: 'translateX(-100%)',
+              fontSize: 8,
+              color: h.color,
+              whiteSpace: 'nowrap',
+              pointerEvents: 'none',
+            }}
+          >
+            {h.label}
+          </div>
+        </Handle>
+      ))}
+
+      {/* Output proxy handles when collapsed — child → outside */}
+      {outputProxyHandles?.map((h) => (
+        <Handle
+          key={h.id}
+          type="source"
+          position={Position.Right}
+          id={h.id}
+          style={{
+            background: h.color,
+            width: 10,
+            height: 10,
+            border: '2px solid #1a1a1a',
+            pointerEvents: 'auto',
+          }}
+        >
+          <div
+            style={{
+              position: 'absolute',
+              right: -6,
+              top: -2,
+              transform: 'translateX(100%)',
               fontSize: 8,
               color: h.color,
               whiteSpace: 'nowrap',

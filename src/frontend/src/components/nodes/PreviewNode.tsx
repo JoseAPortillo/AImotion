@@ -26,9 +26,14 @@ function PreviewNode(props: NodeProps) {
 
   return (
     <NodeWrapper def={def} selected={props.selected} handles={
-      <Handle type="target" position={Position.Left} id="video_in" style={{ top: '50%', background: getHandleColor('video_in', 'video_tensor') }}>
-        <div style={{ position: 'absolute', left: -6, top: -2, transform: 'translateX(-100%)', fontSize: 9, color: getHandleColor('video_in', 'video_tensor'), whiteSpace: 'nowrap' }}>Output</div>
-      </Handle>
+      <>
+        <Handle type="target" position={Position.Left} id="video_in" style={{ top: '50%', background: getHandleColor('video_in', 'video_tensor') }}>
+          <div style={{ position: 'absolute', left: -6, top: -2, transform: 'translateX(-100%)', fontSize: 9, color: getHandleColor('video_in', 'video_tensor'), whiteSpace: 'nowrap' }}>Output</div>
+        </Handle>
+        <Handle type="source" position={Position.Right} id="video_out" style={{ top: '50%', background: getHandleColor('video_out', 'video_tensor') }}>
+          <div style={{ position: 'absolute', right: -6, top: -2, transform: 'translateX(100%)', fontSize: 9, color: getHandleColor('video_out', 'video_tensor'), whiteSpace: 'nowrap' }}>Passthrough</div>
+        </Handle>
+      </>
     }>
       <div style={{ padding: '4px 6px', fontSize: 10, color: '#ccc' }}>
         {src ? (

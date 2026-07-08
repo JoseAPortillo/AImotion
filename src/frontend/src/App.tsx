@@ -22,7 +22,7 @@ import Sidebar from './components/Sidebar'
 import NodeInspector from './components/NodeInspector'
 import ModelManager from './components/ModelManager'
 import VramStatusBar from './components/VramStatusBar'
-import { useCallback, useEffect, useState, useRef, type DragEvent } from 'react'
+import { useCallback, useEffect, useState, useRef, useMemo, type DragEvent } from 'react'
 import { checkHealth, startGeneration, pollTask, type TaskStatus } from './api/backend'
 import type { PromptData, ImageInputData, VideoInputData, GenerationData } from './types/nodes'
 import ToastContainer from './components/Toast'
@@ -94,6 +94,54 @@ function AppInner() {
   const nodes = useGraphStore((s) => s.nodes)
   const edges = useGraphStore((s) => s.edges)
   const onEdgesChange = useGraphStore((s) => s.onEdgesChange)
+
+  // Derive display edges: when a group is collapsed, route child→outside and outside→child
+  // edges through the group's proxy handles so visuals stay clean.
+  const displayEdges = useMemo(() => {
+    const proxyEdges: Edge[] = []
+    const groups = nodes.filter((n) => n.type === 'groupNode')
+    const hiddenSet = new Set<string>()
+
+    for (const group of groups) {
+      const gd = group.data as GroupNodeData
+      if (!gd.collapsed || !gd.childIds?.length) continue
+
+      const childSet = new Set(gd.childIds)
+
+      for (const edge of edges) {
+        const isInternalSource = childSet.has(edge.source)
+        const isInternalTarget = childSet.has(edge.target)
+
+        if (!isInternalSource && !isInternalTarget) continue
+
+        hiddenSet.add(edge.id)
+
+        if (isInternalSource && !isInternalTarget) {
+          proxyEdges.push({
+            id: `_proxy_${group.id}_${edge.id}`,
+            source: group.id,
+            sourceHandle: `source:${edge.source}:${edge.sourceHandle}`,
+            target: edge.target,
+            targetHandle: edge.targetHandle,
+            style: edge.style,
+          })
+        }
+
+        if (!isInternalSource && isInternalTarget) {
+          proxyEdges.push({
+            id: `_proxy_${group.id}_${edge.id}`,
+            source: edge.source,
+            sourceHandle: edge.sourceHandle,
+            target: group.id,
+            targetHandle: `target:${edge.target}:${edge.targetHandle}`,
+            style: edge.style,
+          })
+        }
+      }
+    }
+
+    return edges.map((e) => (hiddenSet.has(e.id) ? { ...e, hidden: true } : e)).concat(proxyEdges)
+  }, [nodes, edges])
   const onConnect = useGraphStore((s) => s.onConnect)
   const addNode = useGraphStore((s) => s.addNode)
   const selectNode = useGraphStore((s) => s.selectNode)
@@ -466,7 +514,7 @@ function AppInner() {
         />
         <ReactFlow
           nodes={nodes}
-          edges={edges}
+          edges={displayEdges}
           onNodesChange={handleNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
