@@ -36,6 +36,7 @@ from app.services.runners.registry import RunnerRegistry
 from app.services.runners.diffusers import DiffusersRunner
 from app.services.runners.gguf import GGUFRunner
 from app.services.runners.api import APIRunner
+from app.services.runners.wan import WanRunner
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -55,6 +56,7 @@ async def lifespan(app: FastAPI):
     RunnerRegistry.register("diffusers", DiffusersRunner())
     RunnerRegistry.register("gguf", GGUFRunner())
     RunnerRegistry.register("api", APIRunner())
+    RunnerRegistry.register("wan2.2", WanRunner())
     logger.info("Built-in runners registered")
 
     logger.info("AImation backend started")
