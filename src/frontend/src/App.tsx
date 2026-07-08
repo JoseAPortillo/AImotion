@@ -317,11 +317,12 @@ function AppInner() {
         addToast('Workflow saved', 'success')
         return
       } catch (err: any) {
+        console.error('[handleSave] Directory save failed:', err)
         if (err?.name === 'AbortError' || err?.name === 'SecurityError') return
       }
     }
     downloadWorkflowJson(nodes, edges, nodeOutputs, autoPreviews, outputUrl, resultType)
-    addToast('Workflow saved', 'success')
+    addToast('Workflow saved (JSON fallback)', 'success')
   }, [nodes, edges, nodeOutputs, autoPreviews, outputUrl, resultType, addToast])
 
   const handleOpen = useCallback(async () => {

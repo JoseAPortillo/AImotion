@@ -32,25 +32,10 @@ function mediaFileName(nodeId: string, type: 'image' | 'video'): string {
   return `${nodeId}_${Date.now()}.${ext}`
 }
 
-/** Traverse a nested path like "images/foo.png" from a directory handle */
-async function getFileByPath(
-  dirHandle: FileSystemDirectoryHandle,
-  path: string,
-): Promise<FileSystemFileHandle> {
-  const parts = path.split('/')
-  let current: FileSystemDirectoryHandle = dirHandle
-  for (let i = 0; i < parts.length - 1; i++) {
-    current = await current.getDirectoryHandle(parts[i])
-  }
-  return current.getFileHandle(parts[parts.length - 1])
+async function createSubDir(dirHandle: FileSystemDirectoryHandle, name: string): Promise<FileSystemDirectoryHandle> {
+  return dirHandle.getDirectoryHandle(name, { create: true })
 }
 
-/** Check if File System Access API is available */
-export function hasDirectorySupport(): boolean {
-  return 'showDirectoryPicker' in window
-}
-
-/** Save a media map to a subfolder structure, returns the media paths map */
 async function saveMediaMap(
   dirHandle: FileSystemDirectoryHandle,
   media: MediaMap,
@@ -62,14 +47,17 @@ async function saveMediaMap(
     if (!entry.url) continue
     const fileName = mediaFileName(nodeId, entry.type)
     const subDir = entry.type === 'video' ? 'videos' : 'images'
-    const fullSubDir = `${basePath}/${subDir}`
+    const fullSubDir = basePath ? `${basePath}/${subDir}` : subDir
 
     try {
       const response = await fetch(entry.url)
-      if (!response.ok) continue
+      if (!response.ok) {
+        console.warn(`[saveMediaMap] fetch failed for ${entry.url}: ${response.status}`)
+        continue
+      }
       const blob = await response.blob()
 
-      const parts = fullSubDir.split('/')
+      const parts = fullSubDir.split('/').filter(Boolean)
       let current = dirHandle
       for (const part of parts) {
         current = await current.getDirectoryHandle(part, { create: true })
@@ -80,15 +68,14 @@ async function saveMediaMap(
       await writable.close()
 
       result[nodeId] = { path: `${fullSubDir}/${fileName}`, type: entry.type }
-    } catch {
-      // skip media that can't be fetched
+    } catch (err) {
+      console.error(`[saveMediaMap] error saving ${entry.url}:`, err)
     }
   }
 
   return result
 }
 
-/** Load a media map from a subfolder structure */
 async function loadMediaMap(
   dirHandle: FileSystemDirectoryHandle,
   mediaPaths: Record<string, WorkflowMedia>,
@@ -97,18 +84,40 @@ async function loadMediaMap(
 
   for (const [nodeId, media] of Object.entries(mediaPaths)) {
     try {
-      const mediaFileHandle = await getFileByPath(dirHandle, media.path)
-      const mediaFile = await mediaFileHandle.getFile()
-      result[nodeId] = { blob: mediaFile, type: media.type }
-    } catch {
-      // skip media that can't be read
+      const parts = media.path.split('/').filter(Boolean)
+      let current = dirHandle
+      for (let i = 0; i < parts.length - 1; i++) {
+        current = await current.getDirectoryHandle(parts[i])
+      }
+      const fileHandle = await current.getFileHandle(parts[parts.length - 1])
+      const file = await fileHandle.getFile()
+      result[nodeId] = { blob: file, type: media.type }
+    } catch (err) {
+      console.warn(`[loadMediaMap] error reading ${media.path}:`, err)
     }
   }
 
   return result
 }
 
-/** Save workflow to a user-picked directory via File System Access API */
+/** Check if File System Access API is available */
+export function hasDirectorySupport(): boolean {
+  const supported = 'showDirectoryPicker' in window
+  console.log('[hasDirectorySupport]', supported)
+  return supported
+}
+
+/** Find the first .aimation file inside a directory handle */
+async function findAimationFile(dirHandle: FileSystemDirectoryHandle): Promise<FileSystemFileHandle> {
+  for await (const entry of dirHandle.values()) {
+    if (entry.kind === 'file' && entry.name.endsWith('.aimation')) {
+      return entry as FileSystemFileHandle
+    }
+  }
+  return dirHandle.getFileHandle('workflow.aimation')
+}
+
+/** Save workflow to a user-picked folder: name.aimation + images/ + videos/ + previews/ */
 export async function saveWorkflowToDirectory(
   nodes: AppNode[],
   edges: Edge[],
@@ -118,12 +127,20 @@ export async function saveWorkflowToDirectory(
   resultType: 'image' | 'video' | null,
 ): Promise<void> {
   const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' })
+  const folderName = dirHandle.name
+
+  // Create subdirectories upfront so they always exist
+  await dirHandle.getDirectoryHandle('images', { create: true })
+  await dirHandle.getDirectoryHandle('videos', { create: true })
+  const previewsDir = await dirHandle.getDirectoryHandle('previews', { create: true })
+  await previewsDir.getDirectoryHandle('images', { create: true })
+  await previewsDir.getDirectoryHandle('videos', { create: true })
 
   const mediaMap = await saveMediaMap(dirHandle, nodeOutputs, '')
   const previewMap = await saveMediaMap(dirHandle, autoPreviews, 'previews')
 
   const workflow: WorkflowFile = {
-    version: 3,
+    version: 4,
     nodes: nodes.map(({ id, type, position, data, width, height, hidden }) => ({
       id, type, position, data, width, height, hidden,
     })),
@@ -136,13 +153,14 @@ export async function saveWorkflowToDirectory(
     autoPreviews: previewMap,
   }
 
-  const jsonHandle = await dirHandle.getFileHandle('workflow.json', { create: true })
+  const fileName = `${folderName}.aimation`
+  const jsonHandle = await dirHandle.getFileHandle(fileName, { create: true })
   const writable = await jsonHandle.createWritable()
   await writable.write(JSON.stringify(workflow, null, 2))
   await writable.close()
 }
 
-/** Load workflow from a user-picked directory via File System Access API */
+/** Load workflow from a user-picked folder */
 export async function loadWorkflowFromDirectory(): Promise<{
   workflow: WorkflowFile
   mediaBlobs: Record<string, { blob: Blob; type: 'image' | 'video' }>
@@ -150,7 +168,7 @@ export async function loadWorkflowFromDirectory(): Promise<{
 }> {
   const dirHandle = await window.showDirectoryPicker({ mode: 'read' })
 
-  const jsonHandle = await dirHandle.getFileHandle('workflow.json')
+  const jsonHandle = await findAimationFile(dirHandle)
   const file = await jsonHandle.getFile()
   const text = await file.text()
   const workflow: WorkflowFile = JSON.parse(text)
@@ -165,7 +183,7 @@ export async function loadWorkflowFromDirectory(): Promise<{
   return { workflow, mediaBlobs, previewBlobs }
 }
 
-/** Fallback: save as JSON download (current behavior) */
+/** Fallback: save as JSON download */
 export function downloadWorkflowJson(
   nodes: AppNode[],
   edges: Edge[],

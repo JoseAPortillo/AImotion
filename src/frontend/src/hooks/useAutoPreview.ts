@@ -19,10 +19,16 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
     return existing?.url ?? null
   })
 
+  const [previewType, setPreviewType] = useState<'image' | 'video' | null>(() => {
+    const existing = autoPreviews[nodeId]
+    return existing?.type ?? null
+  })
+
   useEffect(() => {
     const existing = autoPreviews[nodeId]
     if (existing?.url) {
       setPreviewUrl(existing.url)
+      setPreviewType(existing.type)
     }
   }, [autoPreviews, nodeId])
   const [previewRunning, setPreviewRunning] = useState(false)
@@ -147,8 +153,10 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
       } while (status.status === 'pending' || status.status === 'running')
 
       if (!abortRef.current && status && status.status === 'completed' && status.result_url) {
+        const rtype = status.result_type || 'image'
         setPreviewUrl(status.result_url)
-        setAutoPreview(nodeId, status.result_url, status.result_type || 'image')
+        setPreviewType(rtype)
+        setAutoPreview(nodeId, status.result_url, rtype)
       }
     } catch {
       // silent
@@ -164,6 +172,7 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
     }
     setPreviewRunning(false)
     setPreviewUrl(null)
+    setPreviewType(null)
     if (timerRef.current) {
       clearTimeout(timerRef.current)
       timerRef.current = null
@@ -192,6 +201,7 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
 
   return {
     previewUrl,
+    previewType,
     previewRunning,
     cancelAutoPreview: cancel,
   }

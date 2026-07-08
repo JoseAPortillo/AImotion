@@ -72,6 +72,16 @@ interface GraphState {
   resizeGroupWithChildren: (groupId: string, newWidth: number, newHeight: number) => void
 }
 
+function revokeBlobUrl(url: string) {
+  if (url.startsWith('blob:')) URL.revokeObjectURL(url)
+}
+
+function revokeAllBlobUrls(record: Record<string, { url: string; type: string }>) {
+  for (const entry of Object.values(record)) {
+    revokeBlobUrl(entry.url)
+  }
+}
+
 let nodeCounter = 0
 
 export const useGraphStore = create<GraphState>((set, get) => ({
@@ -172,6 +182,8 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   removeNode: (nodeId) => {
     set((state) => {
       const node = state.nodes.find((n) => n.id === nodeId)
+      revokeBlobUrl(state.nodeOutputs[nodeId]?.url ?? '')
+      revokeBlobUrl(state.autoPreviews[nodeId]?.url ?? '')
       const remaining = state.nodes.filter((n) => n.id !== nodeId)
       const { [nodeId]: _, ...restOutputs } = state.nodeOutputs
       const { [nodeId]: _ap, ...restPreviews } = state.autoPreviews
@@ -189,9 +201,17 @@ export const useGraphStore = create<GraphState>((set, get) => ({
     })
   },
 
-  clearAll: () => set({ nodes: [], edges: [], selectedNode: null, outputUrl: null, resultType: null, nodeOutputs: {}, autoPreviews: {} }),
+  clearAll: () => {
+    const state = get()
+    revokeAllBlobUrls(state.nodeOutputs)
+    revokeAllBlobUrls(state.autoPreviews)
+    set({ nodes: [], edges: [], selectedNode: null, outputUrl: null, resultType: null, nodeOutputs: {}, autoPreviews: {} })
+  },
 
   loadWorkflow: (wfNodes, wfEdges, restoration) => {
+    const state = get()
+    revokeAllBlobUrls(state.nodeOutputs)
+    revokeAllBlobUrls(state.autoPreviews)
     const maxNum = wfNodes.reduce((max, n) => {
       const m = n.id.match(/_(\d+)$/)
       return m ? Math.max(max, parseInt(m[1], 10)) : max
