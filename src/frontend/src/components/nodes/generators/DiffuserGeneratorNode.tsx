@@ -2,7 +2,7 @@ import { memo, useCallback, useMemo, useState, useEffect, useRef } from 'react'
 import { flushSync } from 'react-dom'
 import type { NodeProps } from '@xyflow/react'
 import { Handle, Position } from '@xyflow/react'
-import { NODE_DEFINITIONS, getHandleColor, type NodeType, type GenerationData, type PromptData } from '../../../types/nodes'
+import { NODE_DEFINITIONS, getHandleColor, type NodeType, type GenerationData, type PromptData, type GroupNodeData } from '../../../types/nodes'
 import NodeWrapper, { CollapsibleSection, InfoLabel, FIELD_DESCS } from '../NodeWrapper'
 import { useGraphStore } from '../../../store/graph'
 import { useToastStore } from '../../../store/toast'
@@ -237,19 +237,51 @@ function DiffuserGeneratorNode(props: NodeProps) {
     console.log('[DiffuserGen] Image node:', imageNode)
     console.log('[DiffuserGen] Image node data:', imageNode?.data)
     
-    const getFileFromNodeData = async (nodeData: any): Promise<File | undefined> => {
-      if (!nodeData) return undefined
-      if (nodeData.file instanceof File) return nodeData.file
-      if (nodeData.fileDataUrl) {
-        const response = await fetch(nodeData.fileDataUrl)
-        const blob = await response.blob()
-        return new File([blob], nodeData.fileName || 'file', { type: blob.type })
+    const resolveNodeFile = async (sourceNodeId: string, visited?: Set<string>): Promise<File | undefined> => {
+      const store = useGraphStore.getState()
+      const sourceNode = store.nodes.find((n) => n.id === sourceNodeId)
+      if (!sourceNode) return undefined
+
+      const nd = sourceNode.data as Record<string, unknown>
+      if (nd.file instanceof File) return nd.file
+      if (nd.fileDataUrl) {
+        const r = await fetch(nd.fileDataUrl as string)
+        const blob = await r.blob()
+        return new File([blob], (nd.fileName as string) || 'file', { type: blob.type })
       }
+
+      const output = store.nodeOutputs[sourceNodeId]
+      if (output?.url) {
+        const r = await fetch(output.url)
+        const blob = await r.blob()
+        return new File([blob], 'output', { type: blob.type })
+      }
+
+      if (sourceNode.type === 'groupNode') {
+        const childIds = (sourceNode.data as GroupNodeData).childIds || []
+        for (const cid of childIds) {
+          const co = store.nodeOutputs[cid]
+          if (co?.url) {
+            const r = await fetch(co.url)
+            const blob = await r.blob()
+            return new File([blob], 'group-output', { type: blob.type })
+          }
+        }
+      }
+
+      if (sourceNode.type === 'preview' || sourceNode.type === 'groupNode') {
+        const guard = visited ?? new Set<string>()
+        if (guard.has(sourceNodeId)) return undefined
+        guard.add(sourceNodeId)
+        const incoming = store.edges.find((e) => e.target === sourceNodeId)
+        if (incoming) return resolveNodeFile(incoming.source, guard)
+      }
+
       return undefined
     }
     
-    const imageFile = await getFileFromNodeData(imageNode?.data)
-    const videoFile = await getFileFromNodeData(videoNode?.data)
+    const imageFile = imageEdge ? await resolveNodeFile(imageEdge.source) : undefined
+    const videoFile = videoEdge ? await resolveNodeFile(videoEdge.source) : undefined
     console.log('[DiffuserGen] Image file to send:', imageFile)
     console.log('[DiffuserGen] Video file to send:', videoFile)
 
