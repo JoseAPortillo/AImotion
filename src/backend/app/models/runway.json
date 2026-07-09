@@ -1,0 +1,34 @@
+{
+  "family": "runway",
+  "label": "Runway",
+  "description": "Runway video-to-video via API",
+  "runner": "api",
+  "pipeline": null,
+  "schedulers": {},
+  "default_scheduler": null,
+  "defaults": {},
+  "inputs": {
+    "prompt": { "required": true, "type": "text" },
+    "video": { "required": true, "type": "video" }
+  },
+  "output": { "type": "video", "mime": "video/mp4" },
+  "variants": [
+    {
+      "key": "runway:aleph2",
+      "name": "Aleph 2.0",
+      "hf_name": null,
+      "type": "api",
+      "size_gb": null,
+      "dtype": null,
+      "needs_token": false,
+      "pricing": { "credits_per_second": 28, "min_credits": 56 },
+      "resolutions": ["16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16", "21:9"],
+      "inputs": {
+        "seed": { "required": false, "type": "int", "default": 42, "min": 0, "max": 2147483647 }
+      },
+      "defaults": {
+        "seed": 42
+      }
+    }
+  ]
+}

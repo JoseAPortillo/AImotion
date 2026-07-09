@@ -23,6 +23,7 @@ export type NodeType =
   | 'imageToVideo'
   | 'videoToVideo'
   | 'imageToImage'
+  | 'runwayVideoToVideo'
   | 'groupNode'
 
 export interface ModelEntry {
@@ -48,6 +49,12 @@ export interface ModelEntry {
     min?: number
     max?: number
   }>
+  pricing?: {
+    credits_per_second?: number
+    min_credits?: number
+    tiers?: Record<string, number>
+  }
+  resolutions?: string[]
 }
 
 export type PortType =
@@ -502,6 +509,21 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
       { id: 'image_out', label: 'Image', type: 'video_tensor' },
     ],
     defaultData: { model: '', scheduler: '', execution_mode: 'local', vae_tiling: true, vae_tile_overlap: 0.0, steps: 30, cfg: 7, seed: 42, strength: 0.8, width: 1024, height: 1024 },
+  },
+  runwayVideoToVideo: {
+    type: 'runwayVideoToVideo',
+    label: 'Runway V2V',
+    color: '#6366f1',
+    description: "Generate video using Runway's API — Aleph 2.0 video-to-video.",
+    inputs: [
+      { id: 'video_in', label: 'Video', type: 'video_tensor' },
+      { id: 'prompt_pos', label: 'Positive Prompt', type: 'prompt' },
+      { id: 'prompt_neg', label: 'Negative Prompt', type: 'prompt' },
+    ],
+    outputs: [
+      { id: 'video_out', label: 'Video', type: 'video_tensor' },
+    ],
+    defaultData: { model: '', scheduler: '', execution_mode: 'local', vae_tiling: false, vae_tile_overlap: 0.0, steps: 50, cfg: 6, seed: 42, strength: 0.8, width: 1280, height: 720, num_frames: 5 },
   },
   groupNode: {
     type: 'groupNode',

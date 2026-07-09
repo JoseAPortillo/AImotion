@@ -1,34 +1,46 @@
 import os
 import json
+import base64
 import logging
+import hashlib
+import sys
 from typing import Optional
 from cryptography.fernet import Fernet
 
 logger = logging.getLogger(__name__)
 
-CREDENTIALS_DIR = os.path.join(os.path.dirname(__file__), "..", "..")
-KEY_FILE = os.path.abspath(os.path.join(CREDENTIALS_DIR, ".credentials.key"))
-STORE_FILE = os.path.abspath(os.path.join(CREDENTIALS_DIR, "credentials.json"))
+
+def _data_dir() -> str:
+    if sys.platform == "win32":
+        base = os.environ.get("APPDATA", os.path.expanduser("~"))
+        path = os.path.join(base, "AImation")
+    else:
+        path = os.path.expanduser("~/.config/aimation")
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+_DATA_DIR = _data_dir()
+
+
+def store_path() -> str:
+    return os.environ.get("AIMATION_CREDENTIALS_PATH") or os.path.join(_DATA_DIR, "credentials.json")
+
+
+_MASTER_SECRET = os.environ.get("AIMATION_CREDENTIAL_KEY", "aimation-credential-key-v1")
 
 
 def _get_cipher() -> Fernet:
-    if not os.path.exists(KEY_FILE):
-        key = Fernet.generate_key()
-        os.makedirs(os.path.dirname(KEY_FILE), exist_ok=True)
-        with open(KEY_FILE, "wb") as f:
-            f.write(key)
-        logger.info("Generated new credential encryption key")
-    else:
-        with open(KEY_FILE, "rb") as f:
-            key = f.read()
+    key = base64.urlsafe_b64encode(hashlib.sha256(_MASTER_SECRET.encode()).digest())
     return Fernet(key)
 
 
 def _load_store() -> dict[str, str]:
-    if not os.path.exists(STORE_FILE):
+    path = store_path()
+    if not os.path.exists(path):
         return {}
     try:
-        with open(STORE_FILE) as f:
+        with open(path) as f:
             return json.load(f)
     except (json.JSONDecodeError, OSError):
         logger.warning("Corrupted credential store, starting fresh")
@@ -36,8 +48,9 @@ def _load_store() -> dict[str, str]:
 
 
 def _save_store(store: dict[str, str]):
-    os.makedirs(os.path.dirname(STORE_FILE), exist_ok=True)
-    with open(STORE_FILE, "w") as f:
+    path = store_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
         json.dump(store, f, indent=2)
 
 

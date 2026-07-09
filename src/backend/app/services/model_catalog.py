@@ -147,6 +147,8 @@ class ModelVariant:
             "default_scheduler": self.default_scheduler,
             "accepts": self.accepts(),
             "is_video": self.is_video,
+            "pricing": self._data.get("pricing"),
+            "resolutions": self._data.get("resolutions"),
         }
 
 

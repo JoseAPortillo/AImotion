@@ -459,6 +459,8 @@ def _build_variant_entry(variant) -> dict:
         "inputs": variant.inputs,
         "is_video": variant.is_video,
         "runner": variant.family.runner,
+        "pricing": variant._data.get("pricing"),
+        "resolutions": variant._data.get("resolutions"),
     }
 
 
@@ -471,7 +473,7 @@ async def list_models():
         if v.type in ("builtin", "future", "api", "installable"):
             if v.key in installed_keys:
                 continue
-            if v.hf_name is None or not is_model_cached(v.hf_name):
+            if v.type != "api" and (v.hf_name is None or not is_model_cached(v.hf_name)):
                 continue
             results.append(_build_variant_entry(v))
     for inst in installed_list:

@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     offload_text_encoder: bool = True
     hf_token: Optional[str] = None
     gemini_api_key: Optional[str] = None
+    app_url: str = "http://localhost:8000"
 
 
 settings = Settings()

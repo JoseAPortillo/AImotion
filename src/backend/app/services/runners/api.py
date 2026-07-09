@@ -6,12 +6,14 @@ from app.services.runners.base import BaseRunner, GenerateParams, GenerateResult
 from app.services.model_catalog import catalog
 from app.services.api_providers.kling import KlingProvider
 from app.services.api_providers.seedance import SeedanceProvider
+from app.services.api_providers.runway import RunwayProvider
 
 logger = logging.getLogger(__name__)
 
 _PROVIDERS: dict[str, BaseRunner] = {
     "kling": KlingProvider(),
     "seedance": SeedanceProvider(),
+    "runway": RunwayProvider(),
 }
 
 
