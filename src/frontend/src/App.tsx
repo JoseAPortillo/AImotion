@@ -22,6 +22,7 @@ import Sidebar from './components/Sidebar'
 import NodeInspector from './components/NodeInspector'
 import ModelManager from './components/ModelManager'
 import VramStatusBar from './components/VramStatusBar'
+import CreditStatusBar from './components/CreditStatusBar'
 import { useCallback, useEffect, useState, useRef, useMemo, type DragEvent } from 'react'
 import { checkHealth, startGeneration, pollTask, type TaskStatus } from './api/backend'
 import type { PromptData, ImageInputData, VideoInputData, GenerationData } from './types/nodes'
@@ -607,8 +608,9 @@ function AppInner() {
               {generating ? 'Generating...' : 'Generate'}
             </button>
           </Panel>
-          <Panel position="top-center">
+          <Panel position="top-center" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <VramStatusBar />
+            <CreditStatusBar />
           </Panel>
           <Panel position="bottom-center" style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 4 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: '#555', letterSpacing: 1 }}>AImation</div>

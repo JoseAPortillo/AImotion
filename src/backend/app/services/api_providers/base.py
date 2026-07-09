@@ -69,3 +69,7 @@ class BaseApiProvider(abc.ABC):
         cancel_event: Optional[threading.Event] = None,
     ) -> GenerateResult:
         ...
+
+    async def get_balance(self) -> dict | None:
+        """Return credit balance info or None if not supported by this provider."""
+        return None

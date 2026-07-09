@@ -143,6 +143,10 @@ class RunwayProvider(BaseApiProvider):
                     video_url = output[0] if output else ""
                     if not video_url:
                         raise ProviderError("Runway returned succeeded status but no video URL")
+                    usage = status_data.get("usage")
+                    if isinstance(usage, dict):
+                        from app.services.credit_manager import credit_manager
+                        credit_manager.record_usage("runway", api_model, usage.get("credits", 0), task_id)
                     logger.info("Runway generation complete: %s", video_url)
                     return GenerateResult(url=video_url, media_type="video")
 
@@ -154,6 +158,29 @@ class RunwayProvider(BaseApiProvider):
                 elapsed += POLL_INTERVAL
 
             raise ProviderError("Runway generation timed out")
+
+    async def get_balance(self) -> dict | None:
+        async with httpx.AsyncClient(timeout=15) as client:
+            try:
+                data = await client.get(
+                    f"{self.base_url}/v1/organization",
+                    headers=self._auth_headers(),
+                )
+                if not data.is_success:
+                    logger.warning("Runway balance fetch failed: %s", data.status_code)
+                    return None
+                org = data.json()
+                return {
+                    "provider": "runway",
+                    "balance": org.get("creditBalance"),
+                    "tier": org.get("tier"),
+                    "daily_generations": org.get("dailyGenerations"),
+                    "monthly_spend": org.get("monthlySpend"),
+                    "monthly_spend_cap": org.get("monthlySpendCap"),
+                }
+            except Exception as e:
+                logger.warning("Runway balance fetch error: %s", e)
+                return None
 
     def load(self, model_key: str) -> None:
         logger.info("Runway provider ready for model: %s", model_key)
