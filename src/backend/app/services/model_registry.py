@@ -234,6 +234,20 @@ def discover_pipeline(hf_name: str) -> dict:
                         "CogVideoXTransformer3DModel": "CogVideoXPipeline",
                     }
                     pipeline_class = model_to_pipeline.get(pipeline_class, pipeline_class.replace("Model", "Pipeline"))
+
+        if pipeline_class and pipeline_tag:
+            tag_lower = pipeline_tag.lower()
+            is_i2v_pipeline = "ImageToVideo" in pipeline_class or "Img2Vid" in pipeline_class
+            is_v2v_pipeline = "VideoToVideo" in pipeline_class
+            tag_is_i2v = tag_lower == "image-to-video"
+            tag_is_v2v = tag_lower == "video-to-video"
+            tag_is_t2v = tag_lower == "text-to-video"
+            if tag_is_i2v and not is_i2v_pipeline:
+                logger.info(f"Overriding pipeline {pipeline_class} -> image-to-video based on pipeline_tag")
+                pipeline_class = "CogVideoXImageToVideoPipeline" if "cogvideox" in pipeline_class.lower() else pipeline_class
+            elif tag_is_v2v and not is_v2v_pipeline:
+                logger.info(f"Overriding pipeline {pipeline_class} -> video-to-video based on pipeline_tag")
+                pipeline_class = "CogVideoXVideoToVideoPipeline" if "cogvideox" in pipeline_class.lower() else pipeline_class
             if not pipeline_class:
                 supported_keywords = {}
                 for fam in _catalog_families():

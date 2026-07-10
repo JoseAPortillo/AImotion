@@ -34,21 +34,6 @@
     "installed_at": "2026-06-30T10:32:42.279824"
   },
   {
-    "key": "alperkts_krea2_fp8",
-    "hf_name": "AlperKTS/Krea2_FP8",
-    "alias": "Krea2_FP8",
-    "pipeline_class": "StableDiffusionXLPipeline",
-    "dtype": "float16",
-    "schedulers": {},
-    "default_scheduler": "",
-    "needs_token": false,
-    "defaults": {
-      "steps": 50,
-      "cfg": 7.0
-    },
-    "installed_at": "2026-06-30T12:39:32.307387"
-  },
-  {
     "key": "quantstack_wan2.2_ti2v_5b_gguf",
     "hf_name": "QuantStack/Wan2.2-TI2V-5B-GGUF",
     "alias": "Wan2.2-TI2V-5B-GGUF",
@@ -126,5 +111,48 @@
       "cfg": 7.0
     },
     "installed_at": "2026-07-03T12:19:42.228030"
+  },
+  {
+    "key": "nimvideo_cogvideox_2b_img2vid",
+    "hf_name": "NimVideo/cogvideox-2b-img2vid",
+    "alias": "cogvideox-2b-img2vid",
+    "pipeline_class": "CogVideoXImageToVideoPipeline",
+    "dtype": "bfloat16",
+    "schedulers": {
+      "scheduler": "CogVideoXDDIMScheduler"
+    },
+    "default_scheduler": "cogvideox_ddim",
+    "needs_token": false,
+    "defaults": {
+      "width": 720,
+      "height": 480,
+      "steps": 50,
+      "cfg": 6.0,
+      "num_frames": 49,
+      "fps": 8,
+      "max_seq": 226
+    },
+    "installed_at": "2026-07-10T11:02:03.319384",
+    "repo_files": [
+      ".gitattributes",
+      "README.md",
+      "cogvideox-2b-img2vid-workflow.json",
+      "cogvideox-2b-img2vid-workflow.png",
+      "model_index.json",
+      "scheduler/scheduler_config.json",
+      "text_encoder/config.json",
+      "text_encoder/model-00001-of-00002.safetensors",
+      "text_encoder/model-00002-of-00002.safetensors",
+      "text_encoder/model.safetensors.index.json",
+      "tokenizer/added_tokens.json",
+      "tokenizer/special_tokens_map.json",
+      "tokenizer/spiece.model",
+      "tokenizer/tokenizer_config.json",
+      "transformer/config.json",
+      "transformer/diffusion_pytorch_model.safetensors",
+      "vae/config.json",
+      "vae/diffusion_pytorch_model.safetensors"
+    ],
+    "checkpoint_file": ""
   }
 ]
