@@ -572,7 +572,9 @@ class DiffusersGenerator:
         min_cfg = min_guidance_scale if min_guidance_scale is not None else d.get("min_guidance_scale")
         max_cfg = max_guidance_scale if max_guidance_scale is not None else d.get("max_guidance_scale")
 
-        pipe = self._ensure_pipe(model)
+        import asyncio
+        loop = asyncio.get_running_loop()
+        pipe = await loop.run_in_executor(None, lambda: self._ensure_pipe(model))
         self._apply_scheduler(scheduler, pipe=pipe, cfg=model_cfg)
 
         sig = inspect.signature(pipe.__call__)
@@ -623,8 +625,6 @@ class DiffusersGenerator:
         logger.info(f"Starting generation with {type(pipe).__name__}...")
         self._log_vram()
 
-        import asyncio
-        loop = asyncio.get_running_loop()
         output = await loop.run_in_executor(None, lambda: pipe(**pipe_kwargs))
 
         if progress_callback:
