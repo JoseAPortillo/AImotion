@@ -299,6 +299,7 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
         files = api.list_repo_files(hf_name)
         weight_exts = (".safetensors", ".bin", ".pt", ".pth", ".gguf", ".ggufs")
         weight_files = [f for f in files if f.endswith(weight_exts)]
+        config_files = [f for f in files if f not in weight_files]
 
         has_model_index = "model_index.json" in files
         checkpoint_file = weight_files[0] if weight_files and not has_model_index else ""
@@ -319,7 +320,8 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
                 pass
             return 0
 
-        total_size = sum(_get_file_size(f) for f in weight_files)
+        total_weight_size = sum(_get_file_size(f) for f in weight_files)
+        total_size = total_weight_size + sum(_get_file_size(f) for f in config_files)
         if total_size > 0:
             import shutil
             os.makedirs(cache_dir, exist_ok=True)
@@ -335,17 +337,8 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
                     f"Free up space or choose a smaller model."
                 )
                 return
-        downloaded_size = 0
-        task.total_files = len(weight_files)
 
-        for i, fname in enumerate(weight_files):
-            if task.cancel_event.is_set():
-                task.status = "cancelled"
-                return
-
-            task.current_file = os.path.basename(fname)
-            task.downloaded_files = i
-
+        def _download_file(fname: str) -> bool:
             try:
                 hf_hub_download(
                     repo_id=hf_name,
@@ -354,18 +347,45 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
                     resume_download=True,
                     cache_dir=cache_dir,
                 )
+                return True
             except Exception as e:
                 if task.cancel_event.is_set():
-                    task.status = "cancelled"
-                    return
+                    return False
                 task.status = "error"
                 task.error_msg = f"Failed to download {fname}: {e}"
+                return False
+
+        # Download config files first (small files, needed for from_pretrained)
+        task.total_files = len(config_files) + len(weight_files)
+        task.current_file = "config files"
+        for i, fname in enumerate(config_files):
+            if task.cancel_event.is_set():
+                task.status = "cancelled"
+                return
+            task.downloaded_files = i
+            if not _download_file(fname):
+                return
+            task.downloaded_files = i + 1
+
+        # Download weight files with progress tracking
+        downloaded_weight_size = 0
+        config_size = total_size - total_weight_size
+        task.current_file = ""
+        for i, fname in enumerate(weight_files):
+            if task.cancel_event.is_set():
+                task.status = "cancelled"
                 return
 
-            downloaded_size += _get_file_size(fname)
-            task.progress_pct = (downloaded_size / total_size * 100) if total_size else \
-                ((i + 1) / len(weight_files) * 100)
-            task.downloaded_files = i + 1
+            task.current_file = os.path.basename(fname)
+            task.downloaded_files = len(config_files) + i
+
+            if not _download_file(fname):
+                return
+
+            downloaded_weight_size += _get_file_size(fname)
+            task.progress_pct = ((config_size + downloaded_weight_size) / total_size * 100) if total_size else \
+                ((len(config_files) + i + 1) / (len(config_files) + len(weight_files)) * 100)
+            task.downloaded_files = len(config_files) + i + 1
 
         if task.cancel_event.is_set():
             task.status = "cancelled"
