@@ -125,6 +125,18 @@ function GroupNode(props: NodeProps) {
   const displayLabel = label ?? def.label
   const outColor = getHandleColor('output', 'video_tensor')
 
+  const childPreview = useMemo(() => {
+    if (!childIds?.length) return null
+    for (let i = childIds.length - 1; i >= 0; i--) {
+      const out = nodeOutputs[childIds[i]]
+      if (out?.url) return out
+    }
+    return null
+  }, [childIds, nodeOutputs])
+
+  const resolvedUrl = previewUrl ?? nodeOutputs[props.id]?.url ?? childPreview?.url ?? outputUrl
+  const resolvedType = previewType ?? nodeOutputs[props.id]?.type ?? childPreview?.type ?? resultType
+
   return (
     <div
       style={{
@@ -278,7 +290,7 @@ function GroupNode(props: NodeProps) {
             }}
             style={{ cursor: 'text', flex: 1 }}
           >
-            {displayLabel} ({childCount})
+            {displayLabel}
           </span>
         )}
         <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
@@ -356,10 +368,10 @@ function GroupNode(props: NodeProps) {
               overflow: 'hidden',
             }}
           >
-            {previewUrl || nodeOutputs[props.id]?.url || outputUrl ? (
-              (previewType ?? nodeOutputs[props.id]?.type ?? resultType) === 'video' ? (
+            {resolvedUrl ? (
+              resolvedType === 'video' ? (
                 <video
-                  src={previewUrl ?? nodeOutputs[props.id]?.url ?? outputUrl ?? ''}
+                  src={resolvedUrl}
                   style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                   autoPlay
                   loop
@@ -368,7 +380,7 @@ function GroupNode(props: NodeProps) {
                 />
               ) : (
                 <img
-                  src={previewUrl ?? nodeOutputs[props.id]?.url ?? outputUrl ?? ''}
+                  src={resolvedUrl}
                   alt="preview"
                   style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                 />
