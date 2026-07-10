@@ -182,6 +182,31 @@ class RunwayProvider(BaseApiProvider):
                 logger.warning("Runway balance fetch error: %s", e)
                 return None
 
+    async def get_usage_history(
+        self, start_date: str | None = None, end_date: str | None = None
+    ) -> dict | None:
+        async with httpx.AsyncClient(timeout=15) as client:
+            try:
+                body: dict = {}
+                if start_date:
+                    body["start_date"] = start_date
+                if end_date:
+                    body["end_date"] = end_date
+
+                headers = self._auth_headers()
+                resp = await client.post(
+                    f"{self.base_url}/v1/organization/usage",
+                    json=body,
+                    headers=headers,
+                )
+                if not resp.is_success:
+                    logger.warning("Runway usage fetch failed: %s", resp.status_code)
+                    return None
+                return resp.json()
+            except Exception as e:
+                logger.warning("Runway usage fetch error: %s", e)
+                return None
+
     def load(self, model_key: str) -> None:
         logger.info("Runway provider ready for model: %s", model_key)
 

@@ -86,5 +86,34 @@ class CreditManager:
             "recent": sorted(history, key=lambda x: x["timestamp"], reverse=True)[:limit],
         }
 
+    def get_daily_summary(self, days: int = 30) -> dict:
+        """Return usage grouped by date and model for the last N days."""
+        now = datetime.now(timezone.utc)
+        cutoff = now - __import__("datetime").timedelta(days=days)
+
+        daily: dict[str, dict[str, float]] = {}
+        for h in self._store["history"]:
+            ts = h.get("timestamp", "")
+            try:
+                dt = datetime.fromisoformat(ts)
+            except (ValueError, TypeError):
+                continue
+            if dt < cutoff:
+                continue
+            date_key = dt.strftime("%Y-%m-%d")
+            model = h.get("model", "unknown")
+            if date_key not in daily:
+                daily[date_key] = {}
+            daily[date_key][model] = daily[date_key].get(model, 0) + h.get("credits", 0)
+
+        sorted_days = sorted(daily.items(), reverse=True)[:days]
+        return {
+            "daily": [
+                {"date": date, "models": models}
+                for date, models in sorted_days
+            ],
+            "days": days,
+        }
+
 
 credit_manager = CreditManager()
