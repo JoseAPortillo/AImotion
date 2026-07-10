@@ -22,7 +22,7 @@ task_manager = TaskManager()
 solver = GraphSolver()
 
 
-_GEN_NODE_TYPES = {"imageGen", "videoGen", "textToImage", "textToVideo", "imageToVideo", "videoToVideo", "imageToImage"}
+_GEN_NODE_TYPES = {"imageGen", "videoGen", "textToImage", "textToVideo", "imageToVideo", "videoToVideo", "imageToImage", "runwayVideoToVideo", "runwayImageToVideo"}
 
 def _find_node_by_type(ctx: dict, ntype: str) -> dict | None:
     for nid in ctx["order"]:		
@@ -170,6 +170,8 @@ async def _execute_graph(task_id: str, graph: dict):
                 extra = params.get("extra", {})
                 if resolved_video:
                     extra["video_path"] = str(resolved_video)
+                if resolved_image:
+                    extra["image_path"] = str(resolved_image)
                 gen_params = GenerateParams(
                     prompt=params["prompt"],
                     negative_prompt=params.get("negative_prompt", ""),

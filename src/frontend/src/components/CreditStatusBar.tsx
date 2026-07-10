@@ -86,7 +86,7 @@ export default function CreditStatusBar() {
   const toggleExpand = () => {
     const next = !expanded
     setExpanded(next)
-    if (next && !usageData) {
+    if (next) {
       fetch('/credits/usage?provider=runway&days=30')
         .then(r => r.json())
         .then(d => setUsageData(d))
@@ -217,68 +217,77 @@ export default function CreditStatusBar() {
             padding: 10,
             fontSize: 11,
             color: '#888',
-            minWidth: 320,
-            maxHeight: 300,
+            minWidth: 360,
+            maxHeight: 400,
             overflowY: 'auto',
             zIndex: 100,
           }}
         >
-          <div style={{ fontWeight: 600, color: '#aaa', marginBottom: 8 }}>Usage History (30d)</div>
-          {data?.daily_summary && data.daily_summary.length > 0 ? (
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ color: '#555', fontSize: 9, textAlign: 'left' }}>
-                  <th style={{ padding: '2px 6px' }}>Date</th>
-                  <th style={{ padding: '2px 6px' }}>Model</th>
-                  <th style={{ padding: '2px 6px', textAlign: 'right' }}>Credits</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.daily_summary.slice(0, 15).map((day) =>
-                  Object.entries(day.models).map(([model, credits], i) => (
-                    <tr key={`${day.date}-${model}`} style={{ color: '#777' }}>
-                      <td style={{ padding: '2px 6px', fontSize: 10 }}>
-                        {i === 0 ? day.date : ''}
-                      </td>
-                      <td style={{ padding: '2px 6px', color: '#f0ad4e', fontSize: 10 }}>
-                        {model}
-                      </td>
-                      <td style={{ padding: '2px 6px', textAlign: 'right', fontSize: 10 }}>
-                        {formatNum(credits)}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          ) : runwayUsage.length > 0 ? (
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ color: '#555', fontSize: 9, textAlign: 'left' }}>
-                  <th style={{ padding: '2px 6px' }}>Date</th>
-                  <th style={{ padding: '2px 6px' }}>Model</th>
-                  <th style={{ padding: '2px 6px', textAlign: 'right' }}>Credits</th>
-                </tr>
-              </thead>
-              <tbody>
-                {runwayUsage.slice(0, 15).map((day) =>
-                  day.usedCredits.map((uc, i) => (
-                    <tr key={`${day.date}-${uc.model}`} style={{ color: '#777' }}>
-                      <td style={{ padding: '2px 6px', fontSize: 10 }}>
-                        {i === 0 ? day.date : ''}
-                      </td>
-                      <td style={{ padding: '2px 6px', color: '#f0ad4e', fontSize: 10 }}>
-                        {uc.model}
-                      </td>
-                      <td style={{ padding: '2px 6px', textAlign: 'right', fontSize: 10 }}>
-                        {formatNum(uc.amount)}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          ) : (
+          {data?.daily_summary && data.daily_summary.length > 0 && (
+            <>
+              <div style={{ fontWeight: 600, color: '#aaa', marginBottom: 6 }}>Local Usage</div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
+                <thead>
+                  <tr style={{ color: '#555', fontSize: 9, textAlign: 'left' }}>
+                    <th style={{ padding: '2px 6px' }}>Date</th>
+                    <th style={{ padding: '2px 6px' }}>Model</th>
+                    <th style={{ padding: '2px 6px', textAlign: 'right' }}>Credits</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.daily_summary.slice(0, 15).map((day) =>
+                    Object.entries(day.models).map(([model, credits], i) => (
+                      <tr key={`local-${day.date}-${model}`} style={{ color: '#777' }}>
+                        <td style={{ padding: '2px 6px', fontSize: 10 }}>
+                          {i === 0 ? day.date : ''}
+                        </td>
+                        <td style={{ padding: '2px 6px', color: '#f0ad4e', fontSize: 10 }}>
+                          {model}
+                        </td>
+                        <td style={{ padding: '2px 6px', textAlign: 'right', fontSize: 10 }}>
+                          {formatNum(credits)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </>
+          )}
+
+          {runwayUsage.length > 0 && (
+            <>
+              <div style={{ fontWeight: 600, color: '#aaa', marginBottom: 6 }}>Runway API Usage</div>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ color: '#555', fontSize: 9, textAlign: 'left' }}>
+                    <th style={{ padding: '2px 6px' }}>Date</th>
+                    <th style={{ padding: '2px 6px' }}>Model</th>
+                    <th style={{ padding: '2px 6px', textAlign: 'right' }}>Credits</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {runwayUsage.slice(0, 15).map((day) =>
+                    day.usedCredits.map((uc, i) => (
+                      <tr key={`api-${day.date}-${uc.model}`} style={{ color: '#777' }}>
+                        <td style={{ padding: '2px 6px', fontSize: 10 }}>
+                          {i === 0 ? day.date : ''}
+                        </td>
+                        <td style={{ padding: '2px 6px', color: '#f0ad4e', fontSize: 10 }}>
+                          {uc.model}
+                        </td>
+                        <td style={{ padding: '2px 6px', textAlign: 'right', fontSize: 10 }}>
+                          {formatNum(uc.amount)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </>
+          )}
+
+          {(!data?.daily_summary || data.daily_summary.length === 0) && runwayUsage.length === 0 && (
             <div style={{ color: '#555', fontSize: 10 }}>No usage recorded yet</div>
           )}
         </div>

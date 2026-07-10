@@ -34,7 +34,7 @@ const NODE_GROUPS: NodeGroup[] = [
       },
       {
         label: 'Cloud',
-        nodes: ['runwayVideoToVideo'],
+        nodes: ['runwayVideoToVideo', 'runwayImageToVideo'],
       },
       {
         label: 'Transformers',

@@ -162,29 +162,24 @@ function RatioSelect({
   )
 }
 
-function RunwayVideoToVideoNode(props: NodeProps) {
-  const def = NODE_DEFINITIONS.runwayVideoToVideo
+function RunwayImageToVideoNode(props: NodeProps) {
+  const def = NODE_DEFINITIONS.runwayImageToVideo
   const data = props.data as GenerationData
   const base = useGeneratorBase({
     nodeId: props.id,
     data,
-    modalityFilter: (m: ModelEntry) => m.runner === 'api' && m.key.startsWith('runway'),
+    modalityFilter: (m: ModelEntry) => m.runner === 'api' && m.key.startsWith('runway') && m.key.includes('i2v'),
   })
   const autoPreview = useAutoPreview({ nodeId: props.id, data })
 
   const activeInputs = useMemo(() => {
-    const active = new Set<string>(['prompt_pos', 'prompt_neg', 'video_in'])
-    if (base.modelConfig?.accepts?.image) active.add('image_in')
-    return active
-  }, [base.modelConfig])
+    return new Set<string>(['prompt_pos', 'prompt_neg', 'image_in'])
+  }, [])
 
   const allInputs = useMemo(() => {
     const inputs = [...def.inputs]
     if (!inputs.find(i => i.id === 'image_in')) {
       inputs.push({ id: 'image_in', label: 'Image', type: 'video_tensor' as const })
-    }
-    if (!inputs.find(i => i.id === 'video_in')) {
-      inputs.push({ id: 'video_in', label: 'Video', type: 'video_tensor' as const })
     }
     return inputs
   }, [])
@@ -209,12 +204,18 @@ function RunwayVideoToVideoNode(props: NodeProps) {
     base.updateNodeData(props.id, { seed: v } as any)
   }, [base.updateNodeData, props.id])
 
+  const handleDurationChange = useCallback((v: number) => {
+    base.updateNodeData(props.id, { duration: v } as any)
+  }, [base.updateNodeData, props.id])
+
+  const duration = (data as any).duration ?? 5
+
   return (
     <NodeWrapper
       def={def}
       selected={props.selected}
       style={{ width: props.width, height: props.height }}
-      headerLabel="Runway V2V"
+      headerLabel="Runway I2V"
       headerRight={
         <span style={{ fontSize: 9, opacity: 0.9, background: 'rgba(0,0,0,0.3)', padding: '1px 5px', borderRadius: 3 }}>
           {def.label}
@@ -314,13 +315,23 @@ function RunwayVideoToVideoNode(props: NodeProps) {
           </div>
         )}
 
-        <div>
-          <div style={{ fontSize: 9, color: '#888', marginBottom: 2 }}>Seed</div>
-          <NumberInput
-            value={data.seed ?? 42}
-            min={0} max={2147483647} step={1}
-            onChange={handleSeedChange}
-          />
+        <div style={{ display: 'flex', gap: 6 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 9, color: '#888', marginBottom: 2 }}>Seed</div>
+            <NumberInput
+              value={data.seed ?? 42}
+              min={0} max={2147483647} step={1}
+              onChange={handleSeedChange}
+            />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 9, color: '#888', marginBottom: 2 }}>Duration (s)</div>
+            <NumberInput
+              value={duration}
+              min={2} max={10} step={1}
+              onChange={handleDurationChange}
+            />
+          </div>
         </div>
 
         {(autoPreview.previewRunning || autoPreview.previewUrl) && (
@@ -348,4 +359,4 @@ function RunwayVideoToVideoNode(props: NodeProps) {
   )
 }
 
-export default memo(RunwayVideoToVideoNode)
+export default memo(RunwayImageToVideoNode)

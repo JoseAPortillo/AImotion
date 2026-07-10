@@ -30,6 +30,7 @@ const NODE_DEFAULT_SIZE: Record<NodeType, { width: number; height: number }> = {
   videoToVideo: { width: 260, height: 420 },
   imageToImage: { width: 260, height: 420 },
   runwayVideoToVideo: { width: 260, height: 240 },
+  runwayImageToVideo: { width: 260, height: 240 },
   samplingParams: { width: 260, height: 180 },
   denoisingStrength: { width: 260, height: 100 },
   output: { width: 260, height: 200 },

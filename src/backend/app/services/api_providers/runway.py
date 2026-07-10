@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import logging
 import threading
@@ -15,6 +16,49 @@ logger = logging.getLogger(__name__)
 POLL_INTERVAL = 5.0
 MAX_POLL_TIME = 600.0
 
+_MODEL_ALIASES: dict[str, str] = {
+    "gen4.5-i2v": "gen4.5",
+    "gen4_turbo-i2v": "gen4_turbo",
+    "veo3-i2v": "veo3",
+    "veo3.1-i2v": "veo3.1",
+    "veo3.1_fast-i2v": "veo3.1_fast",
+    "seedance2-i2v": "seedance2",
+    "aleph2": "gen4_aleph",
+}
+
+_MODEL_PRICING: dict[str, dict] = {}
+
+
+def _load_pricing() -> dict[str, dict]:
+    global _MODEL_PRICING
+    if _MODEL_PRICING:
+        return _MODEL_PRICING
+    model_dir = os.path.join(os.path.dirname(__file__), "..", "..", "models")
+    path = os.path.join(model_dir, "runway.json")
+    try:
+        with open(path) as f:
+            data = json.load(f)
+        for v in data.get("variants", []):
+            key = v.get("key", "").removeprefix("runway:")
+            pricing = v.get("pricing", {})
+            if key and pricing:
+                _MODEL_PRICING[key] = pricing
+                resolved = _MODEL_ALIASES.get(key)
+                if resolved:
+                    _MODEL_PRICING[resolved] = pricing
+    except (OSError, json.JSONDecodeError):
+        pass
+    return _MODEL_PRICING
+
+
+def _estimate_credits(api_model: str, duration: float) -> float:
+    pricing = _load_pricing().get(api_model, {})
+    cps = pricing.get("credits_per_second", 0)
+    min_credits = pricing.get("min_credits", 0)
+    if cps > 0:
+        return max(min_credits, cps * duration)
+    return 0
+
 
 class RunwayProvider(BaseApiProvider):
     service_name = "runway"
@@ -30,8 +74,8 @@ class RunwayProvider(BaseApiProvider):
             "Content-Type": "application/json",
         }
 
-    async def _upload_video(self, client: httpx.AsyncClient, video_path: str) -> str:
-        filename = os.path.basename(video_path)
+    async def _upload_media(self, client: httpx.AsyncClient, file_path: str, content_type: str = "video/mp4") -> str:
+        filename = os.path.basename(file_path)
         resp = await client.post(
             f"{self.base_url}/v1/uploads",
             json={"filename": filename, "type": "ephemeral"},
@@ -51,14 +95,19 @@ class RunwayProvider(BaseApiProvider):
         if not upload_url or not runway_uri:
             raise ProviderError("Runway upload response missing uploadUrl or runwayUri")
 
-        with open(video_path, "rb") as f:
-            upload_resp = await client.post(upload_url, data=fields, files={"file": (filename, f, "video/mp4")})
+        with open(file_path, "rb") as f:
+            upload_resp = await client.post(upload_url, data=fields, files={"file": (filename, f, content_type)})
         if not upload_resp.is_success:
             detail = upload_resp.text[:200]
             raise ProviderError(f"Runway file upload error ({upload_resp.status_code}): {detail}")
 
         logger.info("Runway upload complete: %s", runway_uri)
         return runway_uri
+
+    def _is_i2v(self, params: GenerateParams) -> bool:
+        image_path = params.extra.get("image_path")
+        video_path = params.extra.get("video_path")
+        return bool(image_path and os.path.exists(image_path)) and not (video_path and os.path.exists(video_path))
 
     async def generate(
         self,
@@ -69,8 +118,20 @@ class RunwayProvider(BaseApiProvider):
         if progress_callback:
             await progress_callback(0, 5)
 
-        api_model = params.model.removeprefix("runway:")
+        raw_key = params.model.removeprefix("runway:")
+        api_model = _MODEL_ALIASES.get(raw_key, raw_key)
+        is_i2v = self._is_i2v(params)
 
+        if is_i2v:
+            return await self._generate_i2v(api_model, params, progress_callback, cancel_event)
+        else:
+            return await self._generate_v2v(api_model, params, progress_callback, cancel_event)
+
+    async def _generate_v2v(
+        self, api_model: str, params: GenerateParams,
+        progress_callback: Optional[Callable[[int, int], Awaitable[None]]] = None,
+        cancel_event: Optional[threading.Event] = None,
+    ) -> GenerateResult:
         video_path = params.extra.get("video_path")
         if not video_path or not os.path.exists(video_path):
             raise ProviderError("Runway video-to-video requires an input video")
@@ -79,7 +140,7 @@ class RunwayProvider(BaseApiProvider):
             if progress_callback:
                 await progress_callback(1, 5)
 
-            runway_uri = await self._upload_video(client, video_path)
+            runway_uri = await self._upload_media(client, video_path, "video/mp4")
 
             body: dict = {
                 "model": api_model,
@@ -116,9 +177,72 @@ class RunwayProvider(BaseApiProvider):
             if not task_id:
                 raise ProviderError("Runway did not return a task id")
 
-            if progress_callback:
-                await progress_callback(3, 5)
+            return await self._poll_task(task_id, api_model, params, progress_callback, cancel_event)
 
+    async def _generate_i2v(
+        self, api_model: str, params: GenerateParams,
+        progress_callback: Optional[Callable[[int, int], Awaitable[None]]] = None,
+        cancel_event: Optional[threading.Event] = None,
+    ) -> GenerateResult:
+        image_path = params.extra.get("image_path")
+        if not image_path or not os.path.exists(image_path):
+            raise ProviderError("Runway image-to-video requires an input image")
+
+        async with httpx.AsyncClient(timeout=60) as client:
+            if progress_callback:
+                await progress_callback(1, 5)
+
+            runway_uri = await self._upload_media(client, image_path, "image/png")
+
+            body: dict = {
+                "model": api_model,
+                "promptImage": runway_uri,
+            }
+
+            if params.prompt:
+                body["promptText"] = params.prompt
+
+            if params.seed > 0:
+                body["seed"] = params.seed
+
+            target_ratio = params.extra.get("targetAspectRatio")
+            if target_ratio:
+                body["ratio"] = target_ratio
+
+            duration = params.extra.get("duration", 5)
+            body["duration"] = duration
+
+            if progress_callback:
+                await progress_callback(2, 5)
+
+            data = await client.post(
+                f"{self.base_url}/v1/image_to_video",
+                json=body,
+                headers=self._auth_headers(),
+            )
+            if data.status_code == 429:
+                raise ProviderError("Runway API rate limit exceeded")
+            if not data.is_success:
+                detail = data.text[:200]
+                raise ProviderError(f"Runway API error ({data.status_code}): {detail}")
+
+            task_data = data.json()
+            task_id: str = task_data.get("id", "")
+
+            if not task_id:
+                raise ProviderError("Runway did not return a task id")
+
+            return await self._poll_task(task_id, api_model, params, progress_callback, cancel_event)
+
+    async def _poll_task(
+        self, task_id: str, api_model: str, params: GenerateParams,
+        progress_callback: Optional[Callable[[int, int], Awaitable[None]]] = None,
+        cancel_event: Optional[threading.Event] = None,
+    ) -> GenerateResult:
+        if progress_callback:
+            await progress_callback(3, 5)
+
+        async with httpx.AsyncClient(timeout=60) as client:
             elapsed = 0.0
             while elapsed < MAX_POLL_TIME:
                 if cancel_event and cancel_event.is_set():
@@ -143,11 +267,11 @@ class RunwayProvider(BaseApiProvider):
                     video_url = output[0] if output else ""
                     if not video_url:
                         raise ProviderError("Runway returned succeeded status but no video URL")
-                    usage = status_data.get("usage")
-                    if isinstance(usage, dict):
-                        from app.services.credit_manager import credit_manager
-                        credit_manager.record_usage("runway", api_model, usage.get("credits", 0), task_id)
-                    logger.info("Runway generation complete: %s", video_url)
+                    duration = params.extra.get("duration", 5) if hasattr(params, 'extra') else 5
+                    credits_used = _estimate_credits(api_model, duration)
+                    from app.services.credit_manager import credit_manager
+                    credit_manager.record_usage("runway", api_model, credits_used, task_id)
+                    logger.info("Runway generation complete: %s (credits: %.0f)", video_url, credits_used)
                     return GenerateResult(url=video_url, media_type="video")
 
                 if status in ("FAILED", "CANCELED"):

@@ -190,6 +190,11 @@ export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorB
       }
     }
 
+    const ratioVal = (data as any).targetAspectRatio
+    if (ratioVal) extraParams.targetAspectRatio = ratioVal
+    const durationVal = (data as any).duration
+    if (durationVal != null) extraParams.duration = durationVal
+
     flushSync(() => {
       setGenRunning(true)
       setProgress(0)

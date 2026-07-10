@@ -24,6 +24,7 @@ export type NodeType =
   | 'videoToVideo'
   | 'imageToImage'
   | 'runwayVideoToVideo'
+  | 'runwayImageToVideo'
   | 'groupNode'
 
 export interface ModelEntry {
@@ -524,6 +525,21 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
       { id: 'video_out', label: 'Video', type: 'video_tensor' },
     ],
     defaultData: { model: '', scheduler: '', execution_mode: 'local', vae_tiling: false, vae_tile_overlap: 0.0, steps: 50, cfg: 6, seed: 42, strength: 0.8, width: 1280, height: 720, num_frames: 5 },
+  },
+  runwayImageToVideo: {
+    type: 'runwayImageToVideo',
+    label: 'Runway I2V',
+    color: '#6366f1',
+    description: "Generate video from an image using Runway's API — Aleph 2.0 image-to-video.",
+    inputs: [
+      { id: 'image_in', label: 'Image', type: 'video_tensor' },
+      { id: 'prompt_pos', label: 'Positive Prompt', type: 'prompt' },
+      { id: 'prompt_neg', label: 'Negative Prompt', type: 'prompt' },
+    ],
+    outputs: [
+      { id: 'video_out', label: 'Video', type: 'video_tensor' },
+    ],
+    defaultData: { model: '', scheduler: '', execution_mode: 'local', vae_tiling: false, vae_tile_overlap: 0.0, steps: 50, cfg: 6, seed: 42, strength: 0.8, width: 1280, height: 720, duration: 5 },
   },
   groupNode: {
     type: 'groupNode',

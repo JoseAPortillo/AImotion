@@ -221,6 +221,8 @@ async def _run_generation(task_id: str, params: dict):
         extra = params.get("extra", {})
         if video_path:
             extra["video_path"] = video_path
+        if image_path:
+            extra["image_path"] = image_path
         gen_params = GenerateParams(
             prompt=params["prompt"],
             negative_prompt=params.get("negative_prompt", ""),

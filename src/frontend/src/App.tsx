@@ -46,6 +46,7 @@ import ImageToVideoNode from './components/nodes/generators/ImageToVideoNode'
 import VideoToVideoNode from './components/nodes/generators/VideoToVideoNode'
 import ImageToImageNode from './components/nodes/generators/ImageToImageNode'
 import RunwayVideoToVideoNode from './components/nodes/generators/RunwayVideoToVideoNode'
+import RunwayImageToVideoNode from './components/nodes/generators/RunwayImageToVideoNode'
 import TransformersGeneratorNode from './components/nodes/generators/TransformersGeneratorNode'
 import VLMNode from './components/nodes/generators/VLMNode'
 import LLMGeneratorNode from './components/nodes/generators/LLMGeneratorNode'
@@ -66,6 +67,7 @@ const nodeTypes: NodeTypes = {
   videoToVideo: VideoToVideoNode,
   imageToImage: ImageToImageNode,
   runwayVideoToVideo: RunwayVideoToVideoNode,
+  runwayImageToVideo: RunwayImageToVideoNode,
   transformersGenerator: TransformersGeneratorNode,
   vlmNode: VLMNode,
   llmGenerator: LLMGeneratorNode,
