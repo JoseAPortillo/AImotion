@@ -149,6 +149,7 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
     setPreviewRunning(true)
     try {
       const previewParams = getPreviewParams()
+      console.log('[auto-preview] sending:', { model: previewParams.model, width: previewParams.width, height: previewParams.height, steps: previewParams.steps })
       const task = await startGeneration(
         promptText,
         promptEdgeNeg ? (getNode(promptEdgeNeg)?.data as PromptData | undefined)?.negative || '' : '',
@@ -173,8 +174,8 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
         setPreviewType(rtype)
         setAutoPreview(nodeId, status.result_url, rtype)
       }
-    } catch {
-      // silent
+    } catch (e: any) {
+      console.error('[auto-preview] generation failed:', e?.message || e)
     } finally {
       setPreviewRunning(false)
     }

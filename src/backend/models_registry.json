@@ -119,7 +119,8 @@
     "pipeline_class": "CogVideoXImageToVideoPipeline",
     "dtype": "bfloat16",
     "schedulers": {
-      "scheduler": "CogVideoXDDIMScheduler"
+      "cogvideox_ddim": "CogVideoXDDIMScheduler",
+      "cogvideox_dpm": "CogVideoXDPMScheduler"
     },
     "default_scheduler": "cogvideox_ddim",
     "needs_token": false,
