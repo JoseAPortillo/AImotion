@@ -223,21 +223,21 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
 
     try:
         task.status = "discovering"
-        discovered = discover_pipeline(hf_name)
-        pipeline_class_name = None
-        schedulers: dict = {}
-        default_scheduler = ""
-        defaults: dict = {"steps": 50, "cfg": 7.0}
         family = _find_matching_family(hf_name)
 
-        if "error" in discovered:
-            if family and family.runner != "diffusers":
-                logger.info(
-                    f"Pipeline discovery failed for '{hf_name}', but family "
-                    f"'{family.family}' matched. Proceeding with runner defaults."
-                )
-                defaults = family.defaults or defaults
-            else:
+        if family and family.runner != "diffusers":
+            pipeline_class_name = None
+            schedulers: dict = {}
+            default_scheduler = ""
+            defaults: dict = family.defaults or {"steps": 50, "cfg": 7.0}
+            discovered: dict = {}
+            logger.info(
+                f"Non-diffusers family '{family.family}' for {hf_name}, "
+                f"skipping pipeline detection"
+            )
+        else:
+            discovered = discover_pipeline(hf_name)
+            if "error" in discovered:
                 task.status = "error"
                 reasons = {
                     "no_weights": (
@@ -260,11 +260,11 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
                     f"'{hf_name}' cannot be installed: {discovered['error']}"
                 )
                 return
-        else:
-            pipeline_class_name = discovered["pipeline_class"]
-            schedulers = discovered["schedulers"]
-            default_scheduler = discovered["default_scheduler"]
-            defaults = discovered.get("defaults", defaults)
+            else:
+                pipeline_class_name = discovered["pipeline_class"]
+                schedulers = discovered["schedulers"]
+                default_scheduler = discovered["default_scheduler"]
+                defaults = discovered.get("defaults", {"steps": 50, "cfg": 7.0})
 
         tok = settings.hf_token or None
 
@@ -371,7 +371,12 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
             task.status = "cancelled"
             return
 
-        key = generate_key(hf_name)
+        cat_variants = catalog.get_variants_by_hf(hf_name)
+        key = cat_variants[0].key if cat_variants else generate_key(hf_name)
+        for existing in list_installed():
+            if existing.hf_name == hf_name and existing.key != key:
+                logger.info(f"Removing stale registry entry '{existing.key}' for {hf_name}")
+                remove_installed(existing.key)
         final_alias = alias or hf_name.split("/")[-1]
         model = InstalledModel(
             key=key,
@@ -454,6 +459,8 @@ def _build_variant_entry(variant) -> dict:
         "inputs": variant.inputs,
         "is_video": variant.is_video,
         "runner": variant.family.runner,
+        "pricing": variant._data.get("pricing"),
+        "resolutions": variant._data.get("resolutions"),
     }
 
 
@@ -466,7 +473,7 @@ async def list_models():
         if v.type in ("builtin", "future", "api", "installable"):
             if v.key in installed_keys:
                 continue
-            if v.hf_name is None or not is_model_cached(v.hf_name):
+            if v.type != "api" and (v.hf_name is None or not is_model_cached(v.hf_name)):
                 continue
             results.append(_build_variant_entry(v))
     for inst in installed_list:
@@ -526,10 +533,15 @@ async def install_model(req: InstallRequest):
     if not hf_name:
         raise HTTPException(status_code=422, detail="hf_name is required")
 
-    key = generate_key(hf_name)
+    cat_variants = catalog.get_variants_by_hf(hf_name)
+    key = cat_variants[0].key if cat_variants else generate_key(hf_name)
     existing = find_installed(key)
     if existing and is_model_cached(hf_name):
         return {"status": "already_installed", "model_key": existing.key}
+    for existing in list_installed():
+        if existing.hf_name == hf_name and existing.key != key:
+            logger.info(f"Cleaning up stale entry '{existing.key}' for {hf_name}")
+            remove_installed(existing.key)
 
     with tasks_lock:
         for tid, t in install_tasks.items():

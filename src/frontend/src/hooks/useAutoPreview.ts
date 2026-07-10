@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState, useEffect, useRef } from 'react'
 import { startGeneration, pollTask, cancelTask } from '../api/backend'
 import { useGraphStore } from '../store/graph'
-import type { GenerationData, PromptData, ModelEntry } from '../types/nodes'
+import type { GenerationData, PromptData, ModelEntry, GroupNodeData } from '../types/nodes'
 
 interface UseAutoPreviewOptions {
   nodeId: string
@@ -11,8 +11,26 @@ interface UseAutoPreviewOptions {
 export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
   const nodes = useGraphStore((s) => s.nodes)
   const edges = useGraphStore((s) => s.edges)
+  const autoPreviews = useGraphStore((s) => s.autoPreviews)
+  const setAutoPreview = useGraphStore((s) => s.setAutoPreview)
 
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(() => {
+    const existing = autoPreviews[nodeId]
+    return existing?.url ?? null
+  })
+
+  const [previewType, setPreviewType] = useState<'image' | 'video' | null>(() => {
+    const existing = autoPreviews[nodeId]
+    return existing?.type ?? null
+  })
+
+  useEffect(() => {
+    const existing = autoPreviews[nodeId]
+    if (existing?.url) {
+      setPreviewUrl(existing.url)
+      setPreviewType(existing.type)
+    }
+  }, [autoPreviews, nodeId])
   const [previewRunning, setPreviewRunning] = useState(false)
 
   const taskIdRef = useRef('')
@@ -33,6 +51,38 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
     return `${data.model}|${data.seed}|${data.cfg}|${data.strength}|${data.scheduler}|${data.width}|${data.height}|${promptText}|${negText}|${hasImage}|${hasVideo}`
   }, [edges, nodes, nodeId, data.model, data.seed, data.cfg, data.strength, data.scheduler, data.width, data.height])
 
+  function getPreviewParams(): Record<string, unknown> {
+    const genEdges = edges.filter((e) => e.target === nodeId)
+    const hasVideo = genEdges.some((e) => e.targetHandle === 'video_in')
+    const isVideo = hasVideo || (data.num_frames ?? 0) > 1
+
+    const maxDim = 384
+    const scale = Math.min(1, maxDim / Math.max(data.width ?? 720, data.height ?? 480))
+    const pw = Math.round((data.width ?? 720) * scale)
+    const ph = Math.round((data.height ?? 480) * scale)
+
+    return {
+      width: pw,
+      height: ph,
+      steps: isVideo ? 12 : 6,
+      cfg: data.cfg ?? 6,
+      strength: data.strength ?? 0.8,
+      seed: data.seed ?? 0,
+      scheduler: data.scheduler || '',
+      model: data.model,
+      execution_mode: data.execution_mode || 'local',
+      vae_tiling: data.vae_tiling ?? true,
+      vae_tile_overlap: data.vae_tile_overlap ?? 0.0,
+      num_frames: isVideo ? Math.min(data.num_frames ?? 49, 8) : undefined,
+      max_sequence_length: data.max_sequence_length,
+      noise_aug_strength: data.noise_aug_strength ?? (data.strength ?? 0.8),
+      fps: data.fps,
+      motion_bucket_id: data.motion_bucket_id,
+      min_guidance_scale: data.min_guidance_scale,
+      max_guidance_scale: data.max_guidance_scale,
+    }
+  }
+
   const run = useCallback(async () => {
     if (!data.model) return
 
@@ -48,22 +98,47 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
     const promptText = promptData?.positive || ''
     if (!promptText) return
 
-    const videoNode = videoEdge ? getNode(videoEdge) : undefined
-    const imageNode = imageEdge ? getNode(imageEdge) : undefined
-
-    const getFileFromNodeData = async (n: any): Promise<File | undefined> => {
-      if (!n?.data) return undefined
-      if (n.data.file instanceof File) return n.data.file
-      if (n.data.fileDataUrl) {
-        const r = await fetch(n.data.fileDataUrl)
+    const getFileFromNodeData = async (nodeData: any): Promise<File | undefined> => {
+      if (!nodeData) return undefined
+      if (nodeData.file instanceof File) return nodeData.file
+      if (nodeData.fileDataUrl) {
+        const r = await fetch(nodeData.fileDataUrl)
         const blob = await r.blob()
-        return new File([blob], n.data.fileName || 'file', { type: blob.type })
+        return new File([blob], nodeData.fileName || 'file', { type: blob.type })
       }
       return undefined
     }
 
-    const imageFile = await getFileFromNodeData(imageNode)
-    const videoFile = await getFileFromNodeData(videoNode)
+    const resolveNodeFile = async (sourceNodeId: string): Promise<File | undefined> => {
+      const store = useGraphStore.getState()
+      const sourceNode = store.nodes.find((n) => n.id === sourceNodeId)
+      if (!sourceNode) return undefined
+
+      const file = await getFileFromNodeData(sourceNode.data)
+      if (file) return file
+
+      if (sourceNode.type === 'groupNode') {
+        const output = store.nodeOutputs[sourceNodeId]
+        if (output?.url) {
+          const r = await fetch(output.url)
+          const blob = await r.blob()
+          return new File([blob], 'group-output', { type: blob.type })
+        }
+        const childIds = (sourceNode.data as GroupNodeData).childIds || []
+        for (const cid of childIds) {
+          const childOutput = store.nodeOutputs[cid]
+          if (childOutput?.url) {
+            const r = await fetch(childOutput.url)
+            const blob = await r.blob()
+            return new File([blob], 'group-output', { type: blob.type })
+          }
+        }
+      }
+      return undefined
+    }
+
+    const imageFile = imageEdge ? await resolveNodeFile(imageEdge.source) : undefined
+    const videoFile = videoEdge ? await resolveNodeFile(videoEdge.source) : undefined
 
     abortRef.current = true
     if (taskIdRef.current) {
@@ -73,51 +148,37 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
 
     setPreviewRunning(true)
     try {
+      const previewParams = getPreviewParams()
       const task = await startGeneration(
         promptText,
         promptEdgeNeg ? (getNode(promptEdgeNeg)?.data as PromptData | undefined)?.negative || '' : '',
-        {
-          width: data.width ?? 720,
-          height: data.height ?? 480,
-          steps: 12,
-          cfg: data.cfg ?? 6,
-          strength: data.strength ?? 0.8,
-          seed: data.seed ?? 0,
-          scheduler: data.scheduler || '',
-          model: data.model,
-          execution_mode: data.execution_mode || 'local',
-          vae_tiling: data.vae_tiling ?? true,
-          vae_tile_overlap: data.vae_tile_overlap ?? 0.0,
-          num_frames: data.num_frames,
-          max_sequence_length: data.max_sequence_length,
-          noise_aug_strength: data.noise_aug_strength ?? (data.strength ?? 0.8),
-          fps: data.fps,
-          motion_bucket_id: data.motion_bucket_id,
-          min_guidance_scale: data.min_guidance_scale,
-          max_guidance_scale: data.max_guidance_scale,
-        },
+        previewParams as Parameters<typeof startGeneration>[2],
         videoFile,
         imageFile,
       )
 
       taskIdRef.current = task.task_id
+      const pollInterval = previewParams.num_frames && (previewParams.num_frames as number) > 1 ? 3000 : 1500
       let status: any
       do {
-        await new Promise((r) => setTimeout(r, 1500))
+        await new Promise((r) => setTimeout(r, pollInterval))
         if (abortRef.current) break
         status = await pollTask(task.task_id)
         if (status.status === 'cancelled') break
       } while (status.status === 'pending' || status.status === 'running')
 
       if (!abortRef.current && status && status.status === 'completed' && status.result_url) {
+        const rtype = status.result_type || 'image'
         setPreviewUrl(status.result_url)
+        setPreviewType(rtype)
+        setAutoPreview(nodeId, status.result_url, rtype)
       }
     } catch {
       // silent
     } finally {
       setPreviewRunning(false)
     }
-  }, [nodeId, data, nodes, edges])
+  }, [nodeId, data, nodes, edges, setAutoPreview])
 
   const cancel = useCallback(() => {
     abortRef.current = true
@@ -126,6 +187,7 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
     }
     setPreviewRunning(false)
     setPreviewUrl(null)
+    setPreviewType(null)
     if (timerRef.current) {
       clearTimeout(timerRef.current)
       timerRef.current = null
@@ -154,6 +216,7 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
 
   return {
     previewUrl,
+    previewType,
     previewRunning,
     cancelAutoPreview: cancel,
   }

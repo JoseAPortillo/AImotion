@@ -13,6 +13,7 @@ export default defineConfig({
       '/models': 'http://localhost:8000',
       '/hardware': 'http://localhost:8000',
       '/credentials': 'http://localhost:8000',
+      '/credits': 'http://localhost:8000',
     },
   },
 })

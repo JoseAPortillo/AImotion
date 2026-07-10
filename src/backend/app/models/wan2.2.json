@@ -14,7 +14,11 @@
   "default_scheduler": null,
   "defaults": {
     "steps": 50,
-    "cfg": 5.0
+    "cfg": 6.0,
+    "width": 480,
+    "height": 832,
+    "num_frames": 81,
+    "fps": 16
   },
   "inputs": {
     "prompt": { "required": true, "type": "text" },
@@ -24,8 +28,12 @@
     "background_video": { "required": false, "type": "video" },
     "mask_video": { "required": false, "type": "video" },
     "steps": { "required": false, "type": "int", "default": 50, "min": 1, "max": 200 },
-    "cfg": { "required": false, "type": "float", "default": 5.0, "min": 1.0, "max": 30.0 },
+    "cfg": { "required": false, "type": "float", "default": 6.0, "min": 1.0, "max": 30.0 },
     "seed": { "required": false, "type": "int", "default": 0, "min": 0, "max": 2147483647 },
+    "width": { "required": false, "type": "int", "default": 480, "min": 128, "max": 1920 },
+    "height": { "required": false, "type": "int", "default": 832, "min": 128, "max": 1920 },
+    "num_frames": { "required": false, "type": "int", "default": 81, "min": 1, "max": 200 },
+    "fps": { "required": false, "type": "int", "default": 16, "min": 1, "max": 60 },
     "strength": { "required": false, "type": "float", "default": 0.8, "min": 0, "max": 1 }
   },
   "output": { "type": "video", "mime": "video/mp4" },

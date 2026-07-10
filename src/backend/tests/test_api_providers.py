@@ -2,6 +2,16 @@ import pytest
 from app.services.api_providers.kling import KlingProvider
 from app.services.api_providers.seedance import SeedanceProvider
 from app.services.api_providers.base import ProviderError
+from app.services.credential_manager import delete_key
+
+
+@pytest.fixture(autouse=True)
+def clean_provider_creds():
+    for s in ["kling", "seedance"]:
+        delete_key(s)
+    yield
+    for s in ["kling", "seedance"]:
+        delete_key(s)
 
 
 class TestKlingProvider:

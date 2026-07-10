@@ -372,13 +372,13 @@ function GeneratorNodeBase(props: NodeBaseProps) {
               )}
               {autoPreview.previewUrl && (
                 <>
-                  {autoPreview.previewUrl.endsWith('.png') || autoPreview.previewUrl.endsWith('.jpg') ? (
-                    <img src={autoPreview.previewUrl} alt="Preview"
-                      style={{ width: '100%', maxWidth: 200, maxHeight: 200, borderRadius: 4, display: 'block', margin: '0 auto', opacity: autoPreview.previewRunning ? 0.5 : 1 }}
-                    />
-                  ) : (
+                  {autoPreview.previewType === 'video' ? (
                     <video src={autoPreview.previewUrl} controls autoPlay loop
                       style={{ width: '100%', maxWidth: 200, maxHeight: 160, borderRadius: 4, display: 'block', margin: '0 auto', opacity: autoPreview.previewRunning ? 0.5 : 1 }}
+                    />
+                  ) : (
+                    <img src={autoPreview.previewUrl} alt="Preview"
+                      style={{ width: '100%', maxWidth: 200, maxHeight: 200, borderRadius: 4, display: 'block', margin: '0 auto', opacity: autoPreview.previewRunning ? 0.5 : 1 }}
                     />
                   )}
                   {autoPreview.previewRunning && (

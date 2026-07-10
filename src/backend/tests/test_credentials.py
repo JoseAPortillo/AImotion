@@ -1,17 +1,17 @@
 import pytest
 import os
-from app.services.credential_manager import set_key, get_key, delete_key, list_services, KEY_FILE, STORE_FILE
+import tempfile
+from app.services.credential_manager import set_key, get_key, delete_key, list_services, store_path
 
 
 @pytest.fixture(autouse=True)
-def clean_store():
-    for f in [KEY_FILE, STORE_FILE]:
-        if os.path.exists(f):
-            os.remove(f)
+def isolated_credentials(monkeypatch):
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+        tmp = f.name
+    monkeypatch.setenv("AIMATION_CREDENTIALS_PATH", tmp)
     yield
-    for f in [KEY_FILE, STORE_FILE]:
-        if os.path.exists(f):
-            os.remove(f)
+    if os.path.exists(tmp):
+        os.remove(tmp)
 
 
 class TestCredentialManager:
@@ -44,7 +44,7 @@ class TestCredentialManager:
 
     def test_encryption_at_rest(self):
         set_key("kling", "secret-value")
-        with open(STORE_FILE) as f:
+        with open(store_path()) as f:
             raw = f.read()
         assert "secret-value" not in raw
 
@@ -61,7 +61,7 @@ class TestCredentialsAPI:
         assert resp.status_code == 200
         data = resp.json()
         assert data["api_key"] != "sk-test-key-12345"
-        assert "***" in data["api_key"]
+        assert "..." in data["api_key"]
 
     def test_get_revealed(self, client):
         client.put("/credentials/kling", json={"api_key": "sk-test-key-12345"})

@@ -33,6 +33,10 @@ const NODE_GROUPS: NodeGroup[] = [
         nodes: ['textToImage', 'textToVideo', 'imageToVideo', 'videoToVideo', 'imageToImage'],
       },
       {
+        label: 'Cloud',
+        nodes: ['runwayVideoToVideo', 'runwayImageToVideo'],
+      },
+      {
         label: 'Transformers',
         nodes: ['transformersGenerator'],
       },
@@ -57,6 +61,10 @@ const NODE_GROUPS: NodeGroup[] = [
   {
     label: 'Outputs',
     nodes: ['output', 'preview'],
+  },
+  {
+    label: 'Groups',
+    nodes: ['groupNode'],
   },
 ]
 

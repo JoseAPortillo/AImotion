@@ -218,6 +218,11 @@ async def _run_generation(task_id: str, params: dict):
             video_frames = [PILImage.open(image_path).convert("RGB")]
             logger.info(f"video_frames created with {len(video_frames)} frame(s), size: {video_frames[0].size}")
 
+        extra = params.get("extra", {})
+        if video_path:
+            extra["video_path"] = video_path
+        if image_path:
+            extra["image_path"] = image_path
         gen_params = GenerateParams(
             prompt=params["prompt"],
             negative_prompt=params.get("negative_prompt", ""),
@@ -238,7 +243,7 @@ async def _run_generation(task_id: str, params: dict):
             max_guidance_scale=params.get("max_guidance_scale"),
             fps=params.get("fps"),
             motion_bucket_id=params.get("motion_bucket_id"),
-            extra=params.get("extra", {}),
+            extra=extra,
         )
 
         runner = _get_runner(model)

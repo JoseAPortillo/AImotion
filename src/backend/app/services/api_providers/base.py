@@ -69,3 +69,13 @@ class BaseApiProvider(abc.ABC):
         cancel_event: Optional[threading.Event] = None,
     ) -> GenerateResult:
         ...
+
+    async def get_balance(self) -> dict | None:
+        """Return credit balance info or None if not supported by this provider."""
+        return None
+
+    async def get_usage_history(
+        self, start_date: str | None = None, end_date: str | None = None
+    ) -> dict | None:
+        """Return usage history broken down by day and model, or None if not supported."""
+        return None

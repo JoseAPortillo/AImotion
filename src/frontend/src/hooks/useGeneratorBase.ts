@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState, useEffect, useRef } from 'react'
 import { flushSync } from 'react-dom'
-import type { GenerationData, PromptData, ModelEntry } from '../types/nodes'
+import type { GenerationData, PromptData, ModelEntry, GroupNodeData } from '../types/nodes'
 import { useGraphStore } from '../store/graph'
 import { useToastStore } from '../store/toast'
 import { startGeneration, pollTask, cancelTask, type TaskStatus } from '../api/backend'
@@ -129,8 +129,52 @@ export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorB
       return undefined
     }
 
-    const imageFile = await getFileFromNodeData(imageNode?.data)
-    const videoFile = await getFileFromNodeData(videoNode?.data)
+    const resolveNodeFile = async (sourceNodeId: string, visited?: Set<string>): Promise<File | undefined> => {
+      const store = useGraphStore.getState()
+      const sourceNode = store.nodes.find((n) => n.id === sourceNodeId)
+      if (!sourceNode) return undefined
+
+      // Direct file from node data
+      const file = await getFileFromNodeData(sourceNode.data)
+      if (file) return file
+
+      // Check stored node output for ANY node type
+      const output = store.nodeOutputs[sourceNodeId]
+      if (output?.url) {
+        const response = await fetch(output.url)
+        const blob = await response.blob()
+        return new File([blob], 'output', { type: blob.type })
+      }
+
+      // If source is a group, try its children
+      if (sourceNode.type === 'groupNode') {
+        const childIds = (sourceNode.data as GroupNodeData).childIds || []
+        for (const cid of childIds) {
+          const childOutput = store.nodeOutputs[cid]
+          if (childOutput?.url) {
+            const response = await fetch(childOutput.url)
+            const blob = await response.blob()
+            return new File([blob], 'group-output', { type: blob.type })
+          }
+        }
+      }
+
+      // Passthrough nodes (preview, group): follow upstream
+      if (sourceNode.type === 'preview' || sourceNode.type === 'groupNode') {
+        const cycleGuard = visited ?? new Set<string>()
+        if (cycleGuard.has(sourceNodeId)) return undefined
+        cycleGuard.add(sourceNodeId)
+        const incoming = store.edges.find((e) => e.target === sourceNodeId)
+        if (incoming) {
+          return resolveNodeFile(incoming.source, cycleGuard)
+        }
+      }
+
+      return undefined
+    }
+
+    const imageFile = imageEdge ? await resolveNodeFile(imageEdge.source) : undefined
+    const videoFile = videoEdge ? await resolveNodeFile(videoEdge.source) : undefined
 
     const extraParams: Record<string, number | string | boolean> = {}
     if (modelConfig?.inputs) {
@@ -145,6 +189,11 @@ export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorB
         }
       }
     }
+
+    const ratioVal = (data as any).targetAspectRatio
+    if (ratioVal) extraParams.targetAspectRatio = ratioVal
+    const durationVal = (data as any).duration
+    if (durationVal != null) extraParams.duration = durationVal
 
     flushSync(() => {
       setGenRunning(true)
@@ -212,6 +261,7 @@ export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorB
         setProgress(100)
         setEtaSec(null)
         setOutputUrl(status.result_url, status.result_type)
+        useGraphStore.getState().setNodeOutput(nodeId, status.result_url, status.result_type || 'image')
       } else {
         addToast(`Workflow failed: ${status.error || 'unknown error'}`, 'error')
       }

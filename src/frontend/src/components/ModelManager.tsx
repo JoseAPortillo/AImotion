@@ -76,9 +76,15 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
   const [modelTab, setModelTab] = useState<'installed' | 'other'>('installed')
   const [customCacheDir, setCustomCacheDir] = useState('')
   const [creds, setCreds] = useState<Record<string, boolean>>({})
+  const [maskedKeys, setMaskedKeys] = useState<Record<string, string>>({})
+  const [availableServices, setAvailableServices] = useState<string[]>([])
   const [editingCred, setEditingCred] = useState<string | null>(null)
   const [credInput, setCredInput] = useState('')
   const [savingCred, setSavingCred] = useState<string | null>(null)
+  const [renamingCred, setRenamingCred] = useState<string | null>(null)
+  const [renameInput, setRenameInput] = useState('')
+  const [pendingServices, setPendingServices] = useState<string[]>([])
+  const [suppressedServices, setSuppressedServices] = useState<string[]>([])
   const [addingCustom, setAddingCustom] = useState(false)
   const [customInput, setCustomInput] = useState('')
   const ref = useRef<HTMLDivElement>(null)
@@ -93,10 +99,11 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
 
   const fetchAll = useCallback(async () => {
     try {
-      const [mRes, hRes, cRes] = await Promise.all([
+      const [mRes, hRes, cRes, pRes] = await Promise.all([
         fetch('/models'),
         fetch('/models/status'),
         fetch('/credentials'),
+        fetch('/credentials/providers'),
       ])
       if (mRes.ok) {
         const data = await mRes.json()
@@ -106,8 +113,18 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
       if (cRes.ok) {
         const cd = await cRes.json()
         const map: Record<string, boolean> = {}
-        for (const s of (cd.services || [])) map[s] = true
+        const mk: Record<string, string> = {}
+        for (const s of (cd.services || [])) {
+          map[s] = true
+          mk[s] = (cd.masked || {})[s] || ''
+        }
         setCreds(map)
+        setMaskedKeys(mk)
+        setPendingServices(prev => prev.filter(s => !map[s]))
+      }
+      if (pRes.ok) {
+        const pd = await pRes.json()
+        setAvailableServices(pd.providers || [])
       }
     } catch { /* offline */ }
   }, [])
@@ -311,12 +328,33 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
     await fetchAll()
   }
 
+  const handleCredRename = async (oldName: string) => {
+    const newName = renameInput.trim().toLowerCase()
+    if (!newName || newName === oldName) return
+    setSavingCred(oldName)
+    try {
+      await fetch(`/credentials/${oldName}/rename`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ new_name: newName }),
+      })
+      setRenamingCred(null)
+      setRenameInput('')
+      if (availableServices.includes(oldName)) {
+        setSuppressedServices(prev => prev.includes(oldName) ? prev : [...prev, oldName])
+      }
+      await fetchAll()
+    } catch { /* ignore */ }
+    setSavingCred(null)
+  }
+
   const handleAddCustom = () => {
     const name = customInput.trim().toLowerCase()
     if (!name) return
     setEditingCred(name)
     setCredInput('')
     setCustomInput('')
+    setPendingServices(prev => prev.includes(name) ? prev : [...prev, name])
   }
 
   const handleSaveAlias = async (modelKey: string) => {
@@ -709,69 +747,117 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
 
               {modelTab === 'other' && (
                 (() => {
-                  const defaultServices = ['kling', 'seedance2']
-                  const extraServices = Object.keys(creds).filter(s => !defaultServices.includes(s))
-                  const allServices = [...defaultServices, ...extraServices]
+                  const visibleKnown = availableServices.filter(s => !suppressedServices.includes(s))
+                  const extraServices = Object.keys(creds).filter(s => !visibleKnown.includes(s) && !pendingServices.includes(s))
+                  const allServices = [...visibleKnown, ...extraServices, ...pendingServices]
 
                   return (
                     <div>
-                      <div style={{ maxHeight: 200, overflowY: 'auto', marginBottom: 6 }}>
-                        {allServices.map(service => {
-                          const configured = creds[service] ?? false
-                          return (
-                            <div key={service} style={{
-                              display: 'flex', alignItems: 'center', gap: 6,
-                              padding: '4px 6px', fontSize: 12,
-                              borderBottom: '1px solid #222',
-                            }}>
-                              <span style={{ flex: 1, textTransform: 'capitalize', color: '#ccc' }}>{service}</span>
-                              {editingCred === service ? (
-                                <div style={{ display: 'flex', gap: 4, flex: 1, justifyContent: 'flex-end' }}>
-                                  <input
-                                    autoFocus
-                                    type="password"
-                                    value={credInput}
-                                    onChange={e => setCredInput(e.target.value)}
-                                    onKeyDown={e => {
-                                      if (e.key === 'Enter') handleCredSave(service)
-                                      if (e.key === 'Escape') { setEditingCred(null); setCredInput('') }
-                                    }}
-                                    style={{
-                                      flex: 1, background: '#0f0f0f', border: '1px solid #555',
-                                      borderRadius: 3, padding: '2px 4px', fontSize: 11,
-                                      color: '#ccc', outline: 'none',
-                                    }}
-                                    placeholder="Paste API key..."
-                                  />
-                                  <button onClick={() => handleCredSave(service)} disabled={savingCred === service}
-                                    style={{ padding: '2px 6px', borderRadius: 3, border: '1px solid #444', cursor: 'pointer', background: '#4ade80', color: '#0f0f0f', fontSize: 10, lineHeight: 1.3 }}>
-                                    {savingCred === service ? '...' : 'Save'}
-                                  </button>
-                                  <button onClick={() => { setEditingCred(null); setCredInput('') }}
-                                    style={{ padding: '2px 6px', borderRadius: 3, border: '1px solid #444', cursor: 'pointer', background: '#111', color: '#ccc', fontSize: 10, lineHeight: 1.3 }}>
-                                    Cancel
-                                  </button>
-                                </div>
-                              ) : (
-                                <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                                  <span style={{ fontSize: 10, color: configured ? '#4ade80' : '#555' }}>
-                                    {configured ? '✓ configured' : '—'}
-                                  </span>
-                                  <button onClick={() => { setEditingCred(service); setCredInput('') }}
-                                    style={{ padding: '2px 6px', borderRadius: 3, border: '1px solid #444', cursor: 'pointer', background: '#111', color: '#888', fontSize: 10, lineHeight: 1.3 }}>
-                                    {configured ? 'Update' : 'Set'}
-                                  </button>
-                                  {configured && (
-                                    <button onClick={() => handleCredDelete(service)}
-                                      style={{ padding: '2px 6px', borderRadius: 3, border: '1px solid #444', cursor: 'pointer', background: '#111', color: '#ef4444', fontSize: 10, lineHeight: 1.3 }}>
-                                      Del
-                                    </button>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })}
+                      <div style={{ maxHeight: 220, overflowY: 'auto', marginBottom: 6 }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                          <thead>
+                            <tr style={{ color: '#888', borderBottom: '1px solid #333' }}>
+                              <th style={{ textAlign: 'left', padding: '3px 6px', fontWeight: 500 }}>Provider</th>
+                              <th style={{ textAlign: 'left', padding: '3px 6px', fontWeight: 500 }}>API Key</th>
+                              <th style={{ padding: '3px 6px', fontWeight: 500 }} />
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {allServices.map(service => {
+                              const configured = creds[service] ?? false
+                              const renaming = renamingCred === service
+                              return (
+                                <tr key={service} style={{ borderBottom: '1px solid #222' }}>
+                                  <td style={{ padding: '3px 6px', verticalAlign: 'middle' }}>
+                                    {renaming ? (
+                                      <div style={{ display: 'flex', gap: 3 }}>
+                                        <input
+                                          autoFocus
+                                          value={renameInput}
+                                          onChange={e => setRenameInput(e.target.value)}
+                                          onKeyDown={e => {
+                                            if (e.key === 'Enter') handleCredRename(service)
+                                            if (e.key === 'Escape') { setRenamingCred(null); setRenameInput('') }
+                                          }}
+                                          style={{
+                                            width: 80, background: '#0f0f0f', border: '1px solid #555',
+                                            borderRadius: 3, padding: '1px 4px', fontSize: 11,
+                                            color: '#ccc', outline: 'none',
+                                          }}
+                                          placeholder="New name..."
+                                        />
+                                        <button onClick={() => handleCredRename(service)} disabled={savingCred === service}
+                                          style={{ padding: '1px 5px', borderRadius: 3, border: '1px solid #444', cursor: 'pointer', background: '#2563eb', color: '#fff', fontSize: 9, lineHeight: 1.2 }}>
+                                          Save
+                                        </button>
+                                        <button onClick={() => { setRenamingCred(null); setRenameInput('') }}
+                                          style={{ padding: '1px 5px', borderRadius: 3, border: '1px solid #444', cursor: 'pointer', background: '#111', color: '#ccc', fontSize: 9, lineHeight: 1.2 }}>
+                                          ✕
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <span
+                                        onClick={() => { setRenamingCred(service); setRenameInput(service) }}
+                                        title="Click to rename"
+                                        style={{ textTransform: 'capitalize', color: '#ccc', cursor: 'pointer', borderBottom: '1px dotted #555' }}
+                                      >
+                                        {service}
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td style={{ padding: '3px 6px', verticalAlign: 'middle', color: configured ? '#4ade80' : '#555', fontFamily: 'monospace', fontSize: 10 }}>
+                                    {configured ? maskedKeys[service] || '—' : '—'}
+                                  </td>
+                                  <td style={{ padding: '3px 6px', verticalAlign: 'middle', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                    {editingCred === service ? (
+                                      <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+                                        <input
+                                          autoFocus
+                                          type="password"
+                                          value={credInput}
+                                          onChange={e => setCredInput(e.target.value)}
+                                          onKeyDown={e => {
+                                            if (e.key === 'Enter') handleCredSave(service)
+                                            if (e.key === 'Escape') { setEditingCred(null); setCredInput('') }
+                                          }}
+                                          style={{
+                                            width: 110, background: '#0f0f0f', border: '1px solid #555',
+                                            borderRadius: 3, padding: '1px 4px', fontSize: 11,
+                                            color: '#ccc', outline: 'none',
+                                          }}
+                                          placeholder="Paste API key..."
+                                        />
+                                        <button onClick={() => handleCredSave(service)} disabled={savingCred === service}
+                                          style={{ padding: '1px 5px', borderRadius: 3, border: '1px solid #444', cursor: 'pointer', background: '#4ade80', color: '#0f0f0f', fontSize: 9, lineHeight: 1.2 }}>
+                                          {savingCred === service ? '...' : 'Save'}
+                                        </button>
+                                        <button onClick={() => { setEditingCred(null); setCredInput('') }}
+                                          style={{ padding: '1px 5px', borderRadius: 3, border: '1px solid #444', cursor: 'pointer', background: '#111', color: '#ccc', fontSize: 9, lineHeight: 1.2 }}>
+                                          ✕
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <div style={{ display: 'flex', gap: 3, alignItems: 'center', justifyContent: 'flex-end' }}>
+                                        <button onClick={() => { setEditingCred(service); setCredInput('') }}
+                                          title={configured ? 'Update API key' : 'Set API key'}
+                                          style={{ padding: '1px 5px', borderRadius: 3, border: '1px solid #444', cursor: 'pointer', background: configured ? '#1a3a1a' : '#111', color: configured ? '#4ade80' : '#888', fontSize: 9, lineHeight: 1.2 }}>
+                                          {configured ? 'Update' : 'Set'}
+                                        </button>
+                                        {configured && (
+                                          <button onClick={() => handleCredDelete(service)}
+                                            title="Delete credential"
+                                            style={{ padding: '1px 5px', borderRadius: 3, border: '1px solid #444', cursor: 'pointer', background: '#2a0a0a', color: '#ef4444', fontSize: 9, lineHeight: 1.2 }}>
+                                            Del
+                                          </button>
+                                        )}
+                                      </div>
+                                    )}
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
                       </div>
 
                       {addingCustom ? (
@@ -814,7 +900,7 @@ export default function ModelManager({ backendOk }: { backendOk: boolean }) {
                       )}
 
                       <div style={{ fontSize: 9, color: '#555', lineHeight: 1.4 }}>
-                        Keys are encrypted at rest. Used by cloud API providers (Kling, Seedance, etc.).
+                        Keys are encrypted at rest. Click a provider name to rename it.
                       </div>
                     </div>
                   )

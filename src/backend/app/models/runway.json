@@ -1,0 +1,131 @@
+{
+  "family": "runway",
+  "label": "Runway",
+  "description": "Runway video generation via API",
+  "runner": "api",
+  "pipeline": null,
+  "schedulers": {},
+  "default_scheduler": null,
+  "defaults": {},
+  "inputs": {
+    "prompt": { "required": true, "type": "text" },
+    "video": { "required": false, "type": "video" },
+    "image": { "required": false, "type": "image" }
+  },
+  "output": { "type": "video", "mime": "video/mp4" },
+  "variants": [
+    {
+      "key": "runway:aleph2",
+      "name": "Aleph 2.0 V2V",
+      "hf_name": null,
+      "type": "api",
+      "size_gb": null,
+      "dtype": null,
+      "needs_token": false,
+      "pricing": { "credits_per_second": 28, "min_credits": 56 },
+      "resolutions": ["16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16", "21:9"],
+      "inputs": {
+        "seed": { "required": false, "type": "int", "default": 42, "min": 0, "max": 2147483647 }
+      },
+      "defaults": {
+        "seed": 42
+      }
+    },
+    {
+      "key": "runway:gen4.5-i2v",
+      "name": "Gen-4.5",
+      "hf_name": null,
+      "type": "api",
+      "size_gb": null,
+      "dtype": null,
+      "needs_token": false,
+      "pricing": { "credits_per_second": 12, "min_credits": 24 },
+      "resolutions": ["1280:720", "720:1280", "1104:832", "832:1104", "960:960", "1584:672"],
+      "inputs": {
+        "seed": { "required": false, "type": "int", "default": 42, "min": 0, "max": 2147483647 },
+        "duration": { "required": false, "type": "int", "default": 5, "min": 2, "max": 10 }
+      },
+      "defaults": { "seed": 42, "duration": 5 }
+    },
+    {
+      "key": "runway:gen4_turbo-i2v",
+      "name": "Gen-4 Turbo",
+      "hf_name": null,
+      "type": "api",
+      "size_gb": null,
+      "dtype": null,
+      "needs_token": false,
+      "pricing": { "credits_per_second": 5, "min_credits": 10 },
+      "resolutions": ["1280:720", "720:1280", "1104:832", "832:1104", "960:960", "1584:672"],
+      "inputs": {
+        "seed": { "required": false, "type": "int", "default": 42, "min": 0, "max": 2147483647 },
+        "duration": { "required": false, "type": "int", "default": 5, "min": 2, "max": 10 }
+      },
+      "defaults": { "seed": 42, "duration": 5 }
+    },
+    {
+      "key": "runway:veo3-i2v",
+      "name": "Veo 3",
+      "hf_name": null,
+      "type": "api",
+      "size_gb": null,
+      "dtype": null,
+      "needs_token": false,
+      "pricing": { "credits_per_second": 40, "min_credits": 80 },
+      "resolutions": ["1280:720", "720:1280", "1104:832", "832:1104", "960:960"],
+      "inputs": {
+        "seed": { "required": false, "type": "int", "default": 42, "min": 0, "max": 2147483647 },
+        "duration": { "required": false, "type": "int", "default": 8, "min": 8, "max": 8 }
+      },
+      "defaults": { "seed": 42, "duration": 8 }
+    },
+    {
+      "key": "runway:veo3.1-i2v",
+      "name": "Veo 3.1",
+      "hf_name": null,
+      "type": "api",
+      "size_gb": null,
+      "dtype": null,
+      "needs_token": false,
+      "pricing": { "credits_per_second": 20, "min_credits": 40 },
+      "resolutions": ["1280:720", "720:1280", "1104:832", "832:1104", "960:960"],
+      "inputs": {
+        "seed": { "required": false, "type": "int", "default": 42, "min": 0, "max": 2147483647 },
+        "duration": { "required": false, "type": "int", "default": 5, "min": 2, "max": 10 }
+      },
+      "defaults": { "seed": 42, "duration": 5 }
+    },
+    {
+      "key": "runway:veo3.1_fast-i2v",
+      "name": "Veo 3.1 Fast",
+      "hf_name": null,
+      "type": "api",
+      "size_gb": null,
+      "dtype": null,
+      "needs_token": false,
+      "pricing": { "credits_per_second": 10, "min_credits": 20 },
+      "resolutions": ["1280:720", "720:1280", "1104:832", "832:1104", "960:960"],
+      "inputs": {
+        "seed": { "required": false, "type": "int", "default": 42, "min": 0, "max": 2147483647 },
+        "duration": { "required": false, "type": "int", "default": 5, "min": 2, "max": 10 }
+      },
+      "defaults": { "seed": 42, "duration": 5 }
+    },
+    {
+      "key": "runway:seedance2-i2v",
+      "name": "Seedance 2",
+      "hf_name": null,
+      "type": "api",
+      "size_gb": null,
+      "dtype": null,
+      "needs_token": false,
+      "pricing": { "credits_per_second": 36, "min_credits": 72 },
+      "resolutions": ["1280:720", "720:1280", "960:960", "1112:834", "834:1112", "1470:630"],
+      "inputs": {
+        "seed": { "required": false, "type": "int", "default": 42, "min": 0, "max": 2147483647 },
+        "duration": { "required": false, "type": "int", "default": 5, "min": 2, "max": 15 }
+      },
+      "defaults": { "seed": 42, "duration": 5 }
+    }
+  ]
+}
