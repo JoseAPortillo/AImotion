@@ -263,12 +263,36 @@ def _is_video_pipeline(pipeline_class: str) -> bool:
     return pipeline_class in _INFERRED_VIDEO_PIPELINES
 
 
+_KNOWN_PIPELINE_INPUTS: dict[str, dict] = {
+    "CogVideoXImageToVideoPipeline": {
+        "prompt": {"required": True, "type": "text"},
+        "image": {"required": True, "type": "image"},
+    },
+    "CogVideoXVideoToVideoPipeline": {
+        "prompt": {"required": True, "type": "text"},
+        "video": {"required": True, "type": "video"},
+    },
+    "WanImageToVideoPipeline": {
+        "prompt": {"required": True, "type": "text"},
+        "image": {"required": True, "type": "image"},
+    },
+    "WanVideoToVideoPipeline": {
+        "prompt": {"required": True, "type": "text"},
+        "video": {"required": True, "type": "video"},
+    },
+    "StableDiffusionXLImg2ImgPipeline": {
+        "prompt": {"required": True, "type": "text"},
+        "image": {"required": True, "type": "image"},
+    },
+}
+
+
 def _infer_inputs(pipeline_class: str | None) -> dict:
     if not pipeline_class:
         return {}
     params = infer_pipeline_params(pipeline_class)
-    if not params:
-        return {"prompt": {"required": True, "type": "text"}}
+    if not params or set(params.keys()) <= {"args", "kwargs"}:
+        return _KNOWN_PIPELINE_INPUTS.get(pipeline_class, {"prompt": {"required": True, "type": "text"}})
     inputs: dict = {}
     for pname, pinfo in params.items():
         if pname in ("prompt",):
