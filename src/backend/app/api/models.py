@@ -299,7 +299,6 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
         files = api.list_repo_files(hf_name)
         weight_exts = (".safetensors", ".bin", ".pt", ".pth", ".gguf", ".ggufs")
         weight_files = [f for f in files if f.endswith(weight_exts)]
-        config_files = [f for f in files if f not in weight_files]
 
         has_model_index = "model_index.json" in files
         checkpoint_file = weight_files[0] if weight_files and not has_model_index else ""
@@ -309,6 +308,17 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
             task.error_msg = f"Model '{hf_name}' has no weight files"
             logger.info(f"Install task {task_id} stopped: no weight files found")
             return
+
+        # Files required by from_pretrained (configs, tokenizer, scheduler)
+        _cfg_exts = (".json", ".model", ".txt", ".py")
+        _cfg_prefixes = ("model_index.json", "scheduler/", "tokenizer/", "feature_extractor/")
+        config_files = [
+            f for f in files
+            if f not in weight_files
+            and (f.endswith(_cfg_exts) or f.startswith(_cfg_prefixes))
+            and not f.endswith(("-workflow.json",))
+            and not f.startswith(".")
+        ]
 
         def _get_file_size(filename: str) -> int:
             try:
@@ -321,7 +331,8 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
             return 0
 
         total_weight_size = sum(_get_file_size(f) for f in weight_files)
-        total_size = total_weight_size + sum(_get_file_size(f) for f in config_files)
+        total_config_size = sum(_get_file_size(f) for f in config_files)
+        total_size = total_weight_size + total_config_size
         if total_size > 0:
             import shutil
             os.makedirs(cache_dir, exist_ok=True)
@@ -369,7 +380,6 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
 
         # Download weight files with progress tracking
         downloaded_weight_size = 0
-        config_size = total_size - total_weight_size
         task.current_file = ""
         for i, fname in enumerate(weight_files):
             if task.cancel_event.is_set():
@@ -383,7 +393,7 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
                 return
 
             downloaded_weight_size += _get_file_size(fname)
-            task.progress_pct = ((config_size + downloaded_weight_size) / total_size * 100) if total_size else \
+            task.progress_pct = ((total_config_size + downloaded_weight_size) / total_size * 100) if total_size else \
                 ((len(config_files) + i + 1) / (len(config_files) + len(weight_files)) * 100)
             task.downloaded_files = len(config_files) + i + 1
 
