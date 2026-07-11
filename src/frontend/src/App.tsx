@@ -106,12 +106,14 @@ function AppInner() {
   const edges = useGraphStore((s) => s.edges)
   const onEdgesChange = useGraphStore((s) => s.onEdgesChange)
 
-  // Derive display edges: when a group is collapsed, route child→outside and outside→child
+    // Derive display edges: when a group is collapsed, route child→outside and outside→child
   // edges through the group's proxy handles so visuals stay clean.
+  // If both endpoints are inside DIFFERENT collapsed groups, route group→group directly.
   const displayEdges = useMemo(() => {
     const proxyEdges: Edge[] = []
     const groups = nodes.filter((n) => n.type === 'groupNode')
     const hiddenSet = new Set<string>()
+    const routedEdgeIds = new Set<string>()
 
     for (const group of groups) {
       const gd = group.data as GroupNodeData
@@ -120,6 +122,8 @@ function AppInner() {
       const childSet = new Set(gd.childIds)
 
       for (const edge of edges) {
+        if (routedEdgeIds.has(edge.id)) continue
+
         const isInternalSource = childSet.has(edge.source)
         const isInternalTarget = childSet.has(edge.target)
 
@@ -128,17 +132,47 @@ function AppInner() {
         hiddenSet.add(edge.id)
 
         if (isInternalSource && !isInternalTarget) {
-          proxyEdges.push({
-            id: `_proxy_${group.id}_${edge.id}`,
-            source: group.id,
-            sourceHandle: `source:${edge.source}:${edge.sourceHandle}`,
-            target: edge.target,
-            targetHandle: edge.targetHandle,
-            style: edge.style,
-          })
+          // Check if target is inside ANOTHER collapsed group
+          const targetGroup = groups.find(
+            (g) =>
+              g.id !== group.id &&
+              (g.data as GroupNodeData).collapsed &&
+              (g.data as GroupNodeData).childIds?.includes(edge.target),
+          )
+          if (targetGroup) {
+            // Route group → other collapsed group directly
+            proxyEdges.push({
+              id: `_proxy_${group.id}_${edge.id}`,
+              source: group.id,
+              sourceHandle: `source:${edge.source}:${edge.sourceHandle}`,
+              target: targetGroup.id,
+              targetHandle: `target:${edge.target}:${edge.targetHandle}`,
+              style: edge.style,
+            })
+            routedEdgeIds.add(edge.id)
+          } else {
+            // Route group → visible target node
+            proxyEdges.push({
+              id: `_proxy_${group.id}_${edge.id}`,
+              source: group.id,
+              sourceHandle: `source:${edge.source}:${edge.sourceHandle}`,
+              target: edge.target,
+              targetHandle: edge.targetHandle,
+              style: edge.style,
+            })
+          }
         }
 
         if (!isInternalSource && isInternalTarget) {
+          // Check if source is inside ANOTHER collapsed group
+          const sourceGroup = groups.find(
+            (g) =>
+              g.id !== group.id &&
+              (g.data as GroupNodeData).collapsed &&
+              (g.data as GroupNodeData).childIds?.includes(edge.source),
+          )
+          if (sourceGroup) continue // source group already routed this edge
+          // Route visible source node → group
           proxyEdges.push({
             id: `_proxy_${group.id}_${edge.id}`,
             source: edge.source,
