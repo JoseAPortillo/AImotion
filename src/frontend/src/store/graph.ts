@@ -81,6 +81,7 @@ interface GraphState {
   undo: () => void
   redo: () => void
   deleteEdge: (edgeId: string) => void
+  toggleNodeCollapse: (nodeId: string) => void
   copySelectedNodes: () => void
   pasteNodes: () => void
 }
@@ -497,6 +498,33 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   deleteEdge: (edgeId) => {
     get()._snapshot()
     set((s) => ({ edges: s.edges.filter((e) => e.id !== edgeId) }))
+  },
+
+  toggleNodeCollapse: (nodeId) => {
+    get()._snapshot()
+    set((s) => {
+      const node = s.nodes.find((n) => n.id === nodeId)
+      if (!node) return s
+      const nd = node.data as Record<string, unknown>
+      const collapsed = !!nd.collapsed
+      if (!collapsed) {
+        return {
+          nodes: s.nodes.map((n) =>
+            n.id === nodeId
+              ? { ...n, data: { ...n.data, collapsed: true, _originalHeight: n.height } as NodeData, height: 36 }
+              : n,
+          ),
+        }
+      }
+      const origH = (nd._originalHeight as number) || node.height || 120
+      return {
+        nodes: s.nodes.map((n) => {
+          if (n.id !== nodeId) return n
+          const { collapsed: _, _originalHeight: __, ...cleanData } = n.data as Record<string, unknown>
+          return { ...n, data: cleanData as NodeData, height: origH }
+        }),
+      }
+    })
   },
 
   _snapshot: () => {
