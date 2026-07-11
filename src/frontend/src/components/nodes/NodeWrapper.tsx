@@ -184,6 +184,7 @@ function NodeWrapper({ children, def, selected, headerLabel, headerRight, footer
   const node = useStore(s => (nodeId ? s.nodeLookup.get(nodeId) : undefined))
   const toggleNodeCollapse = useGraphStore((s) => s.toggleNodeCollapse)
   const copySelectedNodes = useGraphStore((s) => s.copySelectedNodes)
+  const pasteNodes = useGraphStore((s) => s.pasteNodes)
   const removeNode = useGraphStore((s) => s.removeNode)
   const selectNode = useGraphStore((s) => s.selectNode)
 
@@ -212,7 +213,7 @@ function NodeWrapper({ children, def, selected, headerLabel, headerRight, footer
         <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{headerLabel ?? def.label}</span>
         {headerRight}
         <button onClick={handleAction(() => toggleNodeCollapse(nodeId!))} style={toolbarBtn} title={collapsed ? 'Expand' : 'Collapse'}>{collapsed ? '◻' : '▣'}</button>
-        <button onClick={handleAction(() => copySelectedNodes())} style={toolbarBtn} title="Copy">⎘</button>
+        <button onClick={handleAction(() => { copySelectedNodes(); pasteNodes() })} style={toolbarBtn} title="Duplicate">⎘</button>
         <button onClick={handleAction(() => removeNode(nodeId!))} style={{ ...toolbarBtn, background: 'rgba(220,38,38,0.4)' }} title="Delete">✕</button>
       </div>
       {!collapsed && (
