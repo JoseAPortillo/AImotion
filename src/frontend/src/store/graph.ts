@@ -38,6 +38,8 @@ const NODE_DEFAULT_SIZE: Record<NodeType, { width: number; height: number }> = {
   groupNode: { width: 400, height: 400 },
 }
 
+type Snapshot = { nodes: AppNode[]; edges: Edge[] }
+
 interface GraphState {
   nodes: AppNode[]
   edges: Edge[]
@@ -46,6 +48,9 @@ interface GraphState {
   resultType: 'image' | 'video' | null
   nodeOutputs: Record<string, { url: string; type: 'image' | 'video' }>
   autoPreviews: Record<string, { url: string; type: 'image' | 'video' }>
+  _historyPast: Snapshot[]
+  _historyFuture: Snapshot[]
+  _clipboard: Snapshot | null
   addNode: (type: NodeType, position: { x: number; y: number }) => string
   onNodesChange: (changes: NodeChange<AppNode>[]) => void
   onEdgesChange: (changes: EdgeChange[]) => void
@@ -72,6 +77,13 @@ interface GraphState {
   toggleGroupCollapse: (groupId: string) => void
   createGroupFromSelection: (selectedIds: string[]) => string | null
   resizeGroupWithChildren: (groupId: string, newWidth: number, newHeight: number) => void
+  _snapshot: () => void
+  undo: () => void
+  redo: () => void
+  deleteEdge: (edgeId: string) => void
+  toggleNodeCollapse: (nodeId: string) => void
+  copySelectedNodes: () => void
+  pasteNodes: () => void
 }
 
 function revokeBlobUrl(url: string) {
@@ -85,6 +97,16 @@ function revokeAllBlobUrls(record: Record<string, { url: string; type: string }>
 }
 
 let nodeCounter = 0
+let updateDataTimer: ReturnType<typeof setTimeout> | null = null
+
+function cloneSnapshot(nodes: AppNode[], edges: Edge[]): Snapshot {
+  return {
+    nodes: nodes.map(n => ({ ...n, data: { ...n.data } })),
+    edges: edges.map(e => ({ ...e })),
+  }
+}
+
+const MAX_HISTORY = 50
 
 export const useGraphStore = create<GraphState>((set, get) => ({
   nodes: [],
@@ -94,8 +116,12 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   resultType: null,
   nodeOutputs: {},
   autoPreviews: {},
+  _historyPast: [],
+  _historyFuture: [],
+  _clipboard: null,
 
   addNode: (type, position) => {
+    get()._snapshot()
     const def = NODE_DEFINITIONS[type]
     nodeCounter++
     const id = `${type}_${nodeCounter}`
@@ -123,6 +149,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   },
 
   onConnect: (connection) => {
+    get()._snapshot()
     const nodes = get().nodes
     const sourceNode = nodes.find((n) => n.id === connection.source)
     const targetNode = nodes.find((n) => n.id === connection.target)
@@ -147,6 +174,10 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   },
 
   updateNodeData: (nodeId, data) => {
+    const state = get()
+    if (!updateDataTimer) state._snapshot()
+    if (updateDataTimer) clearTimeout(updateDataTimer)
+    updateDataTimer = setTimeout(() => { updateDataTimer = null }, 500)
     set((state) => ({
       nodes: state.nodes.map((node) =>
         node.id === nodeId ? { ...node, data: { ...node.data, ...data } } : node
@@ -182,6 +213,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   },
 
   removeNode: (nodeId) => {
+    get()._snapshot()
     set((state) => {
       const node = state.nodes.find((n) => n.id === nodeId)
       revokeBlobUrl(state.nodeOutputs[nodeId]?.url ?? '')
@@ -204,13 +236,15 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   },
 
   clearAll: () => {
+    get()._snapshot()
     const state = get()
     revokeAllBlobUrls(state.nodeOutputs)
     revokeAllBlobUrls(state.autoPreviews)
-    set({ nodes: [], edges: [], selectedNode: null, outputUrl: null, resultType: null, nodeOutputs: {}, autoPreviews: {} })
+    set({ nodes: [], edges: [], selectedNode: null, outputUrl: null, resultType: null, nodeOutputs: {}, autoPreviews: {}, _historyPast: [], _historyFuture: [] })
   },
 
   loadWorkflow: (wfNodes, wfEdges, restoration) => {
+    get()._snapshot()
     const state = get()
     revokeAllBlobUrls(state.nodeOutputs)
     revokeAllBlobUrls(state.autoPreviews)
@@ -254,6 +288,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   },
 
   addNodesToGroup: (groupId, childIds) => {
+    get()._snapshot()
     set((state) => {
       const group = state.nodes.find((n) => n.id === groupId)
       if (!group) return state
@@ -273,6 +308,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   },
 
   removeNodesFromGroup: (groupId, childIds) => {
+    get()._snapshot()
     set((state) => {
       const group = state.nodes.find((n) => n.id === groupId)
       if (!group) return state
@@ -298,6 +334,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   },
 
   toggleGroupCollapse: (groupId) => {
+    get()._snapshot()
     set((state) => {
       const group = state.nodes.find((n) => n.id === groupId)
       if (!group || group.type !== 'groupNode') return state
@@ -310,6 +347,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
       const expW = data.expandedWidth ?? group.width ?? collapsedSize.width
       const expH = data.expandedHeight ?? group.height ?? collapsedSize.height
       const dx = expW - collapsedSize.width
+      const dy = expH - collapsedSize.height
 
       const updatedNodes = state.nodes.map((node) => {
         if (node.id === groupId) {
@@ -326,7 +364,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
             }
             return {
               ...node,
-              position: { x: node.position.x + dx, y: node.position.y },
+              position: { x: node.position.x + dx / 2, y: node.position.y + dy / 2 },
               width: collapsedSize.width,
               height: collapsedSize.height,
               data: {
@@ -338,10 +376,11 @@ export const useGraphStore = create<GraphState>((set, get) => ({
               } as GroupNodeData,
             }
           }
-          const newGroupX = node.position.x - dx
+          const newGroupX = node.position.x - dx / 2
+          const newGroupY = node.position.y - dy / 2
           return {
             ...node,
-            position: { x: newGroupX, y: node.position.y },
+            position: { x: newGroupX, y: newGroupY },
             width: expW,
             height: expH,
             data: {
@@ -358,14 +397,15 @@ export const useGraphStore = create<GraphState>((set, get) => ({
             return { ...node, hidden: true, style: { ...node.style, display: 'none' } }
           }
           const saved = data.savedChildPositions?.[node.id]
-          const groupX = group.position.x - dx
+          const groupX = group.position.x - dx / 2
+          const groupY = group.position.y - dy / 2
           const { style, ...rest } = node
           const { display: _, ...cleanStyle } = style || {}
           return {
             ...rest,
             hidden: false,
             position: saved
-              ? { x: groupX + saved.relX, y: group.position.y + saved.relY }
+              ? { x: groupX + saved.relX, y: groupY + saved.relY }
               : node.position,
             style: Object.keys(cleanStyle).length ? cleanStyle : undefined,
           }
@@ -378,6 +418,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   },
 
   createGroupFromSelection: (selectedIds) => {
+    get()._snapshot()
     const state = get()
     if (selectedIds.length === 0) return null
 
@@ -455,5 +496,115 @@ export const useGraphStore = create<GraphState>((set, get) => ({
 
       return { nodes: updatedNodes }
     })
+  },
+
+  deleteEdge: (edgeId) => {
+    get()._snapshot()
+    set((s) => ({ edges: s.edges.filter((e) => e.id !== edgeId) }))
+  },
+
+  toggleNodeCollapse: (nodeId) => {
+    get()._snapshot()
+    set((s) => {
+      const node = s.nodes.find((n) => n.id === nodeId)
+      if (!node) return s
+      const nd = node.data as Record<string, unknown>
+      const wasCollapsed = !!nd.collapsed
+      if (!wasCollapsed) {
+        return {
+          nodes: s.nodes.map((n) =>
+            n.id === nodeId
+              ? { ...n, data: { ...n.data, collapsed: true, _origH: n.height } as NodeData, height: 36 }
+              : n,
+          ),
+        }
+      }
+      const origH = (nd._origH as number) || node.height || 120
+      return {
+        nodes: s.nodes.map((n) => {
+          if (n.id !== nodeId) return n
+          const { collapsed: _, _origH: __, ...clean } = n.data as Record<string, unknown>
+          return { ...n, data: clean as NodeData, height: origH }
+        }),
+      }
+    })
+  },
+
+  _snapshot: () => {
+    const { nodes, edges, _historyPast } = get()
+    const snap = cloneSnapshot(nodes, edges)
+    const past = [..._historyPast, snap].slice(-MAX_HISTORY)
+    set({ _historyPast: past, _historyFuture: [] })
+  },
+
+  undo: () => {
+    const { _historyPast, nodes, edges } = get()
+    if (_historyPast.length === 0) return
+    const prev = _historyPast[_historyPast.length - 1]
+    const current = cloneSnapshot(nodes, edges)
+    set({
+      nodes: prev.nodes,
+      edges: prev.edges,
+      _historyPast: _historyPast.slice(0, -1),
+      _historyFuture: [...get()._historyFuture, current].slice(-MAX_HISTORY),
+    })
+  },
+
+  redo: () => {
+    const { _historyFuture, nodes, edges } = get()
+    if (_historyFuture.length === 0) return
+    const next = _historyFuture[_historyFuture.length - 1]
+    const current = cloneSnapshot(nodes, edges)
+    set({
+      nodes: next.nodes,
+      edges: next.edges,
+      _historyFuture: _historyFuture.slice(0, -1),
+      _historyPast: [...get()._historyPast, current].slice(-MAX_HISTORY),
+    })
+  },
+
+  copySelectedNodes: () => {
+    const { nodes, edges } = get()
+    const selected = nodes.filter((n) => n.selected)
+    if (selected.length === 0) return
+    const selectedIds = new Set(selected.map((n) => n.id))
+    const internalEdges = edges.filter(
+      (e) => selectedIds.has(e.source) && selectedIds.has(e.target),
+    )
+    set({ _clipboard: cloneSnapshot(selected, internalEdges) })
+  },
+
+  pasteNodes: () => {
+    const { _clipboard } = get()
+    if (!_clipboard || _clipboard.nodes.length === 0) return
+
+    const idMap = new Map<string, string>()
+    const newNodes: AppNode[] = _clipboard.nodes.map((n) => {
+      nodeCounter++
+      const newId = `${n.type}_${nodeCounter}`
+      idMap.set(n.id, newId)
+      return {
+        ...n,
+        id: newId,
+        position: { x: n.position.x + 50, y: n.position.y + 50 },
+        selected: true,
+      }
+    })
+
+    const newEdges: Edge[] = _clipboard.edges.map((e) => ({
+      ...e,
+      id: `_paste_${e.id}`,
+      source: idMap.get(e.source) ?? e.source,
+      target: idMap.get(e.target) ?? e.target,
+    }))
+
+    get()._snapshot()
+    set((s) => ({
+      nodes: [
+        ...s.nodes.map((n) => ({ ...n, selected: false })),
+        ...newNodes,
+      ],
+      edges: [...s.edges, ...newEdges],
+    }))
   },
 }))

@@ -23,6 +23,7 @@ _MODEL_ALIASES: dict[str, str] = {
     "veo3.1-i2v": "veo3.1",
     "veo3.1_fast-i2v": "veo3.1_fast",
     "seedance2-i2v": "seedance2",
+    "seedance2-v2v": "seedance2",
     "aleph2": "gen4_aleph",
 }
 

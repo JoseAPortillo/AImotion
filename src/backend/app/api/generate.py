@@ -105,6 +105,8 @@ async def create_generation(
     max_guidance_scale: Optional[float] = Form(None),
     fps: Optional[int] = Form(None),
     motion_bucket_id: Optional[int] = Form(None),
+    vae_tiling: Optional[bool] = Form(None),
+    vae_tile_overlap: Optional[float] = Form(None),
     extra_params: Optional[str] = Form(None),
 ):
     model_cfg = get_model_config(model)
@@ -175,6 +177,8 @@ async def create_generation(
         "max_guidance_scale": max_guidance_scale,
         "fps": fps,
         "motion_bucket_id": motion_bucket_id,
+        "vae_tiling": vae_tiling,
+        "vae_tile_overlap": vae_tile_overlap,
         "extra": json.loads(extra_params) if extra_params else {},
     }
     task_id = await task_manager.create_task(params)
@@ -223,6 +227,10 @@ async def _run_generation(task_id: str, params: dict):
             extra["video_path"] = video_path
         if image_path:
             extra["image_path"] = image_path
+        if params.get("vae_tiling") is not None:
+            extra["vae_tiling"] = params["vae_tiling"]
+        if params.get("vae_tile_overlap") is not None:
+            extra["vae_tile_overlap"] = params["vae_tile_overlap"]
         gen_params = GenerateParams(
             prompt=params["prompt"],
             negative_prompt=params.get("negative_prompt", ""),

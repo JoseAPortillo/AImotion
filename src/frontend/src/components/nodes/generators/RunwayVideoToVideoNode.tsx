@@ -168,7 +168,7 @@ function RunwayVideoToVideoNode(props: NodeProps) {
   const base = useGeneratorBase({
     nodeId: props.id,
     data,
-    modalityFilter: (m: ModelEntry) => m.runner === 'api' && m.key.startsWith('runway'),
+    modalityFilter: (m: ModelEntry) => m.runner === 'api' && m.key.startsWith('runway') && !m.key.includes('-i2v'),
   })
   const autoPreview = useAutoPreview({ nodeId: props.id, data })
 

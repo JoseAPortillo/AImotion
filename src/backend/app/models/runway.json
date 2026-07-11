@@ -16,20 +16,33 @@
   "variants": [
     {
       "key": "runway:aleph2",
-      "name": "Aleph 2.0 V2V",
+      "name": "Gen-4 Aleph",
       "hf_name": null,
       "type": "api",
       "size_gb": null,
       "dtype": null,
       "needs_token": false,
-      "pricing": { "credits_per_second": 28, "min_credits": 56 },
-      "resolutions": ["16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16", "21:9"],
+      "pricing": { "credits_per_second": 15, "min_credits": 30 },
+      "resolutions": ["1280:720", "720:1280", "1104:832", "832:1104", "960:960", "1584:672"],
       "inputs": {
         "seed": { "required": false, "type": "int", "default": 42, "min": 0, "max": 2147483647 }
       },
-      "defaults": {
-        "seed": 42
-      }
+      "defaults": { "seed": 42 }
+    },
+    {
+      "key": "runway:seedance2-v2v",
+      "name": "Seedance 2",
+      "hf_name": null,
+      "type": "api",
+      "size_gb": null,
+      "dtype": null,
+      "needs_token": false,
+      "pricing": { "credits_per_second": 36, "min_credits": 72 },
+      "resolutions": ["1280:720", "720:1280", "960:960", "1112:834", "834:1112", "1470:630"],
+      "inputs": {
+        "seed": { "required": false, "type": "int", "default": 42, "min": 0, "max": 2147483647 }
+      },
+      "defaults": { "seed": 42 }
     },
     {
       "key": "runway:gen4.5-i2v",

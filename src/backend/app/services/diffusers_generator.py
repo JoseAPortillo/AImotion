@@ -187,6 +187,29 @@ class DiffusersGenerator:
                 logger.debug(f"VAE tiling not supported for {type(pipe.vae).__name__}")
 
     @staticmethod
+    def _apply_vae_tiling_config(pipe, vae_tiling: bool | None, vae_tile_overlap: float | None):
+        if not hasattr(pipe, "vae"):
+            return
+        if vae_tiling is True and hasattr(pipe.vae, "enable_tiling"):
+            try:
+                pipe.vae.enable_tiling()
+                logger.info("VAE tiling enabled via request")
+            except Exception:
+                logger.debug(f"VAE tiling not supported for {type(pipe.vae).__name__}")
+        elif vae_tiling is False and hasattr(pipe.vae, "disable_tiling"):
+            try:
+                pipe.vae.disable_tiling()
+                logger.info("VAE tiling disabled via request")
+            except Exception:
+                logger.debug(f"VAE disable_tiling not supported for {type(pipe.vae).__name__}")
+        if vae_tile_overlap is not None and hasattr(pipe.vae, "tile_sample_overlap"):
+            try:
+                pipe.vae.tile_sample_overlap = vae_tile_overlap
+                logger.info(f"VAE tile_sample_overlap set to {vae_tile_overlap}")
+            except Exception:
+                logger.debug(f"VAE tile_sample_overlap not settable for {type(pipe.vae).__name__}")
+
+    @staticmethod
     def _try_load_single_file(local_path: str, dtype, pipe_cls: type | None = None):
         from diffusers import DiffusionPipeline
 
@@ -591,6 +614,11 @@ class DiffusersGenerator:
                     f"Model '{type(pipe).__name__}' requires '{pname}' input "
                     f"but none was provided. Connect a compatible input node."
                 )
+
+        vae_tiling = extra_kwargs.get("vae_tiling")
+        vae_tile_overlap = extra_kwargs.get("vae_tile_overlap")
+        if vae_tiling is not None or vae_tile_overlap is not None:
+            self._apply_vae_tiling_config(pipe, vae_tiling, vae_tile_overlap)
 
         logger.info(f"Starting generation with {type(pipe).__name__}...")
         self._log_vram()

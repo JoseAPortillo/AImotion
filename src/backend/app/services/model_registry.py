@@ -144,8 +144,15 @@ def _catalog_families():
 
 
 def _catalog_family_for_pipeline(pipeline_class: str):
+    pc_lower = pipeline_class.lower()
     for fam in _catalog_families():
-        if fam.pipeline_class == pipeline_class:
+        if fam.pipeline_class and fam.pipeline_class.lower() == pc_lower:
+            return fam
+    for fam in _catalog_families():
+        if fam.pipeline_class and fam.pipeline_class.lower() in pc_lower:
+            return fam
+    for fam in _catalog_families():
+        if fam.family.lower() in pc_lower:
             return fam
     return None
 
@@ -234,6 +241,20 @@ def discover_pipeline(hf_name: str) -> dict:
                         "CogVideoXTransformer3DModel": "CogVideoXPipeline",
                     }
                     pipeline_class = model_to_pipeline.get(pipeline_class, pipeline_class.replace("Model", "Pipeline"))
+
+        if pipeline_class and pipeline_tag:
+            tag_lower = pipeline_tag.lower()
+            is_i2v_pipeline = "ImageToVideo" in pipeline_class or "Img2Vid" in pipeline_class
+            is_v2v_pipeline = "VideoToVideo" in pipeline_class
+            tag_is_i2v = tag_lower == "image-to-video"
+            tag_is_v2v = tag_lower == "video-to-video"
+            tag_is_t2v = tag_lower == "text-to-video"
+            if tag_is_i2v and not is_i2v_pipeline:
+                logger.info(f"Overriding pipeline {pipeline_class} -> image-to-video based on pipeline_tag")
+                pipeline_class = "CogVideoXImageToVideoPipeline" if "cogvideox" in pipeline_class.lower() else pipeline_class
+            elif tag_is_v2v and not is_v2v_pipeline:
+                logger.info(f"Overriding pipeline {pipeline_class} -> video-to-video based on pipeline_tag")
+                pipeline_class = "CogVideoXVideoToVideoPipeline" if "cogvideox" in pipeline_class.lower() else pipeline_class
             if not pipeline_class:
                 supported_keywords = {}
                 for fam in _catalog_families():
@@ -285,7 +306,9 @@ def discover_pipeline(hf_name: str) -> dict:
                 "default_scheduler": fam.default_scheduler,
                 "defaults": fam.defaults,
             }
-        if not schedulers:
+        if known.get("schedulers"):
+            schedulers = dict(known["schedulers"])
+        elif not schedulers:
             schedulers = dict(known.get("schedulers", {}))
 
         default_scheduler = known.get("default_scheduler", "")
