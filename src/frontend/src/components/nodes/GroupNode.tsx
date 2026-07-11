@@ -123,7 +123,6 @@ function GroupNode(props: NodeProps) {
   )
 
   const displayLabel = label ?? def.label
-  const outColor = getHandleColor('output', 'video_tensor')
 
   const childPreview = useMemo(() => {
     if (!childIds?.length) return null
@@ -159,21 +158,6 @@ function GroupNode(props: NodeProps) {
           onResize={handleResize}
         />
       )}
-
-      {/* Static output handle — always visible on right side */}
-      <Handle
-        type="source"
-        position={Position.Right}
-        id="output"
-        style={{
-          background: outColor,
-          width: 10,
-          height: 10,
-          border: '2px solid #1a1a1a',
-          top: 14,
-          pointerEvents: 'auto',
-        }}
-      />
 
       {/* Input proxy handles when collapsed */}
       {inputProxyHandles?.map((h) => (
@@ -349,13 +333,15 @@ function GroupNode(props: NodeProps) {
         </div>
       </div>
 
-      {/* Content area — pointer-events: none so clicks pass to children */}
+      {/* Content area — double-click to collapse/expand */}
       <div
         style={{
           position: 'absolute',
           inset: '26px 0 0 0',
-          pointerEvents: 'none',
+          pointerEvents: collapsed || childCount === 0 ? 'auto' : 'none',
+          cursor: 'pointer',
         }}
+        onDoubleClick={() => toggleGroupCollapse(props.id)}
       >
         {collapsed && (
           <div
@@ -366,13 +352,14 @@ function GroupNode(props: NodeProps) {
               alignItems: 'center',
               justifyContent: 'center',
               overflow: 'hidden',
+              pointerEvents: 'none',
             }}
           >
             {resolvedUrl ? (
               resolvedType === 'video' ? (
                 <video
                   src={resolvedUrl}
-                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                  style={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }}
                   autoPlay
                   loop
                   muted
@@ -382,7 +369,7 @@ function GroupNode(props: NodeProps) {
                 <img
                   src={resolvedUrl}
                   alt="preview"
-                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                  style={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }}
                 />
               )
             ) : (
@@ -403,10 +390,9 @@ function GroupNode(props: NodeProps) {
               justifyContent: 'center',
               fontSize: 10,
               color: '#555',
-              pointerEvents: 'none',
             }}
           >
-            Drag nodes inside or select + absorb
+            Double-click to collapse
           </div>
         )}
       </div>

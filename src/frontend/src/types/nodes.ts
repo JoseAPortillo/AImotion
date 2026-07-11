@@ -547,7 +547,7 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
     color: '#6b7280',
     description: 'Group nodes together. Collapse to show only the generated preview.',
     inputs: [],
-    outputs: [{ id: 'output', label: 'Output', type: 'video_tensor' }],
+    outputs: [],
     defaultData: { collapsed: false, childIds: [], label: 'Group' },
     defaultSize: { width: 400, height: 400 },
   },
