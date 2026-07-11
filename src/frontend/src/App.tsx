@@ -54,6 +54,8 @@ import CVTaskProcessorNode from './components/nodes/processors/CVTaskProcessorNo
 import LoadLoRANode from './components/nodes/adapters/LoadLoRANode'
 import ApplyControlNetNode from './components/nodes/adapters/ApplyControlNetNode'
 import GroupNode from './components/nodes/GroupNode'
+import EdgeWithDelete from './components/EdgeWithDelete'
+import type { EdgeTypes } from '@xyflow/react'
 
 const nodeTypes: NodeTypes = {
   videoInput: VideoInputNode,
@@ -80,6 +82,10 @@ const nodeTypes: NodeTypes = {
   output: OutputNode,
   preview: PreviewNode,
   groupNode: GroupNode,
+}
+
+const edgeTypes: EdgeTypes = {
+  default: EdgeWithDelete,
 }
 
 export default function App() {
@@ -280,12 +286,47 @@ function AppInner() {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'g') {
+      const meta = e.ctrlKey || e.metaKey
+      if (meta && e.key === 'g') {
         e.preventDefault()
         const selectedIds = nodes.filter((n) => n.selected).map((n) => n.id)
         if (selectedIds.length > 0) {
           createGroupFromSelection(selectedIds)
         }
+        return
+      }
+      if (meta && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault()
+        useGraphStore.getState().undo()
+        return
+      }
+      if (meta && e.key === 'z' && e.shiftKey) {
+        e.preventDefault()
+        useGraphStore.getState().redo()
+        return
+      }
+      if (meta && e.key === 'y') {
+        e.preventDefault()
+        useGraphStore.getState().redo()
+        return
+      }
+      if (meta && e.key === 'c') {
+        const active = document.activeElement
+        const isInput = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement || active instanceof HTMLSelectElement
+        if (!isInput) {
+          e.preventDefault()
+          useGraphStore.getState().copySelectedNodes()
+        }
+        return
+      }
+      if (meta && e.key === 'v') {
+        const active = document.activeElement
+        const isInput = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement || active instanceof HTMLSelectElement
+        if (!isInput) {
+          e.preventDefault()
+          useGraphStore.getState().pasteNodes()
+        }
+        return
       }
     }
     window.addEventListener('keydown', handleKeyDown)
@@ -530,6 +571,7 @@ function AppInner() {
           onPaneClick={() => selectNode(null)}
           onNodeDragStop={onNodeDragStop}
           nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
           fitView
           minZoom={0.1}
           maxZoom={8}
