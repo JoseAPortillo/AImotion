@@ -166,24 +166,26 @@ const menuItemStyle: React.CSSProperties = {
 
 const COLLAPSED_H = 36
 
+const toolbarBtn: React.CSSProperties = {
+  background: 'rgba(0,0,0,0.2)',
+  border: 'none',
+  borderRadius: 3,
+  color: '#fff',
+  fontSize: 11,
+  lineHeight: 1,
+  padding: '2px 5px',
+  cursor: 'pointer',
+  opacity: 0.75,
+  transition: 'opacity 0.15s',
+}
+
 function NodeWrapper({ children, def, selected, headerLabel, headerRight, footer, handles, style: propStyle, progressBar }: NodeWrapperProps) {
   const nodeId = useNodeId()
   const node = useStore(s => (nodeId ? s.nodeLookup.get(nodeId) : undefined))
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
-  const selectNode = useGraphStore((s) => s.selectNode)
   const toggleNodeCollapse = useGraphStore((s) => s.toggleNodeCollapse)
   const copySelectedNodes = useGraphStore((s) => s.copySelectedNodes)
-
-  useEffect(() => {
-    if (!ctxMenu) return
-    const close = () => setCtxMenu(null)
-    document.addEventListener('mousedown', close)
-    document.addEventListener('contextmenu', close)
-    return () => {
-      document.removeEventListener('mousedown', close)
-      document.removeEventListener('contextmenu', close)
-    }
-  }, [ctxMenu])
+  const removeNode = useGraphStore((s) => s.removeNode)
+  const selectNode = useGraphStore((s) => s.selectNode)
 
   const nd = node?.data as Record<string, unknown> | undefined
   const collapsed = !!nd?.collapsed
@@ -196,20 +198,22 @@ function NodeWrapper({ children, def, selected, headerLabel, headerRight, footer
     height: collapsed ? COLLAPSED_H : ((propStyle?.height as number) || node?.height || 320),
   }
 
-  const handleContextMenu = (e: React.MouseEvent) => {
-    e.preventDefault()
+  const handleAction = (fn: () => void) => (e: React.MouseEvent) => {
     e.stopPropagation()
-    selectNode(nodeId!)
-    setCtxMenu({ x: e.clientX, y: e.clientY })
+    if (nodeId) selectNode(nodeId)
+    fn()
   }
 
   return (
-    <div style={containerStyle} onContextMenu={handleContextMenu}>
+    <div style={containerStyle}>
       <style>{scrollbarStyles}</style>
       {selected && !collapsed && <NodeResizer handleStyle={{ width: 8, height: 8, borderRadius: '50%', background: '#888', zIndex: 10 }} />}
-      <div style={{ background: def.color, padding: '4px 8px', fontSize: 10, fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderRadius: '8px 8px 0 0', flexShrink: 0 }}>
-        <span>{headerLabel ?? def.label}</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>{headerRight}</div>
+      <div style={{ background: def.color, padding: '3px 8px', fontSize: 10, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, borderRadius: '8px 8px 0 0', flexShrink: 0, height: 30 }}>
+        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{headerLabel ?? def.label}</span>
+        {headerRight}
+        <button onClick={handleAction(() => toggleNodeCollapse(nodeId!))} style={toolbarBtn} title={collapsed ? 'Expand' : 'Collapse'}>{collapsed ? '◻' : '▣'}</button>
+        <button onClick={handleAction(() => copySelectedNodes())} style={toolbarBtn} title="Copy">⎘</button>
+        <button onClick={handleAction(() => removeNode(nodeId!))} style={{ ...toolbarBtn, background: 'rgba(220,38,38,0.4)' }} title="Delete">✕</button>
       </div>
       {!collapsed && (
         <div className="node-content" style={contentStyle}>
@@ -221,36 +225,6 @@ function NodeWrapper({ children, def, selected, headerLabel, headerRight, footer
       {!collapsed && footer && (
         <div style={{ borderTop: '1px solid #2a2a2a', padding: '4px 8px', background: '#1a1a1a', flexShrink: 0 }}>
           {footer}
-        </div>
-      )}
-
-      {ctxMenu && (
-        <div
-          style={{
-            position: 'fixed',
-            left: ctxMenu.x,
-            top: ctxMenu.y,
-            background: '#2a2a2a',
-            border: '2px solid #555',
-            borderRadius: 6,
-            minWidth: 130,
-            zIndex: 9999,
-            boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
-            overflow: 'hidden',
-          }}
-        >
-          <div
-            onClick={(e) => { e.stopPropagation(); toggleNodeCollapse(nodeId!); setCtxMenu(null) }}
-            style={{ padding: '7px 14px', fontSize: 11, cursor: 'pointer', color: '#ccc', display: 'flex', alignItems: 'center', gap: 6, borderBottom: '1px solid #333' }}
-          >
-            {collapsed ? '◻' : '▣'} {collapsed ? 'Expand' : 'Collapse'}
-          </div>
-          <div
-            onClick={(e) => { e.stopPropagation(); copySelectedNodes(); setCtxMenu(null) }}
-            style={{ padding: '7px 14px', fontSize: 11, cursor: 'pointer', color: '#ccc', display: 'flex', alignItems: 'center', gap: 6, borderBottom: 'none' }}
-          >
-            ⎘ Copy
-          </div>
         </div>
       )}
     </div>
