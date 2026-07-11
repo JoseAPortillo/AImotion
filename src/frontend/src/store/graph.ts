@@ -347,6 +347,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
       const expW = data.expandedWidth ?? group.width ?? collapsedSize.width
       const expH = data.expandedHeight ?? group.height ?? collapsedSize.height
       const dx = expW - collapsedSize.width
+      const dy = expH - collapsedSize.height
 
       const updatedNodes = state.nodes.map((node) => {
         if (node.id === groupId) {
@@ -363,7 +364,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
             }
             return {
               ...node,
-              position: { x: node.position.x + dx, y: node.position.y },
+              position: { x: node.position.x + dx / 2, y: node.position.y + dy / 2 },
               width: collapsedSize.width,
               height: collapsedSize.height,
               data: {
@@ -375,10 +376,11 @@ export const useGraphStore = create<GraphState>((set, get) => ({
               } as GroupNodeData,
             }
           }
-          const newGroupX = node.position.x - dx
+          const newGroupX = node.position.x - dx / 2
+          const newGroupY = node.position.y - dy / 2
           return {
             ...node,
-            position: { x: newGroupX, y: node.position.y },
+            position: { x: newGroupX, y: newGroupY },
             width: expW,
             height: expH,
             data: {
@@ -395,14 +397,15 @@ export const useGraphStore = create<GraphState>((set, get) => ({
             return { ...node, hidden: true, style: { ...node.style, display: 'none' } }
           }
           const saved = data.savedChildPositions?.[node.id]
-          const groupX = group.position.x - dx
+          const groupX = group.position.x - dx / 2
+          const groupY = group.position.y - dy / 2
           const { style, ...rest } = node
           const { display: _, ...cleanStyle } = style || {}
           return {
             ...rest,
             hidden: false,
             position: saved
-              ? { x: groupX + saved.relX, y: group.position.y + saved.relY }
+              ? { x: groupX + saved.relX, y: groupY + saved.relY }
               : node.position,
             style: Object.keys(cleanStyle).length ? cleanStyle : undefined,
           }
