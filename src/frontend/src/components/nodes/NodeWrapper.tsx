@@ -188,19 +188,18 @@ function NodeWrapper({ children, def, selected, headerLabel, headerRight, footer
   const collapsed = !!nd?.collapsed
 
   const w = (propStyle?.width as number) || node?.width || 260
-  const h = collapsed ? COLLAPSED_H : ((propStyle?.height as number) || node?.height || 320)
 
   const containerStyle: React.CSSProperties = {
     ...rootStyle,
     width: w,
-    height: h,
+    height: collapsed ? COLLAPSED_H : ((propStyle?.height as number) || node?.height || 320),
   }
 
   return (
     <div style={containerStyle}>
       <style>{scrollbarStyles}</style>
       {selected && !collapsed && <NodeResizer handleStyle={{ width: 8, height: 8, borderRadius: '50%', background: '#888', zIndex: 10 }} />}
-      <div style={{ background: def.color, padding: '4px 8px', fontSize: 10, fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderRadius: '8px 8px 0 0', overflow: 'hidden', flexShrink: 0, position: 'relative' }}>
+      <div style={{ background: def.color, padding: '4px 8px', fontSize: 10, fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderRadius: '8px 8px 0 0', flexShrink: 0, position: 'relative' }}>
         <span>{headerLabel ?? def.label}</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           {headerRight}

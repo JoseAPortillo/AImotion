@@ -506,22 +506,22 @@ export const useGraphStore = create<GraphState>((set, get) => ({
       const node = s.nodes.find((n) => n.id === nodeId)
       if (!node) return s
       const nd = node.data as Record<string, unknown>
-      const collapsed = !!nd.collapsed
-      if (!collapsed) {
+      const wasCollapsed = !!nd.collapsed
+      if (!wasCollapsed) {
         return {
           nodes: s.nodes.map((n) =>
             n.id === nodeId
-              ? { ...n, data: { ...n.data, collapsed: true, _originalHeight: n.height } as NodeData, height: 36 }
+              ? { ...n, data: { ...n.data, collapsed: true, _origH: n.height } as NodeData, height: 36 }
               : n,
           ),
         }
       }
-      const origH = (nd._originalHeight as number) || node.height || 120
+      const origH = (nd._origH as number) || node.height || 120
       return {
         nodes: s.nodes.map((n) => {
           if (n.id !== nodeId) return n
-          const { collapsed: _, _originalHeight: __, ...cleanData } = n.data as Record<string, unknown>
-          return { ...n, data: cleanData as NodeData, height: origH }
+          const { collapsed: _, _origH: __, ...clean } = n.data as Record<string, unknown>
+          return { ...n, data: clean as NodeData, height: origH }
         }),
       }
     })
