@@ -53,13 +53,22 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
 
   function getPreviewParams(): Record<string, unknown> {
     const genEdges = edges.filter((e) => e.target === nodeId)
+    const hasImage = genEdges.some((e) => e.targetHandle === 'image_in')
     const hasVideo = genEdges.some((e) => e.targetHandle === 'video_in')
     const isVideo = hasVideo || (data.num_frames ?? 0) > 1
 
-    const maxDim = 384
-    const scale = Math.min(1, maxDim / Math.max(data.width ?? 720, data.height ?? 480))
-    const pw = Math.max(64, Math.round(((data.width ?? 720) * scale) / 8) * 8)
-    const ph = Math.max(64, Math.round(((data.height ?? 480) * scale) / 8) * 8)
+    const isI2V = isVideo && hasImage
+
+    let pw: number, ph: number
+    if (isI2V) {
+      pw = (data.width ?? 720)
+      ph = (data.height ?? 480)
+    } else {
+      const maxDim = 384
+      const scale = Math.min(1, maxDim / Math.max(data.width ?? 720, data.height ?? 480))
+      pw = Math.max(64, Math.round(((data.width ?? 720) * scale) / 8) * 8)
+      ph = Math.max(64, Math.round(((data.height ?? 480) * scale) / 8) * 8)
+    }
 
     const previewFrames = isVideo ? (() => {
       const capped = Math.min(data.num_frames ?? 49, 12)
@@ -106,6 +115,12 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
     const promptData = promptEdgePos ? getNode(promptEdgePos)?.data as PromptData | undefined : undefined
     const promptText = promptData?.positive || ''
     if (!promptText) return
+
+    const isI2V = /i2v/i.test(data.model ?? '')
+    if (isI2V && !imageEdge) {
+      console.warn('[auto-preview] Model', data.model, 'requires image input but no image_in edge — skipping')
+      return
+    }
 
     const getFileFromNodeData = async (nodeData: any): Promise<File | undefined> => {
       if (!nodeData) return undefined
@@ -167,10 +182,16 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
     }
     abortRef.current = false
 
+    if (!imageFile && isI2V) {
+      console.warn('[auto-preview] I2V model but image file not resolved — skipping')
+      setPreviewRunning(false)
+      return
+    }
+
     setPreviewRunning(true)
     try {
       const previewParams = getPreviewParams()
-      console.log('[auto-preview] sending:', { model: previewParams.model, width: previewParams.width, height: previewParams.height, steps: previewParams.steps })
+      console.log('[auto-preview] sending:', { model: previewParams.model, width: previewParams.width, height: previewParams.height, steps: previewParams.steps, hasImage: !!imageFile, hasVideo: !!videoFile })
       const task = await startGeneration(
         promptText,
         promptEdgeNeg ? (getNode(promptEdgeNeg)?.data as PromptData | undefined)?.negative || '' : '',
