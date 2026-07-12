@@ -15,13 +15,13 @@ class InstalledModel:
     key: str
     hf_name: str
     alias: str
-    pipeline_class: str
     dtype: str
     schedulers: dict[str, str]
     default_scheduler: str
     needs_token: bool
     defaults: dict
     installed_at: str
+    pipeline_class: str = ""
     repo_files: list[str] | None = None
     checkpoint_file: str = ""
 
@@ -250,8 +250,12 @@ def discover_pipeline(hf_name: str) -> dict:
             tag_is_v2v = tag_lower == "video-to-video"
             tag_is_t2v = tag_lower == "text-to-video"
             if tag_is_i2v and not is_i2v_pipeline:
-                logger.info(f"Overriding pipeline {pipeline_class} -> image-to-video based on pipeline_tag")
-                pipeline_class = "CogVideoXImageToVideoPipeline" if "cogvideox" in pipeline_class.lower() else pipeline_class
+                has_image_encoder = bool(model_index and "image_encoder" in model_index)
+                if has_image_encoder:
+                    logger.info(f"Overriding pipeline {pipeline_class} -> image-to-video based on pipeline_tag (has image_encoder)")
+                    pipeline_class = "CogVideoXImageToVideoPipeline" if "cogvideox" in pipeline_class.lower() else pipeline_class
+                else:
+                    logger.info(f"Model {hf_name} tagged image-to-video but has no image_encoder — keeping detected pipeline {pipeline_class}")
             elif tag_is_v2v and not is_v2v_pipeline:
                 logger.info(f"Overriding pipeline {pipeline_class} -> video-to-video based on pipeline_tag")
                 pipeline_class = "CogVideoXVideoToVideoPipeline" if "cogvideox" in pipeline_class.lower() else pipeline_class

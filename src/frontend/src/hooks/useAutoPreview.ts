@@ -58,24 +58,33 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
 
     const maxDim = 384
     const scale = Math.min(1, maxDim / Math.max(data.width ?? 720, data.height ?? 480))
-    const pw = Math.round((data.width ?? 720) * scale)
-    const ph = Math.round((data.height ?? 480) * scale)
+    const pw = Math.max(64, Math.round(((data.width ?? 720) * scale) / 8) * 8)
+    const ph = Math.max(64, Math.round(((data.height ?? 480) * scale) / 8) * 8)
+
+    const previewFrames = isVideo ? (() => {
+      const capped = Math.min(data.num_frames ?? 49, 12)
+      if (data.model?.includes('cogvideox')) {
+        const n = Math.floor((capped - 1) / 4)
+        return Math.max(5, 4 * n + 1)
+      }
+      return Math.max(2, capped)
+    })() : undefined
 
     return {
       width: pw,
       height: ph,
-      steps: isVideo ? 12 : 6,
+      steps: isVideo ? 12 : 8,
       cfg: data.cfg ?? 6,
-      strength: data.strength ?? 0.8,
+      strength: isVideo ? Math.min(data.strength ?? 0.8, 0.6) : (data.strength ?? 0.8),
       seed: data.seed ?? 0,
       scheduler: data.scheduler || '',
       model: data.model,
       execution_mode: data.execution_mode || 'local',
       vae_tiling: data.vae_tiling ?? true,
       vae_tile_overlap: data.vae_tile_overlap ?? 0.0,
-      num_frames: isVideo ? Math.min(data.num_frames ?? 49, 8) : undefined,
+      num_frames: previewFrames,
       max_sequence_length: data.max_sequence_length,
-      noise_aug_strength: data.noise_aug_strength ?? (data.strength ?? 0.8),
+      noise_aug_strength: data.noise_aug_strength,
       fps: data.fps,
       motion_bucket_id: data.motion_bucket_id,
       min_guidance_scale: data.min_guidance_scale,

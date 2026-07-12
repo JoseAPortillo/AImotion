@@ -116,7 +116,6 @@
     "key": "nimvideo_cogvideox_2b_img2vid",
     "hf_name": "NimVideo/cogvideox-2b-img2vid",
     "alias": "cogvideox-2b-img2vid",
-    "pipeline_class": "CogVideoXImageToVideoPipeline",
     "dtype": "bfloat16",
     "schedulers": {
       "cogvideox_ddim": "CogVideoXDDIMScheduler",

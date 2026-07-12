@@ -220,7 +220,7 @@ export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorB
           vae_tile_overlap: data.vae_tile_overlap ?? 0.0,
           num_frames: data.num_frames,
           max_sequence_length: data.max_sequence_length,
-          noise_aug_strength: data.noise_aug_strength ?? (data.strength ?? 0.8),
+          noise_aug_strength: data.noise_aug_strength,
           fps: data.fps,
           motion_bucket_id: data.motion_bucket_id,
           min_guidance_scale: data.min_guidance_scale,
