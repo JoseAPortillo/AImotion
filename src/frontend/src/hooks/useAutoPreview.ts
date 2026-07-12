@@ -32,6 +32,9 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
     }
   }, [autoPreviews, nodeId])
   const [previewRunning, setPreviewRunning] = useState(false)
+  const [previewProgress, setPreviewProgress] = useState(0)
+  const [previewCurrentStep, setPreviewCurrentStep] = useState(0)
+  const [previewTotalSteps, setPreviewTotalSteps] = useState(0)
 
   const taskIdRef = useRef('')
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -189,6 +192,9 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
     }
 
     setPreviewRunning(true)
+    setPreviewProgress(0)
+    setPreviewCurrentStep(0)
+    setPreviewTotalSteps(0)
     try {
       const previewParams = getPreviewParams()
       console.log('[auto-preview] sending:', { model: previewParams.model, width: previewParams.width, height: previewParams.height, steps: previewParams.steps, hasImage: !!imageFile, hasVideo: !!videoFile })
@@ -208,6 +214,9 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
         if (abortRef.current) break
         status = await pollTask(task.task_id)
         if (status.status === 'cancelled') break
+        if (status.current_step != null) setPreviewCurrentStep(status.current_step)
+        if (status.total_steps != null) setPreviewTotalSteps(status.total_steps)
+        if (status.progress != null) setPreviewProgress(status.progress)
       } while (status.status === 'pending' || status.status === 'running')
 
       if (!abortRef.current && status && status.status === 'completed' && status.result_url) {
@@ -229,6 +238,9 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
       cancelTask(taskIdRef.current).catch(() => {})
     }
     setPreviewRunning(false)
+    setPreviewProgress(0)
+    setPreviewCurrentStep(0)
+    setPreviewTotalSteps(0)
     setPreviewUrl(null)
     setPreviewType(null)
     if (timerRef.current) {
@@ -261,6 +273,9 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
     previewUrl,
     previewType,
     previewRunning,
+    previewProgress,
+    previewCurrentStep,
+    previewTotalSteps,
     cancelAutoPreview: cancel,
   }
 }
