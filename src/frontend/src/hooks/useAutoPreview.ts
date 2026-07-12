@@ -35,8 +35,10 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
   const [previewProgress, setPreviewProgress] = useState(0)
   const [previewCurrentStep, setPreviewCurrentStep] = useState(0)
   const [previewTotalSteps, setPreviewTotalSteps] = useState(0)
+  const [previewEtaSec, setPreviewEtaSec] = useState<number | null>(null)
 
   const taskIdRef = useRef('')
+  const previewStartRef = useRef(0)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const abortRef = useRef(false)
   const lastKeyRef = useRef('')
@@ -195,6 +197,8 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
     setPreviewProgress(0)
     setPreviewCurrentStep(0)
     setPreviewTotalSteps(0)
+    setPreviewEtaSec(null)
+    previewStartRef.current = Date.now()
     try {
       const previewParams = getPreviewParams()
       console.log('[auto-preview] sending:', { model: previewParams.model, width: previewParams.width, height: previewParams.height, steps: previewParams.steps, hasImage: !!imageFile, hasVideo: !!videoFile })
@@ -217,6 +221,10 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
         if (status.current_step != null) setPreviewCurrentStep(status.current_step)
         if (status.total_steps != null) setPreviewTotalSteps(status.total_steps)
         if (status.progress != null) setPreviewProgress(status.progress)
+        if (status.progress != null && status.progress > 0) {
+          const elapsed = (Date.now() - previewStartRef.current) / 1000
+          setPreviewEtaSec((elapsed / status.progress) * (1 - status.progress))
+        }
       } while (status.status === 'pending' || status.status === 'running')
 
       if (!abortRef.current && status && status.status === 'completed' && status.result_url) {
@@ -241,6 +249,7 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
     setPreviewProgress(0)
     setPreviewCurrentStep(0)
     setPreviewTotalSteps(0)
+    setPreviewEtaSec(null)
     setPreviewUrl(null)
     setPreviewType(null)
     if (timerRef.current) {
@@ -276,6 +285,7 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
     previewProgress,
     previewCurrentStep,
     previewTotalSteps,
+    previewEtaSec,
     cancelAutoPreview: cancel,
   }
 }

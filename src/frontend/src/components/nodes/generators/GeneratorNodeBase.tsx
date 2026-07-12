@@ -381,7 +381,13 @@ function GeneratorNodeBase(props: NodeBaseProps) {
                         ? `Step ${autoPreview.previewCurrentStep}/${autoPreview.previewTotalSteps}`
                         : 'Generating...'}
                     </span>
-                    <button
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      {autoPreview.previewEtaSec != null && (
+                        <span style={{ fontSize: 8, color: '#2563eb', fontVariantNumeric: 'tabular-nums' }}>
+                          ETA {formatEta(autoPreview.previewEtaSec)}
+                        </span>
+                      )}
+                      <button
                       onClick={autoPreview.cancelAutoPreview}
                       style={{
                         padding: '2px 8px',
@@ -398,6 +404,7 @@ function GeneratorNodeBase(props: NodeBaseProps) {
                     </button>
                   </div>
                 </div>
+              </div>
               )}
               {autoPreview.previewUrl && (
                 <>

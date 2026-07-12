@@ -352,7 +352,13 @@ function RunwayImageToVideoNode(props: NodeProps) {
                       ? `Step ${autoPreview.previewCurrentStep}/${autoPreview.previewTotalSteps}`
                       : 'Generating...'}
                   </span>
-                  <button
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    {autoPreview.previewEtaSec != null && (
+                      <span style={{ fontSize: 8, color: '#2563eb', fontVariantNumeric: 'tabular-nums' }}>
+                        ETA {formatEta(autoPreview.previewEtaSec)}
+                      </span>
+                    )}
+                    <button
                     onClick={autoPreview.cancelAutoPreview}
                     style={{
                       padding: '2px 8px',
@@ -367,10 +373,11 @@ function RunwayImageToVideoNode(props: NodeProps) {
                   >
                     Stop
                   </button>
+                  </div>
                 </div>
               </div>
-            )}
-            {autoPreview.previewUrl && (
+              )}
+              {autoPreview.previewUrl && (
               autoPreview.previewType === 'video' ? (
                 <video src={autoPreview.previewUrl} controls autoPlay loop
                   style={{ width: '100%', maxWidth: 200, maxHeight: 160, borderRadius: 4, display: 'block', margin: '0 auto', opacity: autoPreview.previewRunning ? 0.5 : 1 }}
