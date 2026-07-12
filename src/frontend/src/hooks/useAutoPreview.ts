@@ -69,7 +69,7 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
       pw = (data.width ?? 720)
       ph = (data.height ?? 480)
     } else {
-      const maxDim = 384
+      const maxDim = 640
       const scale = Math.min(1, maxDim / Math.max(data.width ?? 720, data.height ?? 480))
       pw = Math.max(64, Math.round(((data.width ?? 720) * scale) / 8) * 8)
       ph = Math.max(64, Math.round(((data.height ?? 480) * scale) / 8) * 8)
@@ -86,7 +86,7 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
     return {
       width: pw,
       height: ph,
-      steps: isVideo ? 8 : 6,
+      steps: 12,
       cfg: data.cfg ?? 6,
       strength: isVideo ? Math.min(data.strength ?? 0.8, 0.6) : (data.strength ?? 0.8),
       seed: data.seed ?? 0,
