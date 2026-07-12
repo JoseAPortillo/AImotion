@@ -76,10 +76,9 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
     }
 
     const previewFrames = isVideo ? (() => {
-      const capped = Math.min(data.num_frames ?? 49, 12)
+      const capped = Math.min(data.num_frames ?? 49, 6)
       if (data.model?.includes('cogvideox')) {
-        const n = Math.floor((capped - 1) / 4)
-        return Math.max(5, 4 * n + 1)
+        return 5
       }
       return Math.max(2, capped)
     })() : undefined
@@ -87,7 +86,7 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
     return {
       width: pw,
       height: ph,
-      steps: isVideo ? 12 : 8,
+      steps: isVideo ? 8 : 6,
       cfg: data.cfg ?? 6,
       strength: isVideo ? Math.min(data.strength ?? 0.8, 0.6) : (data.strength ?? 0.8),
       seed: data.seed ?? 0,
