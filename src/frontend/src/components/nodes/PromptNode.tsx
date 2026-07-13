@@ -54,12 +54,14 @@ function PromptNode(props: NodeProps) {
         </Handle>
       </>
     }>
-      <div style={{ padding: '4px 6px', fontSize: 10, color: '#ccc' }}>
+      <div style={{ padding: '4px 6px', fontSize: 10, color: '#ccc' }}
+        onPointerDown={(e) => e.stopPropagation()}
+        onPointerMove={(e) => e.stopPropagation()}
+      >
         <textarea
           placeholder="Positive prompt..."
           value={data.positive || ''}
           onChange={(e) => updateNodeData(props.id, { positive: e.target.value } as Partial<PromptData>)}
-          onPointerDown={(e) => e.stopPropagation()}
           style={{
             width: '100%',
             background: '#0f0f0f',
@@ -84,27 +86,31 @@ function PromptNode(props: NodeProps) {
             {inlineNegOpen ? '▲ Hide negative' : '▼ Negative prompt'}
           </button>
           {inlineNegOpen && (
-            <textarea
-              placeholder="Negative prompt (optional)..."
-              value={data.negative || ''}
-              onChange={(e) => updateNodeData(props.id, { negative: e.target.value } as Partial<PromptData>)}
+            <div
               onPointerDown={(e) => e.stopPropagation()}
-              style={{
-                width: '100%',
-                background: '#0f0f0f',
-                border: '1px solid #333',
-                borderRadius: 4,
-                color: '#e0e0e0',
-                padding: '4px 6px',
-                fontSize: 10,
-                fontFamily: 'inherit',
-                resize: 'vertical',
-                minHeight: 32,
-                marginTop: 4,
-                outline: 'none',
-                boxSizing: 'border-box',
-              }}
-            />
+              onPointerMove={(e) => e.stopPropagation()}
+            >
+              <textarea
+                placeholder="Negative prompt (optional)..."
+                value={data.negative || ''}
+                onChange={(e) => updateNodeData(props.id, { negative: e.target.value } as Partial<PromptData>)}
+                style={{
+                  width: '100%',
+                  background: '#0f0f0f',
+                  border: '1px solid #333',
+                  borderRadius: 4,
+                  color: '#e0e0e0',
+                  padding: '4px 6px',
+                  fontSize: 10,
+                  fontFamily: 'inherit',
+                  resize: 'vertical',
+                  minHeight: 32,
+                  marginTop: 4,
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
           )}
         </div>
       </div>
