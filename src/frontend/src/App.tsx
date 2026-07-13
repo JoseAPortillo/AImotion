@@ -613,6 +613,7 @@ function AppInner() {
           panOnDrag={false}
           panActivationKeyCode={'Shift'}
           selectionOnDrag
+          selectionKeyCode={null}
           onContextMenu={(e) => e.preventDefault()}
           style={{ background: 'transparent' }}
         >
