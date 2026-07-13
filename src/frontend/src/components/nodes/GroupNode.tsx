@@ -142,10 +142,11 @@ function GroupNode(props: NodeProps) {
   }, [props.id])
 
   const handleResize = useCallback(
-    (_event: unknown, params: { width: number; height: number }) => {
+    (event: unknown, params: { width: number; height: number }) => {
       const orig = origSizeRef.current
       if (orig) {
-        resizeGroupWithChildren(props.id, params.width, params.height, orig.w, orig.h, orig.x, orig.y, orig.children)
+        const shiftHeld = !!(event as MouseEvent | undefined)?.shiftKey
+        resizeGroupWithChildren(props.id, params.width, params.height, orig.w, orig.h, orig.x, orig.y, orig.children, !shiftHeld)
       }
     },
     [props.id, resizeGroupWithChildren],
