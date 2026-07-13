@@ -22,6 +22,7 @@ class InstalledModel:
     defaults: dict
     installed_at: str
     pipeline_class: str = ""
+    hf_pipeline_tag: str = ""
     repo_files: list[str] | None = None
     checkpoint_file: str = ""
 
@@ -328,6 +329,7 @@ def discover_pipeline(hf_name: str) -> dict:
             "default_scheduler": default_scheduler,
             "dtype": dtype,
             "defaults": known.get("defaults", {"steps": 50, "cfg": 7.0}),
+            "pipeline_tag": pipeline_tag,
         }
 
     except Exception as e:

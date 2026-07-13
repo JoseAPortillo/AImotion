@@ -225,15 +225,23 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
         task.status = "discovering"
         family = _find_matching_family(hf_name)
 
+        hf_pipeline_tag = ""
+
         if family and family.runner != "diffusers":
             pipeline_class_name = None
             schedulers: dict = {}
             default_scheduler = ""
             defaults: dict = family.defaults or {"steps": 50, "cfg": 7.0}
             discovered: dict = {}
+            try:
+                api = HfApi()
+                info = api.model_info(hf_name)
+                hf_pipeline_tag = getattr(info, "pipeline_tag", "") or ""
+            except Exception:
+                pass
             logger.info(
-                f"Non-diffusers family '{family.family}' for {hf_name}, "
-                f"skipping pipeline detection"
+                f"Non-diffusers family '{family.family}' for {hf_name} "
+                f"(pipeline_tag={hf_pipeline_tag}), skipping pipeline detection"
             )
         else:
             discovered = discover_pipeline(hf_name)
@@ -265,6 +273,7 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
                 schedulers = discovered["schedulers"]
                 default_scheduler = discovered["default_scheduler"]
                 defaults = discovered.get("defaults", {"steps": 50, "cfg": 7.0})
+                hf_pipeline_tag = discovered.get("pipeline_tag", "")
 
         tok = settings.hf_token or None
 
@@ -301,9 +310,14 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
         weight_files = [f for f in files if f.endswith(weight_exts)]
 
         has_model_index = "model_index.json" in files
-        checkpoint_file = weight_files[0] if weight_files and not has_model_index else ""
+        if has_model_index:
+            download_weights = weight_files
+            checkpoint_file = ""
+        else:
+            checkpoint_file = weight_files[0] if weight_files else ""
+            download_weights = [checkpoint_file] if checkpoint_file else []
 
-        if not weight_files:
+        if not download_weights:
             task.status = "error"
             task.error_msg = f"Model '{hf_name}' has no weight files"
             logger.info(f"Install task {task_id} stopped: no weight files found")
@@ -330,7 +344,7 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
                 pass
             return 0
 
-        total_weight_size = sum(_get_file_size(f) for f in weight_files)
+        total_weight_size = sum(_get_file_size(f) for f in download_weights)
         total_config_size = sum(_get_file_size(f) for f in config_files)
         total_size = total_weight_size + total_config_size
         if total_size > 0:
@@ -367,7 +381,7 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
                 return False
 
         # Download config files first (small files, needed for from_pretrained)
-        task.total_files = len(config_files) + len(weight_files)
+        task.total_files = len(config_files) + len(download_weights)
         task.current_file = "config files"
         for i, fname in enumerate(config_files):
             if task.cancel_event.is_set():
@@ -381,7 +395,7 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
         # Download weight files with progress tracking
         downloaded_weight_size = 0
         task.current_file = ""
-        for i, fname in enumerate(weight_files):
+        for i, fname in enumerate(download_weights):
             if task.cancel_event.is_set():
                 task.status = "cancelled"
                 return
@@ -394,7 +408,7 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
 
             downloaded_weight_size += _get_file_size(fname)
             task.progress_pct = ((total_config_size + downloaded_weight_size) / total_size * 100) if total_size else \
-                ((len(config_files) + i + 1) / (len(config_files) + len(weight_files)) * 100)
+                ((len(config_files) + i + 1) / (len(config_files) + len(download_weights)) * 100)
             task.downloaded_files = len(config_files) + i + 1
 
         if task.cancel_event.is_set():
@@ -419,6 +433,7 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
             needs_token=False,
             defaults=defaults,
             installed_at=datetime.now().isoformat(),
+            hf_pipeline_tag=hf_pipeline_tag,
             repo_files=files,
             checkpoint_file=checkpoint_file,
         )

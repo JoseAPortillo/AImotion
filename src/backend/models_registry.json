@@ -17,23 +17,6 @@
     "installed_at": "2026-06-29T11:54:53.719041"
   },
   {
-    "key": "frankjoshua_toonyou_beta6",
-    "hf_name": "frankjoshua/toonyou_beta6",
-    "alias": "toonyou_beta6",
-    "pipeline_class": "StableDiffusionPipeline",
-    "dtype": "float16",
-    "schedulers": {
-      "scheduler": "PNDMScheduler"
-    },
-    "default_scheduler": "scheduler",
-    "needs_token": false,
-    "defaults": {
-      "steps": 50,
-      "cfg": 7.0
-    },
-    "installed_at": "2026-06-30T10:32:42.279824"
-  },
-  {
     "key": "quantstack_wan2.2_ti2v_5b_gguf",
     "hf_name": "QuantStack/Wan2.2-TI2V-5B-GGUF",
     "alias": "Wan2.2-TI2V-5B-GGUF",
@@ -96,23 +79,6 @@
     "installed_at": "2026-07-02T19:40:17.823268"
   },
   {
-    "key": "zai_org_cogvideox_5b_i2v",
-    "hf_name": "zai-org/CogVideoX-5b-I2V",
-    "alias": "CogVideoX-5b-I2V",
-    "pipeline_class": "CogVideoXImageToVideoPipeline",
-    "dtype": "bfloat16",
-    "schedulers": {
-      "scheduler": "CogVideoXDDIMScheduler"
-    },
-    "default_scheduler": "scheduler",
-    "needs_token": false,
-    "defaults": {
-      "steps": 50,
-      "cfg": 7.0
-    },
-    "installed_at": "2026-07-03T12:19:42.228030"
-  },
-  {
     "key": "nimvideo_cogvideox_2b_img2vid",
     "hf_name": "NimVideo/cogvideox-2b-img2vid",
     "alias": "cogvideox-2b-img2vid",
@@ -155,5 +121,50 @@
       "vae/diffusion_pytorch_model.safetensors"
     ],
     "checkpoint_file": ""
+  },
+  {
+    "key": "unsloth_qwen_image_edit_2511_gguf",
+    "hf_name": "unsloth/Qwen-Image-Edit-2511-GGUF",
+    "alias": "Qwen-Image-Edit-2511-GGUF",
+    "dtype": "float16",
+    "schedulers": {},
+    "default_scheduler": "",
+    "needs_token": false,
+    "defaults": {
+      "temperature": 0.7,
+      "max_tokens": 2048,
+      "top_p": 0.9,
+      "top_k": 40,
+      "seed": 0
+    },
+    "installed_at": "2026-07-13T10:32:29.970173",
+    "pipeline_class": "",
+    "hf_pipeline_tag": "image-to-image",
+    "repo_files": [
+      ".gitattributes",
+      "README.md",
+      "assets/sloth_cart.png",
+      "assets/sloth_cur.png",
+      "assets/sloth_excited.png",
+      "assets/sloth_sketch.png",
+      "assets/sloth_starry.png",
+      "qwen-image-edit-2511-BF16.gguf",
+      "qwen-image-edit-2511-F16.gguf",
+      "qwen-image-edit-2511-Q2_K.gguf",
+      "qwen-image-edit-2511-Q3_K_L.gguf",
+      "qwen-image-edit-2511-Q3_K_M.gguf",
+      "qwen-image-edit-2511-Q3_K_S.gguf",
+      "qwen-image-edit-2511-Q4_0.gguf",
+      "qwen-image-edit-2511-Q4_1.gguf",
+      "qwen-image-edit-2511-Q4_K_M.gguf",
+      "qwen-image-edit-2511-Q4_K_S.gguf",
+      "qwen-image-edit-2511-Q5_0.gguf",
+      "qwen-image-edit-2511-Q5_1.gguf",
+      "qwen-image-edit-2511-Q5_K_M.gguf",
+      "qwen-image-edit-2511-Q5_K_S.gguf",
+      "qwen-image-edit-2511-Q6_K.gguf",
+      "qwen-image-edit-2511-Q8_0.gguf"
+    ],
+    "checkpoint_file": "qwen-image-edit-2511-BF16.gguf"
   }
 ]

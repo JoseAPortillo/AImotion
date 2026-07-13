@@ -217,10 +217,24 @@ class ModelCatalog:
         family = self._find_family_for_installed(inst)
         inferred = _infer_inputs(inst.pipeline_class)
         inputs = inferred | (family.inputs if family else {})
+
+        if not inst.pipeline_class and inst.hf_pipeline_tag:
+            tag = inst.hf_pipeline_tag.lower()
+            if tag == "image-to-image":
+                inputs["image"] = {"required": False, "type": "image"}
+            elif tag == "image-to-video":
+                inputs["image"] = {"required": False, "type": "image"}
+            elif tag == "video-to-video":
+                inputs["video"] = {"required": False, "type": "video"}
+
         defaults = inst.defaults or (family.defaults if family else {"steps": 50, "cfg": 7.0})
         schedulers = inst.schedulers or (family.schedulers if family else {})
         default_scheduler = inst.default_scheduler or (family.default_scheduler if family else "")
         is_video = _is_video_pipeline(inst.pipeline_class) or (family and family.is_video)
+        if not inst.pipeline_class and inst.hf_pipeline_tag:
+            tag = inst.hf_pipeline_tag.lower()
+            if tag in ("image-to-video", "video-to-video"):
+                is_video = True
         runner = family.runner if family else "diffusers"
         dummy_family = ModelFamily({
             "family": inst.key or inst.hf_name,
