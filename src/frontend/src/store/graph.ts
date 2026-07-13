@@ -76,7 +76,7 @@ interface GraphState {
   removeNodesFromGroup: (groupId: string, childIds: string[]) => void
   toggleGroupCollapse: (groupId: string) => void
   createGroupFromSelection: (selectedIds: string[]) => string | null
-  resizeGroupWithChildren: (groupId: string, newWidth: number, newHeight: number, origWidth?: number, origHeight?: number) => void
+  resizeGroupWithChildren: (groupId: string, newWidth: number, newHeight: number, origWidth?: number, origHeight?: number, origChildren?: Map<string, { x: number; y: number; w: number | null; h: number | null }>) => void
   _snapshot: () => void
   undo: () => void
   redo: () => void
@@ -462,7 +462,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
     return groupId
   },
 
-  resizeGroupWithChildren: (groupId, newWidth, newHeight, origWidth, origHeight) => {
+  resizeGroupWithChildren: (groupId, newWidth, newHeight, origWidth, origHeight, origChildren) => {
     set((state) => {
       const group = state.nodes.find((n) => n.id === groupId)
       if (!group || group.type !== 'groupNode') return state
@@ -479,16 +479,21 @@ export const useGraphStore = create<GraphState>((set, get) => ({
           return { ...node, width: newWidth, height: newHeight }
         }
         if (childIds.includes(node.id)) {
-          const relX = node.position.x - group.position.x
-          const relY = node.position.y - group.position.y
+          const orig = origChildren?.get(node.id)
+          const origX = orig?.x ?? node.position.x
+          const origY = orig?.y ?? node.position.y
+          const origW = orig?.w ?? node.width
+          const origH = orig?.h ?? node.height
+          const relX = origX - group.position.x
+          const relY = origY - group.position.y
           return {
             ...node,
             position: {
               x: group.position.x + relX * sx,
               y: group.position.y + relY * sy,
             },
-            width: node.width ? node.width * sx : node.width,
-            height: node.height ? node.height * sy : node.height,
+            width: origW ? origW * sx : origW,
+            height: origH ? origH * sy : origH,
           }
         }
         return node
