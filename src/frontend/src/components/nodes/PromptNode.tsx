@@ -59,6 +59,7 @@ function PromptNode(props: NodeProps) {
           placeholder="Positive prompt..."
           value={data.positive || ''}
           onChange={(e) => updateNodeData(props.id, { positive: e.target.value } as Partial<PromptData>)}
+          onPointerDown={(e) => e.stopPropagation()}
           style={{
             width: '100%',
             background: '#0f0f0f',
@@ -87,6 +88,7 @@ function PromptNode(props: NodeProps) {
               placeholder="Negative prompt (optional)..."
               value={data.negative || ''}
               onChange={(e) => updateNodeData(props.id, { negative: e.target.value } as Partial<PromptData>)}
+              onPointerDown={(e) => e.stopPropagation()}
               style={{
                 width: '100%',
                 background: '#0f0f0f',
