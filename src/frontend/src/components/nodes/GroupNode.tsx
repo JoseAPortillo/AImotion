@@ -23,7 +23,7 @@ function GroupNode(props: NodeProps) {
   const [editing, setEditing] = useState(false)
   const [editValue, setEditValue] = useState(label ?? def.label)
   const inputRef = useRef<HTMLInputElement>(null)
-  const origSizeRef = useRef<{ w: number; h: number; children: Map<string, { x: number; y: number; w: number | null; h: number | null }> } | null>(null)
+  const origSizeRef = useRef<{ w: number; h: number; x: number; y: number; children: Map<string, { x: number; y: number; w: number | null; h: number | null }> } | null>(null)
 
   useEffect(() => {
     if (editing && inputRef.current) {
@@ -135,6 +135,8 @@ function GroupNode(props: NodeProps) {
     origSizeRef.current = {
       w: group.width ?? 260,
       h: group.height ?? 320,
+      x: group.position.x,
+      y: group.position.y,
       children,
     }
   }, [props.id])
@@ -143,7 +145,7 @@ function GroupNode(props: NodeProps) {
     (_event: unknown, params: { width: number; height: number }) => {
       const orig = origSizeRef.current
       if (orig) {
-        resizeGroupWithChildren(props.id, params.width, params.height, orig.w, orig.h, orig.children)
+        resizeGroupWithChildren(props.id, params.width, params.height, orig.w, orig.h, orig.x, orig.y, orig.children)
       }
     },
     [props.id, resizeGroupWithChildren],

@@ -76,7 +76,7 @@ interface GraphState {
   removeNodesFromGroup: (groupId: string, childIds: string[]) => void
   toggleGroupCollapse: (groupId: string) => void
   createGroupFromSelection: (selectedIds: string[]) => string | null
-  resizeGroupWithChildren: (groupId: string, newWidth: number, newHeight: number, origWidth?: number, origHeight?: number, origChildren?: Map<string, { x: number; y: number; w: number | null; h: number | null }>) => void
+  resizeGroupWithChildren: (groupId: string, newWidth: number, newHeight: number, origWidth?: number, origHeight?: number, origX?: number, origY?: number, origChildren?: Map<string, { x: number; y: number; w: number | null; h: number | null }>) => void
   _snapshot: () => void
   undo: () => void
   redo: () => void
@@ -462,7 +462,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
     return groupId
   },
 
-  resizeGroupWithChildren: (groupId, newWidth, newHeight, origWidth, origHeight, origChildren) => {
+  resizeGroupWithChildren: (groupId, newWidth, newHeight, origWidth, origHeight, origX, origY, origChildren) => {
     set((state) => {
       const group = state.nodes.find((n) => n.id === groupId)
       if (!group || group.type !== 'groupNode') return state
@@ -471,6 +471,9 @@ export const useGraphStore = create<GraphState>((set, get) => ({
       const oldH = origHeight ?? group.height ?? newHeight
       const sx = oldW > 0 ? newWidth / oldW : 1
       const sy = oldH > 0 ? newHeight / oldH : 1
+
+      const groupOrigX = origX ?? group.position.x
+      const groupOrigY = origY ?? group.position.y
 
       const childIds: string[] = (group.data as GroupNodeData).childIds ?? []
 
@@ -484,8 +487,8 @@ export const useGraphStore = create<GraphState>((set, get) => ({
           const origY = orig?.y ?? node.position.y
           const origW = orig?.w ?? node.width
           const origH = orig?.h ?? node.height
-          const relX = origX - group.position.x
-          const relY = origY - group.position.y
+          const relX = origX - groupOrigX
+          const relY = origY - groupOrigY
           return {
             ...node,
             position: {
