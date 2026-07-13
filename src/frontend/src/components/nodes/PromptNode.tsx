@@ -54,10 +54,7 @@ function PromptNode(props: NodeProps) {
         </Handle>
       </>
     }>
-      <div style={{ padding: '4px 6px', fontSize: 10, color: '#ccc' }}
-        onPointerDown={(e) => e.stopPropagation()}
-        onPointerMove={(e) => e.stopPropagation()}
-      >
+      <div className="nodrag" style={{ padding: '4px 6px', fontSize: 10, color: '#ccc' }}>
         <textarea
           placeholder="Positive prompt..."
           value={data.positive || ''}
@@ -86,10 +83,7 @@ function PromptNode(props: NodeProps) {
             {inlineNegOpen ? '▲ Hide negative' : '▼ Negative prompt'}
           </button>
           {inlineNegOpen && (
-            <div
-              onPointerDown={(e) => e.stopPropagation()}
-              onPointerMove={(e) => e.stopPropagation()}
-            >
+            <div className="nodrag">
               <textarea
                 placeholder="Negative prompt (optional)..."
                 value={data.negative || ''}
