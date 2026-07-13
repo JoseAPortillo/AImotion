@@ -63,15 +63,13 @@ function VideoInputNode(props: NodeProps) {
     }>
       {objUrl ? (
         <div
-          style={{ flex: 1, display: 'flex', flexDirection: 'column', cursor: 'pointer', overflow: 'hidden' }}
+          style={{ position: 'absolute', inset: 0, cursor: 'pointer', overflow: 'hidden' }}
           onClick={handleClick}
           onDragOver={(e) => e.preventDefault()}
           onDrop={handleDrop}
         >
-          <div style={{ flex: 1, position: 'relative', overflow: 'hidden', padding: 4 }}>
-            <video src={objUrl} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', borderRadius: 4 }} controls />
-          </div>
-          <div style={{ fontSize: 9, color: '#888', textAlign: 'center', flexShrink: 0, padding: '0 4px 2px' }}>{data.fileName} — click to change</div>
+          <video src={objUrl} style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 4 }} controls />
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, fontSize: 9, color: '#888', textAlign: 'center', padding: '0 4px 2px', background: 'rgba(0,0,0,0.6)' }}>{data.fileName} — click to change</div>
         </div>
       ) : (
         <div
