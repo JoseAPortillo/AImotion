@@ -610,8 +610,10 @@ function AppInner() {
           minZoom={0.1}
           maxZoom={8}
           colorMode="dark"
-          panOnDrag
-          selectionOnDrag={false}
+          panOnDrag={false}
+          panActivationKeyCode={'Shift'}
+          selectionOnDrag
+          onContextMenu={(e) => e.preventDefault()}
           style={{ background: 'transparent' }}
         >
           <Background color="#2e2e2e" gap={20} size={0.5} variant={BackgroundVariant.Lines} />
