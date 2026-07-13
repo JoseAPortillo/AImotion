@@ -7,57 +7,19 @@ from typing import Optional, Callable, Awaitable
 
 from app.config import settings
 from app.services.runners.base import BaseRunner, GenerateParams, GenerateResult
-from app.services.model_registry import find_installed
 
 logger = logging.getLogger(__name__)
 
-_VAE_REPO = "Comfy-Org/Qwen-Image_ComfyUI"
-_VAE_FILE = "split_files/vae/qwen_image_vae.safetensors"
-_LLM_REPO = "Comfy-Org/Qwen-Image_ComfyUI"
-_LLM_FILE = "split_files/text_encoders/qwen_2.5_vl_7b.safetensors"
+_QWEN_IMAGE_EDIT_REPO = "Qwen/Qwen-Image-Edit-2511"
 
 
 class GGUFRunner(BaseRunner):
     runner_key = "gguf"
 
     def __init__(self):
-        self._sd: Optional[any] = None
+        self._pipeline = None
         self._model_key: Optional[str] = None
         self._loaded = False
-
-    def _resolve_paths(self, model_key: str) -> dict:
-        inst = find_installed(model_key)
-        if not inst or not inst.checkpoint_file:
-            raise ValueError(
-                f"GGUF model '{model_key}' has no checkpoint file. "
-                "Reinstall the model to download the GGUF weights."
-            )
-
-        from huggingface_hub import hf_hub_download
-
-        diffusion_path = hf_hub_download(
-            repo_id=inst.hf_name,
-            filename=inst.checkpoint_file,
-            cache_dir=settings.model_cache_dir,
-        )
-
-        vae_path = hf_hub_download(
-            repo_id=_VAE_REPO,
-            filename=_VAE_FILE,
-            cache_dir=settings.model_cache_dir,
-        )
-
-        llm_path = hf_hub_download(
-            repo_id=_LLM_REPO,
-            filename=_LLM_FILE,
-            cache_dir=settings.model_cache_dir,
-        )
-
-        return {
-            "diffusion_model_path": diffusion_path,
-            "vae_path": vae_path,
-            "llm_path": llm_path,
-        }
 
     def load(self, model_key: str) -> None:
         if self._loaded and self._model_key == model_key:
@@ -66,27 +28,24 @@ class GGUFRunner(BaseRunner):
         self.unload()
 
         try:
-            from stable_diffusion_cpp import StableDiffusion
+            import torch
+            from diffusers import QwenImageEditPlusPipeline
         except ImportError:
             raise ImportError(
-                "stable-diffusion-cpp-python is not installed. "
-                "Install it to use GGUF models: pip install stable-diffusion-cpp-python"
+                "Required packages not installed. Run: "
+                "pip install -U diffusers transformers accelerate"
             )
 
-        logger.info("GGUF runner loading model %s...", model_key)
-        paths = self._resolve_paths(model_key)
-
-        self._sd = StableDiffusion(
-            diffusion_model_path=paths["diffusion_model_path"],
-            vae_path=paths["vae_path"],
-            llm_path=paths["llm_path"],
-            qwen_image_zero_cond_t=True,
-            flash_attn=True,
+        logger.info("GGUF runner loading QwenImageEditPlusPipeline...")
+        self._pipeline = QwenImageEditPlusPipeline.from_pretrained(
+            _QWEN_IMAGE_EDIT_REPO,
+            torch_dtype=torch.bfloat16,
         )
+        self._pipeline.to("cuda")
 
         self._model_key = model_key
         self._loaded = True
-        logger.info("GGUF runner model %s loaded successfully", model_key)
+        logger.info("GGUF runner pipeline loaded successfully")
 
     async def generate(
         self,
@@ -100,58 +59,54 @@ class GGUFRunner(BaseRunner):
         if cancel_event and cancel_event.is_set():
             raise asyncio.CancelledError("Generation cancelled")
 
-        width = params.width or 1024
-        height = params.height or 1024
         steps = params.steps or 40
-        cfg = params.cfg or 2.5
-        seed = params.seed if params.seed > 0 else -1
+        seed = params.seed if params.seed > 0 else 42
         strength = params.strength or 0.75
-        negative_prompt = params.negative_prompt or ""
-        flow_shift = params.extra.get("flow_shift", 3.0)
+        negative_prompt = params.negative_prompt or " "
+        cfg = params.cfg or 2.5
 
         if progress_callback:
             await progress_callback(0, steps)
 
         loop = asyncio.get_running_loop()
 
-        def sd_progress(step: int, total: int, _time: float):
+        def diffusers_progress(step: int, timestep, latents):
             if progress_callback:
                 try:
                     asyncio.run_coroutine_threadsafe(
-                        progress_callback(step, total), loop
+                        progress_callback(step, steps), loop
                     )
                 except RuntimeError:
                     pass
 
         logger.info(
-            "GGUF runner generating: %s %dx%d %d steps cfg=%.1f seed=%d strength=%.2f",
-            params.prompt[:80], width, height, steps, cfg, seed, strength,
+            "GGUF runner generating: %s seed=%d strength=%.2f",
+            params.prompt[:80], seed, strength,
         )
 
         def _generate():
-            ref_images = params.video_frames
-            return self._sd.generate_image(
-                prompt=params.prompt,
-                negative_prompt=negative_prompt,
-                ref_images=ref_images,
-                width=width,
-                height=height,
-                cfg_scale=cfg,
-                flow_shift=flow_shift,
-                strength=strength,
-                sample_steps=steps,
-                sample_method="euler",
-                seed=seed,
-                progress_callback=sd_progress,
-            )
+            import torch
 
-        outputs = await loop.run_in_executor(None, _generate)
+            image = None
+            if params.video_frames:
+                image = params.video_frames[0]
+
+            result = self._pipeline(
+                prompt=params.prompt,
+                image=image,
+                negative_prompt=negative_prompt,
+                num_inference_steps=steps,
+                guidance_scale=cfg,
+                strength=strength,
+                generator=torch.manual_seed(seed),
+                callback_on_step_end=diffusers_progress,
+            )
+            return result.images[0]
+
+        output_image = await loop.run_in_executor(None, _generate)
 
         if cancel_event and cancel_event.is_set():
             raise asyncio.CancelledError("Generation cancelled")
-
-        if not outputs:
-            raise RuntimeError("GGUF runner generated no output image")
 
         if progress_callback:
             await progress_callback(steps, steps)
@@ -159,7 +114,7 @@ class GGUFRunner(BaseRunner):
         os.makedirs(settings.results_dir, exist_ok=True)
         ts = int(time.time())
         out_path = os.path.join(settings.results_dir, f"gen_{ts}_{seed}.png")
-        outputs[0].save(out_path)
+        output_image.save(out_path)
 
         logger.info("GGUF runner saved image to %s", out_path)
         return GenerateResult(
@@ -168,11 +123,17 @@ class GGUFRunner(BaseRunner):
         )
 
     def unload(self) -> None:
-        self._sd = None
+        self._pipeline = None
         self._model_key = None
         self._loaded = False
         import gc
         gc.collect()
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except ImportError:
+            pass
         logger.info("GGUF runner unloaded")
 
     def get_accepted_params(self, model_key: str) -> dict:
