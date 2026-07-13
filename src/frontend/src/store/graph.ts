@@ -76,7 +76,7 @@ interface GraphState {
   removeNodesFromGroup: (groupId: string, childIds: string[]) => void
   toggleGroupCollapse: (groupId: string) => void
   createGroupFromSelection: (selectedIds: string[]) => string | null
-  resizeGroupWithChildren: (groupId: string, newWidth: number, newHeight: number) => void
+  resizeGroupWithChildren: (groupId: string, newWidth: number, newHeight: number, origWidth?: number, origHeight?: number) => void
   _snapshot: () => void
   undo: () => void
   redo: () => void
@@ -462,13 +462,13 @@ export const useGraphStore = create<GraphState>((set, get) => ({
     return groupId
   },
 
-  resizeGroupWithChildren: (groupId, newWidth, newHeight) => {
+  resizeGroupWithChildren: (groupId, newWidth, newHeight, origWidth, origHeight) => {
     set((state) => {
       const group = state.nodes.find((n) => n.id === groupId)
       if (!group || group.type !== 'groupNode') return state
 
-      const oldW = group.width ?? newWidth
-      const oldH = group.height ?? newHeight
+      const oldW = origWidth ?? group.width ?? newWidth
+      const oldH = origHeight ?? group.height ?? newHeight
       const sx = oldW > 0 ? newWidth / oldW : 1
       const sy = oldH > 0 ? newHeight / oldH : 1
 

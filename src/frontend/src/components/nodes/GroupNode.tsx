@@ -23,6 +23,7 @@ function GroupNode(props: NodeProps) {
   const [editing, setEditing] = useState(false)
   const [editValue, setEditValue] = useState(label ?? def.label)
   const inputRef = useRef<HTMLInputElement>(null)
+  const origSizeRef = useRef<{ w: number; h: number } | null>(null)
 
   useEffect(() => {
     if (editing && inputRef.current) {
@@ -115,12 +116,26 @@ function GroupNode(props: NodeProps) {
     }
   }
 
+  const handleResizeStart = useCallback(() => {
+    const group = useGraphStore.getState().nodes.find((n) => n.id === props.id)
+    if (group) {
+      origSizeRef.current = { w: group.width ?? 260, h: group.height ?? 320 }
+    }
+  }, [props.id])
+
   const handleResize = useCallback(
     (_event: unknown, params: { width: number; height: number }) => {
-      resizeGroupWithChildren(props.id, params.width, params.height)
+      const orig = origSizeRef.current
+      if (orig) {
+        resizeGroupWithChildren(props.id, params.width, params.height, orig.w, orig.h)
+      }
     },
     [props.id, resizeGroupWithChildren],
   )
+
+  const handleResizeEnd = useCallback(() => {
+    origSizeRef.current = null
+  }, [])
 
   const displayLabel = label ?? def.label
 
@@ -155,7 +170,9 @@ function GroupNode(props: NodeProps) {
           handleStyle={{ width: 8, height: 8, borderRadius: '50%', background: '#888', zIndex: 10 }}
           minWidth={80}
           minHeight={80}
+          onResizeStart={handleResizeStart}
           onResize={handleResize}
+          onResizeEnd={handleResizeEnd}
         />
       )}
 
