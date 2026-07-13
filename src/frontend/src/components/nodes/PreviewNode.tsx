@@ -35,12 +35,12 @@ function PreviewNode(props: NodeProps) {
         </Handle>
       </>
     }>
-      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', pointerEvents: 'none' }}>
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
         {src ? (
           isImage ? (
-            <img src={src} alt="Generated" style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 4, pointerEvents: 'none' }} />
+            <img src={src} alt="Generated" style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 4 }} />
           ) : (
-            <video src={src} controls autoPlay style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 4, pointerEvents: 'none' }} />
+            <video src={src} controls autoPlay className="nodrag" style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 4 }} />
           )
         ) : (
           <span style={{ color: '#888', pointerEvents: 'auto' }}>Connect to Generation node</span>
