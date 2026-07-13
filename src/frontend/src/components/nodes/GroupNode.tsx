@@ -32,6 +32,15 @@ function GroupNode(props: NodeProps) {
     }
   }, [editing])
 
+  const shiftRef = useRef(false)
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => { if (e.key === 'Shift') shiftRef.current = true }
+    const up = (e: KeyboardEvent) => { if (e.key === 'Shift') shiftRef.current = false }
+    window.addEventListener('keydown', down)
+    window.addEventListener('keyup', up)
+    return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up) }
+  }, [])
+
   const commitLabel = () => {
     const trimmed = editValue.trim()
     if (trimmed && trimmed !== label) {
@@ -142,10 +151,10 @@ function GroupNode(props: NodeProps) {
   }, [props.id])
 
   const handleResize = useCallback(
-    (event: unknown, params: { width: number; height: number }) => {
+    (_event: unknown, params: { width: number; height: number }) => {
       const orig = origSizeRef.current
       if (orig) {
-        const shiftHeld = !!(event as MouseEvent | undefined)?.shiftKey
+        const shiftHeld = shiftRef.current
         resizeGroupWithChildren(props.id, params.width, params.height, orig.w, orig.h, orig.x, orig.y, orig.children, !shiftHeld)
       }
     },
