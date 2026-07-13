@@ -40,6 +40,26 @@ export interface UseGeneratorBaseOptions {
   modalityFilter: (model: ModelEntry) => boolean
 }
 
+function extForMime(mime: string): string {
+  if (mime.includes('png')) return '.png'
+  if (mime.includes('jpeg') || mime.includes('jpg')) return '.jpg'
+  if (mime.includes('webp')) return '.webp'
+  if (mime.includes('gif')) return '.gif'
+  if (mime.includes('bmp')) return '.bmp'
+  if (mime.includes('tiff')) return '.tiff'
+  if (mime.includes('mp4')) return '.mp4'
+  if (mime.includes('webm')) return '.webm'
+  if (mime.includes('wav')) return '.wav'
+  if (mime.includes('mp3')) return '.mp3'
+  return '.bin'
+}
+
+function fileWithName(baseName: string, blob: Blob): File {
+  const ext = extForMime(blob.type)
+  const hasExt = /\.\w+$/.test(baseName)
+  return new File([blob], hasExt ? baseName : `${baseName}${ext}`, { type: blob.type })
+}
+
 export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorBaseOptions) {
   const updateNodeData = useGraphStore((s) => s.updateNodeData)
   const nodes = useGraphStore((s) => s.nodes)
@@ -124,7 +144,7 @@ export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorB
       if (nodeData.fileDataUrl) {
         const response = await fetch(nodeData.fileDataUrl)
         const blob = await response.blob()
-        return new File([blob], nodeData.fileName || 'file', { type: blob.type })
+        return fileWithName(nodeData.fileName || 'file', blob)
       }
       return undefined
     }
@@ -143,7 +163,7 @@ export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorB
       if (output?.url) {
         const response = await fetch(output.url)
         const blob = await response.blob()
-        return new File([blob], 'output', { type: blob.type })
+        return fileWithName('output', blob)
       }
 
       // If source is a group, try its children
@@ -154,7 +174,7 @@ export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorB
           if (childOutput?.url) {
             const response = await fetch(childOutput.url)
             const blob = await response.blob()
-            return new File([blob], 'group-output', { type: blob.type })
+            return fileWithName('group-output', blob)
           }
         }
       }
@@ -220,7 +240,7 @@ export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorB
           vae_tile_overlap: data.vae_tile_overlap ?? 0.0,
           num_frames: data.num_frames,
           max_sequence_length: data.max_sequence_length,
-          noise_aug_strength: data.noise_aug_strength ?? (data.strength ?? 0.8),
+          noise_aug_strength: data.noise_aug_strength,
           fps: data.fps,
           motion_bucket_id: data.motion_bucket_id,
           min_guidance_scale: data.min_guidance_scale,

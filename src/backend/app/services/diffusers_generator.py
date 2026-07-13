@@ -135,6 +135,7 @@ class DiffusersGenerator:
                     pipe.vae.enable_tiling()
                 except Exception:
                     logger.debug(f"VAE tiling not supported for {type(pipe.vae).__name__}")
+            self._inject_missing_i2v_components(pipe, model_name, dtype)
             self._log_vram()
             logger.info(f"Pipeline loaded on {self.device}: {type(pipe).__name__}({model_name})")
             return pipe
@@ -185,6 +186,43 @@ class DiffusersGenerator:
                 pipe.vae.enable_tiling()
             except Exception:
                 logger.debug(f"VAE tiling not supported for {type(pipe.vae).__name__}")
+
+    @staticmethod
+    def _inject_missing_i2v_components(pipe, model_name: str, dtype):
+        from diffusers import CogVideoXImageToVideoPipeline, WanImageToVideoPipeline
+        i2v_types = (CogVideoXImageToVideoPipeline, WanImageToVideoPipeline)
+        if not isinstance(pipe, i2v_types):
+            return
+        image_enc = getattr(pipe, "image_encoder", None)
+        if image_enc is not None:
+            return
+
+        # Map pipeline types to their expected CLIP variants
+        _CLIP_FALLBACKS = {
+            CogVideoXImageToVideoPipeline: "openai/clip-vit-large-patch14",
+            WanImageToVideoPipeline: "openai/clip-vit-large-patch14",
+        }
+        clip_name = None
+        for pipe_type, cname in _CLIP_FALLBACKS.items():
+            if isinstance(pipe, pipe_type):
+                clip_name = cname
+                break
+
+        if not clip_name:
+            logger.warning(f"No CLIP fallback registered for {type(pipe).__name__}")
+            return
+
+        logger.warning(f"Model {model_name} loaded as I2V pipeline but missing image_encoder — injecting {clip_name}")
+        try:
+            from transformers import CLIPVisionModelWithProjection, CLIPImageProcessor
+            enc = CLIPVisionModelWithProjection.from_pretrained(clip_name, torch_dtype=dtype)
+            enc.eval()
+            enc.to(pipe.device)
+            pipe.image_encoder = enc
+            pipe.feature_extractor = CLIPImageProcessor.from_pretrained(clip_name)
+            logger.info(f"Injected CLIP image_encoder from {clip_name} into {type(pipe).__name__}")
+        except Exception as e:
+            logger.warning(f"Could not inject fallback image_encoder for {model_name}: {e}")
 
     @staticmethod
     def _apply_vae_tiling_config(pipe, vae_tiling: bool | None, vae_tile_overlap: float | None):
@@ -614,6 +652,35 @@ class DiffusersGenerator:
                     f"Model '{type(pipe).__name__}' requires '{pname}' input "
                     f"but none was provided. Connect a compatible input node."
                 )
+
+        if video_frames and "image" not in pipe_kwargs and "video" not in pipe_kwargs:
+            logger.info("Pipeline doesn't accept image/video — encoding image as initial latents")
+            try:
+                img = video_frames[0]
+                tgt_size = (w or img.width, h or img.height)
+                if img.size != tgt_size:
+                    img = img.resize(tgt_size, Image.LANCZOS)
+                import torch, numpy as np
+                arr = np.array(img.convert("RGB")).astype(np.float32) / 127.5 - 1.0
+                pixel = torch.from_numpy(arr).permute(2, 0, 1).unsqueeze(0)
+                pipe_dtype = next(pipe.vae.parameters()).dtype
+                pixel = pixel.to(device=pipe.device, dtype=pipe_dtype)
+                with torch.no_grad():
+                    init_latents = pipe.vae.encode(pixel).latent_dist.sample()
+                    init_latents = init_latents * pipe.vae.config.scaling_factor
+                if "latents" in valid_pipe_params:
+                    if pipe.vae.config.get("time_compression_ratio", 4):
+                        nf_latent = max(1, (nf - 1) // 4 + 1) if nf else 1
+                    else:
+                        nf_latent = 1
+                    if init_latents.dim() == 4:
+                        init_latents = init_latents.unsqueeze(2).repeat(1, 1, nf_latent, 1, 1)
+                    noise = torch.randn_like(init_latents, device=pipe.device)
+                    str_val = min(strength, 0.8)
+                    pipe_kwargs["latents"] = (1 - str_val) * init_latents + str_val * noise
+                    logger.info(f"Added VAE-encoded image as initial latents, shape={pipe_kwargs['latents'].shape}")
+            except Exception as e:
+                logger.warning(f"Could not encode image as initial latents: {e}")
 
         vae_tiling = extra_kwargs.get("vae_tiling")
         vae_tile_overlap = extra_kwargs.get("vae_tile_overlap")

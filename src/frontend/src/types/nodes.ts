@@ -243,11 +243,11 @@ export function getEdgeStyle(portType: PortType | null): React.CSSProperties {
 }
 
 export const MODALITY_FILTERS: Record<string, (m: ModelEntry) => boolean> = {
-  textToImage: (m) => m.is_video !== true && !m.accepts?.image && !m.accepts?.video,
-  textToVideo: (m) => m.is_video === true && !m.accepts?.image && !m.accepts?.video,
-  imageToVideo: (m) => m.is_video === true && m.accepts?.image === true,
-  videoToVideo: (m) => m.accepts?.video === true,
-  imageToImage: (m) => m.is_video !== true && m.accepts?.image === true,
+  textToImage: (m) => m.runner !== 'api' && m.is_video !== true && !m.accepts?.image && !m.accepts?.video,
+  textToVideo: (m) => m.runner !== 'api' && m.is_video === true && !m.accepts?.image && !m.accepts?.video,
+  imageToVideo: (m) => m.runner !== 'api' && m.is_video === true && m.accepts?.image === true,
+  videoToVideo: (m) => m.runner !== 'api' && m.accepts?.video === true,
+  imageToImage: (m) => m.runner !== 'api' && m.is_video !== true && m.accepts?.image === true,
 }
 
 export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {

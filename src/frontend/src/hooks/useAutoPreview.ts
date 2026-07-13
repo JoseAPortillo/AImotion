@@ -32,8 +32,13 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
     }
   }, [autoPreviews, nodeId])
   const [previewRunning, setPreviewRunning] = useState(false)
+  const [previewProgress, setPreviewProgress] = useState(0)
+  const [previewCurrentStep, setPreviewCurrentStep] = useState(0)
+  const [previewTotalSteps, setPreviewTotalSteps] = useState(0)
+  const [previewEtaSec, setPreviewEtaSec] = useState<number | null>(null)
 
   const taskIdRef = useRef('')
+  const previewStartRef = useRef(0)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const abortRef = useRef(false)
   const lastKeyRef = useRef('')
@@ -53,29 +58,46 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
 
   function getPreviewParams(): Record<string, unknown> {
     const genEdges = edges.filter((e) => e.target === nodeId)
+    const hasImage = genEdges.some((e) => e.targetHandle === 'image_in')
     const hasVideo = genEdges.some((e) => e.targetHandle === 'video_in')
     const isVideo = hasVideo || (data.num_frames ?? 0) > 1
 
-    const maxDim = 384
-    const scale = Math.min(1, maxDim / Math.max(data.width ?? 720, data.height ?? 480))
-    const pw = Math.round((data.width ?? 720) * scale)
-    const ph = Math.round((data.height ?? 480) * scale)
+    const isI2V = isVideo && hasImage
+
+    let pw: number, ph: number
+    if (isI2V) {
+      pw = (data.width ?? 720)
+      ph = (data.height ?? 480)
+    } else {
+      const maxDim = 640
+      const scale = Math.min(1, maxDim / Math.max(data.width ?? 720, data.height ?? 480))
+      pw = Math.max(64, Math.round(((data.width ?? 720) * scale) / 8) * 8)
+      ph = Math.max(64, Math.round(((data.height ?? 480) * scale) / 8) * 8)
+    }
+
+    const previewFrames = isVideo ? (() => {
+      const capped = Math.min(data.num_frames ?? 49, 6)
+      if (data.model?.includes('cogvideox')) {
+        return 5
+      }
+      return Math.max(2, capped)
+    })() : undefined
 
     return {
       width: pw,
       height: ph,
-      steps: isVideo ? 12 : 6,
+      steps: Math.max(2, Math.round((data.steps ?? 50) / 2)),
       cfg: data.cfg ?? 6,
-      strength: data.strength ?? 0.8,
+      strength: isVideo ? Math.min(data.strength ?? 0.8, 0.6) : (data.strength ?? 0.8),
       seed: data.seed ?? 0,
       scheduler: data.scheduler || '',
       model: data.model,
       execution_mode: data.execution_mode || 'local',
       vae_tiling: data.vae_tiling ?? true,
       vae_tile_overlap: data.vae_tile_overlap ?? 0.0,
-      num_frames: isVideo ? Math.min(data.num_frames ?? 49, 8) : undefined,
+      num_frames: previewFrames,
       max_sequence_length: data.max_sequence_length,
-      noise_aug_strength: data.noise_aug_strength ?? (data.strength ?? 0.8),
+      noise_aug_strength: data.noise_aug_strength,
       fps: data.fps,
       motion_bucket_id: data.motion_bucket_id,
       min_guidance_scale: data.min_guidance_scale,
@@ -97,6 +119,12 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
     const promptData = promptEdgePos ? getNode(promptEdgePos)?.data as PromptData | undefined : undefined
     const promptText = promptData?.positive || ''
     if (!promptText) return
+
+    const isI2V = /i2v/i.test(data.model ?? '')
+    if (isI2V && !imageEdge) {
+      console.warn('[auto-preview] Model', data.model, 'requires image input but no image_in edge — skipping')
+      return
+    }
 
     const getFileFromNodeData = async (nodeData: any): Promise<File | undefined> => {
       if (!nodeData) return undefined
@@ -158,10 +186,21 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
     }
     abortRef.current = false
 
+    if (!imageFile && isI2V) {
+      console.warn('[auto-preview] I2V model but image file not resolved — skipping')
+      setPreviewRunning(false)
+      return
+    }
+
     setPreviewRunning(true)
+    setPreviewProgress(0)
+    setPreviewCurrentStep(0)
+    setPreviewTotalSteps(0)
+    setPreviewEtaSec(null)
+    previewStartRef.current = Date.now()
     try {
       const previewParams = getPreviewParams()
-      console.log('[auto-preview] sending:', { model: previewParams.model, width: previewParams.width, height: previewParams.height, steps: previewParams.steps })
+      console.log('[auto-preview] sending:', { model: previewParams.model, width: previewParams.width, height: previewParams.height, steps: previewParams.steps, hasImage: !!imageFile, hasVideo: !!videoFile })
       const task = await startGeneration(
         promptText,
         promptEdgeNeg ? (getNode(promptEdgeNeg)?.data as PromptData | undefined)?.negative || '' : '',
@@ -178,6 +217,13 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
         if (abortRef.current) break
         status = await pollTask(task.task_id)
         if (status.status === 'cancelled') break
+        if (status.current_step != null) setPreviewCurrentStep(status.current_step)
+        if (status.total_steps != null) setPreviewTotalSteps(status.total_steps)
+        if (status.progress != null) setPreviewProgress(status.progress)
+        if (status.progress != null && status.progress > 0) {
+          const elapsed = (Date.now() - previewStartRef.current) / 1000
+          setPreviewEtaSec((elapsed / status.progress) * (1 - status.progress))
+        }
       } while (status.status === 'pending' || status.status === 'running')
 
       if (!abortRef.current && status && status.status === 'completed' && status.result_url) {
@@ -199,6 +245,10 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
       cancelTask(taskIdRef.current).catch(() => {})
     }
     setPreviewRunning(false)
+    setPreviewProgress(0)
+    setPreviewCurrentStep(0)
+    setPreviewTotalSteps(0)
+    setPreviewEtaSec(null)
     setPreviewUrl(null)
     setPreviewType(null)
     if (timerRef.current) {
@@ -231,6 +281,10 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
     previewUrl,
     previewType,
     previewRunning,
+    previewProgress,
+    previewCurrentStep,
+    previewTotalSteps,
+    previewEtaSec,
     cancelAutoPreview: cancel,
   }
 }

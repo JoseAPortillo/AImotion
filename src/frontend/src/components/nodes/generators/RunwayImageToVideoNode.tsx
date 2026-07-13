@@ -336,12 +336,48 @@ function RunwayImageToVideoNode(props: NodeProps) {
 
         {(autoPreview.previewRunning || autoPreview.previewUrl) && (
           <div style={{ marginTop: 4, textAlign: 'center' }}>
-            {autoPreview.previewRunning && !autoPreview.previewUrl && (
-              <div style={{ padding: '12px 0', fontSize: 10, color: '#6366f1' }}>
-                Loading preview...
+            {autoPreview.previewRunning && (
+              <div style={{ padding: '4px 6px', background: '#1a1a1a', borderRadius: 4, marginBottom: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}>
+                  <div style={{ flex: 1, height: 4, borderRadius: 2, background: '#2a2a2a', overflow: 'hidden' }}>
+                    <div style={{ width: `${Math.min(autoPreview.previewProgress * 100, 100)}%`, height: '100%', borderRadius: 2, background: '#6366f1', transition: 'width 0.3s ease' }} />
+                  </div>
+                  <span style={{ fontSize: 9, color: '#999', minWidth: 24, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                    {Math.round(autoPreview.previewProgress * 100)}%
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 8, color: '#6366f1' }}>
+                    {autoPreview.previewTotalSteps > 0
+                      ? `Step ${autoPreview.previewCurrentStep}/${autoPreview.previewTotalSteps}`
+                      : 'Generating...'}
+                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    {autoPreview.previewEtaSec != null && (
+                      <span style={{ fontSize: 8, color: '#2563eb', fontVariantNumeric: 'tabular-nums' }}>
+                        ETA {formatEta(autoPreview.previewEtaSec)}
+                      </span>
+                    )}
+                    <button
+                    onClick={autoPreview.cancelAutoPreview}
+                    style={{
+                      padding: '2px 8px',
+                      borderRadius: 3,
+                      border: 'none',
+                      fontSize: 9,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      background: '#ef4444',
+                      color: '#fff',
+                    }}
+                  >
+                    Stop
+                  </button>
+                  </div>
+                </div>
               </div>
-            )}
-            {autoPreview.previewUrl && (
+              )}
+              {autoPreview.previewUrl && (
               autoPreview.previewType === 'video' ? (
                 <video src={autoPreview.previewUrl} controls autoPlay loop
                   style={{ width: '100%', maxWidth: 200, maxHeight: 160, borderRadius: 4, display: 'block', margin: '0 auto', opacity: autoPreview.previewRunning ? 0.5 : 1 }}
