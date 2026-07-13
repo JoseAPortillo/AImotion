@@ -23,6 +23,7 @@ function GroupNode(props: NodeProps) {
   const [editing, setEditing] = useState(false)
   const [editValue, setEditValue] = useState(label ?? def.label)
   const inputRef = useRef<HTMLInputElement>(null)
+  const origSizeRef = useRef<{ w: number; h: number; x: number; y: number; children: Map<string, { x: number; y: number; w: number | null; h: number | null }> } | null>(null)
 
   useEffect(() => {
     if (editing && inputRef.current) {
@@ -30,6 +31,15 @@ function GroupNode(props: NodeProps) {
       inputRef.current.select()
     }
   }, [editing])
+
+  const shiftRef = useRef(false)
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => { if (e.key === 'Shift') shiftRef.current = true }
+    const up = (e: KeyboardEvent) => { if (e.key === 'Shift') shiftRef.current = false }
+    window.addEventListener('keydown', down)
+    window.addEventListener('keyup', up)
+    return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up) }
+  }, [])
 
   const commitLabel = () => {
     const trimmed = editValue.trim()
@@ -115,12 +125,45 @@ function GroupNode(props: NodeProps) {
     }
   }
 
+  const handleResizeStart = useCallback(() => {
+    const state = useGraphStore.getState()
+    const group = state.nodes.find((n) => n.id === props.id)
+    if (!group) return
+    const childIds: string[] = (group.data as GroupNodeData).childIds ?? []
+    const children = new Map<string, { x: number; y: number; w: number | null; h: number | null }>()
+    for (const n of state.nodes) {
+      if (childIds.includes(n.id)) {
+        children.set(n.id, {
+          x: n.position.x,
+          y: n.position.y,
+          w: n.width ?? null,
+          h: n.height ?? null,
+        })
+      }
+    }
+    origSizeRef.current = {
+      w: group.width ?? 260,
+      h: group.height ?? 320,
+      x: group.position.x,
+      y: group.position.y,
+      children,
+    }
+  }, [props.id])
+
   const handleResize = useCallback(
     (_event: unknown, params: { width: number; height: number }) => {
-      resizeGroupWithChildren(props.id, params.width, params.height)
+      const orig = origSizeRef.current
+      if (orig) {
+        const shiftHeld = shiftRef.current
+        resizeGroupWithChildren(props.id, params.width, params.height, orig.w, orig.h, orig.x, orig.y, orig.children, !shiftHeld)
+      }
     },
     [props.id, resizeGroupWithChildren],
   )
+
+  const handleResizeEnd = useCallback(() => {
+    origSizeRef.current = null
+  }, [])
 
   const displayLabel = label ?? def.label
 
@@ -155,7 +198,9 @@ function GroupNode(props: NodeProps) {
           handleStyle={{ width: 8, height: 8, borderRadius: '50%', background: '#888', zIndex: 10 }}
           minWidth={80}
           minHeight={80}
+          onResizeStart={handleResizeStart}
           onResize={handleResize}
+          onResizeEnd={handleResizeEnd}
         />
       )}
 

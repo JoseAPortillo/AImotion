@@ -121,6 +121,7 @@ const contentStyle: React.CSSProperties = {
   minHeight: 0,
   overflowY: 'auto',
   overflowX: 'hidden',
+  position: 'relative',
 }
 
 const scrollbarStyles = `

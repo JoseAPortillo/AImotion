@@ -54,7 +54,7 @@ function PromptNode(props: NodeProps) {
         </Handle>
       </>
     }>
-      <div style={{ padding: '4px 6px', fontSize: 10, color: '#ccc' }}>
+      <div className="nodrag" style={{ padding: '4px 6px', fontSize: 10, color: '#ccc' }}>
         <textarea
           placeholder="Positive prompt..."
           value={data.positive || ''}
@@ -83,26 +83,28 @@ function PromptNode(props: NodeProps) {
             {inlineNegOpen ? '▲ Hide negative' : '▼ Negative prompt'}
           </button>
           {inlineNegOpen && (
-            <textarea
-              placeholder="Negative prompt (optional)..."
-              value={data.negative || ''}
-              onChange={(e) => updateNodeData(props.id, { negative: e.target.value } as Partial<PromptData>)}
-              style={{
-                width: '100%',
-                background: '#0f0f0f',
-                border: '1px solid #333',
-                borderRadius: 4,
-                color: '#e0e0e0',
-                padding: '4px 6px',
-                fontSize: 10,
-                fontFamily: 'inherit',
-                resize: 'vertical',
-                minHeight: 32,
-                marginTop: 4,
-                outline: 'none',
-                boxSizing: 'border-box',
-              }}
-            />
+            <div className="nodrag">
+              <textarea
+                placeholder="Negative prompt (optional)..."
+                value={data.negative || ''}
+                onChange={(e) => updateNodeData(props.id, { negative: e.target.value } as Partial<PromptData>)}
+                style={{
+                  width: '100%',
+                  background: '#0f0f0f',
+                  border: '1px solid #333',
+                  borderRadius: 4,
+                  color: '#e0e0e0',
+                  padding: '4px 6px',
+                  fontSize: 10,
+                  fontFamily: 'inherit',
+                  resize: 'vertical',
+                  minHeight: 32,
+                  marginTop: 4,
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
           )}
         </div>
       </div>

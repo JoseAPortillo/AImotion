@@ -128,7 +128,7 @@ async def create_generation(
     if image:
         logger.info(f"Received image file: {image.filename}, content_type: {image.content_type}")
         os.makedirs(settings.upload_dir, exist_ok=True)
-        file_ext = os.path.splitext(image.filename or "input.png")[1]
+        file_ext = os.path.splitext(image.filename or "input.png")[1] or ".png"
         upload_path = os.path.join(settings.upload_dir, f"img_{seed}{file_ext}")
         content = await image.read()
         logger.info(f"Image content size: {len(content)} bytes")
@@ -144,7 +144,7 @@ async def create_generation(
     if video:
         _validate_video(video)
         os.makedirs(settings.upload_dir, exist_ok=True)
-        file_ext = os.path.splitext(video.filename or "input.mp4")[1]
+        file_ext = os.path.splitext(video.filename or "input.mp4")[1] or ".mp4"
         upload_path = os.path.join(settings.upload_dir, f"video_{seed}{file_ext}")
         content = await video.read()
         if len(content) > settings.max_upload_size_mb * 1024 * 1024:

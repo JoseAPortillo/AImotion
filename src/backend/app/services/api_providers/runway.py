@@ -77,6 +77,13 @@ class RunwayProvider(BaseApiProvider):
 
     async def _upload_media(self, client: httpx.AsyncClient, file_path: str, content_type: str = "video/mp4") -> str:
         filename = os.path.basename(file_path)
+        _, ext = os.path.splitext(filename)
+        if not ext:
+            ext = {
+                "image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp",
+                "video/mp4": ".mp4", "video/webm": ".webm",
+            }.get(content_type, ".bin")
+            filename = f"{filename}{ext}"
         resp = await client.post(
             f"{self.base_url}/v1/uploads",
             json={"filename": filename, "type": "ephemeral"},
