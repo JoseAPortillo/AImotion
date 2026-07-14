@@ -1,4 +1,4 @@
-import { memo, useMemo } from 'react'
+import { memo, useMemo, useEffect } from 'react'
 import type { NodeProps } from '@xyflow/react'
 import { Handle, Position } from '@xyflow/react'
 import { NODE_DEFINITIONS, PORT_COLORS, type NodeType, type TextOutputData } from '../../types/nodes'
@@ -10,6 +10,7 @@ function TextOutputNode(props: NodeProps) {
   const data = props.data as TextOutputData
   const nodes = useGraphStore((s) => s.nodes)
   const edges = useGraphStore((s) => s.edges)
+  const updateNodeData = useGraphStore((s) => s.updateNodeData)
 
   const text = useMemo(() => {
     const inEdges = edges.filter((e) => e.target === props.id && e.targetHandle === 'text_in')
@@ -21,6 +22,12 @@ function TextOutputNode(props: NodeProps) {
     if (typeof sd.text === 'string' && sd.text) return sd.text
     return data.text || ''
   }, [nodes, edges, props.id, data.text])
+
+  useEffect(() => {
+    if (text && text !== data.text) {
+      updateNodeData(props.id, { text } as Partial<TextOutputData>)
+    }
+  }, [text])
 
   return (
     <NodeWrapper def={def} selected={props.selected    } handles={
