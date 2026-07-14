@@ -48,6 +48,7 @@ import ImageToImageNode from './components/nodes/generators/ImageToImageNode'
 import RunwayVideoToVideoNode from './components/nodes/generators/RunwayVideoToVideoNode'
 import RunwayImageToVideoNode from './components/nodes/generators/RunwayImageToVideoNode'
 import TransformersGeneratorNode from './components/nodes/generators/TransformersGeneratorNode'
+import ImageToTextNode from './components/nodes/generators/ImageToTextNode'
 import VLMNode from './components/nodes/generators/VLMNode'
 import LLMGeneratorNode from './components/nodes/generators/LLMGeneratorNode'
 import CVTaskProcessorNode from './components/nodes/processors/CVTaskProcessorNode'
@@ -71,6 +72,7 @@ const nodeTypes: NodeTypes = {
   runwayVideoToVideo: RunwayVideoToVideoNode,
   runwayImageToVideo: RunwayImageToVideoNode,
   transformersGenerator: TransformersGeneratorNode,
+  imageToText: ImageToTextNode,
   vlmNode: VLMNode,
   llmGenerator: LLMGeneratorNode,
   cvTaskProcessor: CVTaskProcessorNode,

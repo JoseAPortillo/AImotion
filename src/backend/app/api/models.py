@@ -6,6 +6,7 @@ import sys
 import importlib
 from datetime import datetime
 from hashlib import md5
+from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from huggingface_hub import HfApi, hf_hub_download
@@ -75,10 +76,56 @@ def _find_matching_family(hf_name: str):
     return None
 
 
+def _detect_transformers_model_class(hf_name: str) -> Optional[str]:
+    """Detect if a model is a transformers model by reading config.json."""
+    try:
+        from huggingface_hub import hf_hub_download
+        import json
+
+        config_path = hf_hub_download(repo_id=hf_name, filename="config.json")
+        with open(config_path, "r") as f:
+            config = json.load(f)
+
+        # Check architectures field
+        architectures = config.get("architectures", [])
+        if architectures:
+            return architectures[0]
+
+        # Check _class_name field
+        class_name = config.get("_class_name")
+        if class_name:
+            return class_name
+
+    except Exception as e:
+        logger.debug(f"No config.json or no _class_name for {hf_name}: {e}")
+
+    return None
+
+
+_TRANSFORMERS_MODEL_CLASSES = {
+    "Florence2ForConditionalGeneration": {"modality": "image-to-text", "processor": "AutoProcessor"},
+    "Florence2ForCausalLM": {"modality": "image-to-text", "processor": "AutoProcessor"},
+    "Blip2ForConditionalGeneration": {"modality": "image-to-text", "processor": "Blip2Processor"},
+    "Blip2ForQuestionAnswering": {"modality": "image-to-text", "processor": "Blip2Processor"},
+    "Qwen2VLForConditionalGeneration": {"modality": "image-to-text", "processor": "AutoProcessor"},
+    "LlavaForConditionalGeneration": {"modality": "image-to-text", "processor": "AutoProcessor"},
+    "LlavaNextForConditionalGeneration": {"modality": "image-to-text", "processor": "AutoProcessor"},
+}
+
+
+def _is_transformers_model(model_class: str) -> bool:
+    """Check if a model class is a known transformers model."""
+    return model_class in _TRANSFORMERS_MODEL_CLASSES
+
+
 def detect_requirements(hf_name: str, discovered: dict) -> list[dict]:
     """Detect requirements for a model based on its format and pipeline."""
     requirements = []
     family = _find_matching_family(hf_name)
+
+    # Check if model is a transformers model
+    model_class = _detect_transformers_model_class(hf_name)
+    is_transformers = model_class and _is_transformers_model(model_class)
 
     # Check if model has GGUF files
     try:
@@ -136,6 +183,21 @@ def detect_requirements(hf_name: str, discovered: dict) -> list[dict]:
                 "reason": "Required Python package for Wan2.2 GGUF video generation",
                 "optional": False,
             })
+
+    # Add transformers requirements if detected
+    if is_transformers and not RunnerRegistry.is_registered("transformers"):
+        requirements.append({
+            "type": "python_package",
+            "package": "transformers",
+            "reason": "Required for transformer model inference",
+            "optional": False,
+        })
+        requirements.append({
+            "type": "python_package",
+            "package": "accelerate",
+            "reason": "Required for efficient model loading and device mapping",
+            "optional": False,
+        })
 
     return requirements
 
@@ -226,6 +288,14 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
         family = _find_matching_family(hf_name)
 
         hf_pipeline_tag = ""
+        model_class_name = None
+        is_transformers = False
+
+        # Detect if it's a transformers model
+        model_class_name = _detect_transformers_model_class(hf_name)
+        if model_class_name and _is_transformers_model(model_class_name):
+            is_transformers = True
+            logger.info(f"Detected transformers model: {hf_name} (class: {model_class_name})")
 
         if family and family.runner != "diffusers":
             pipeline_class_name = None
@@ -243,6 +313,20 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
                 f"Non-diffusers family '{family.family}' for {hf_name} "
                 f"(pipeline_tag={hf_pipeline_tag}), skipping pipeline detection"
             )
+        elif is_transformers:
+            # Transformers model - no diffusers pipeline detection needed
+            pipeline_class_name = None
+            schedulers: dict = {}
+            default_scheduler = ""
+            defaults: dict = {"max_new_tokens": 512, "temperature": 0.7}
+            discovered: dict = {}
+            try:
+                api = HfApi()
+                info = api.model_info(hf_name)
+                hf_pipeline_tag = getattr(info, "pipeline_tag", "") or ""
+            except Exception:
+                pass
+            logger.info(f"Transformers model {hf_name}, skipping diffusers pipeline detection")
         else:
             discovered = discover_pipeline(hf_name)
             if "error" in discovered:
@@ -422,6 +506,15 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
                 logger.info(f"Removing stale registry entry '{existing.key}' for {hf_name}")
                 remove_installed(existing.key)
         final_alias = alias or hf_name.split("/")[-1]
+
+        # Determine runner
+        if is_transformers:
+            runner = "transformers"
+        elif family:
+            runner = family.runner
+        else:
+            runner = "diffusers"
+
         model = InstalledModel(
             key=key,
             hf_name=hf_name,
@@ -436,6 +529,8 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
             hf_pipeline_tag=hf_pipeline_tag,
             repo_files=files,
             checkpoint_file=checkpoint_file,
+            runner=runner,
+            model_class=model_class_name or "",
         )
         add_installed(model)
 
@@ -533,6 +628,13 @@ async def list_models():
             runner = variant.family.runner
             if inst.pipeline_class and _is_diffusers_pipeline(inst.pipeline_class):
                 runner = "diffusers"
+        elif inst.runner == "transformers":
+            # Transformers model - use catalog inputs
+            pipeline_inputs = catalog.get_family("transformers").inputs if catalog.get_family("transformers") else {}
+            pipeline_accepts = {"image": True, "video": False, "strength": False}
+            pipeline_defaults = inst.defaults or {"max_new_tokens": 512, "temperature": 0.7}
+            is_video = False
+            runner = "transformers"
         elif inst.pipeline_class:
             pipeline_inputs = _inputs_from_pipeline(inst.pipeline_class)
             pipeline_accepts = _accepts_from_pipeline(inst.pipeline_class)
@@ -562,6 +664,7 @@ async def list_models():
             "inputs": pipeline_inputs,
             "is_video": is_video,
             "runner": runner,
+            "model_class": inst.model_class,
         })
     return {"models": results}
 

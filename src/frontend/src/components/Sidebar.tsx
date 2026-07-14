@@ -38,7 +38,7 @@ const NODE_GROUPS: NodeGroup[] = [
       },
       {
         label: 'Transformers',
-        nodes: ['transformersGenerator'],
+        nodes: ['transformersGenerator', 'imageToText'],
       },
       {
         label: 'Vision',

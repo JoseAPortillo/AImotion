@@ -25,6 +25,8 @@ class InstalledModel:
     hf_pipeline_tag: str = ""
     repo_files: list[str] | None = None
     checkpoint_file: str = ""
+    runner: str = ""
+    model_class: str = ""
 
 
 def _load_registry() -> list[dict]:

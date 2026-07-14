@@ -19,6 +19,7 @@ const NODE_DEFAULT_SIZE: Record<NodeType, { width: number; height: number }> = {
   diffuserGenerator: { width: 260, height: 420 },
   transformersGenerator: { width: 260, height: 350 },
   vlmNode: { width: 260, height: 300 },
+  imageToText: { width: 260, height: 320 },
   llmGenerator: { width: 260, height: 320 },
   cvTaskProcessor: { width: 260, height: 180 },
   loadLora: { width: 260, height: 180 },

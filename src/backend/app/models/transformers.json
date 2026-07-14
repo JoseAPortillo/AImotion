@@ -1,0 +1,71 @@
+{
+  "family": "transformers",
+  "label": "Transformers",
+  "description": "Transformer models for image-to-text, text generation, and multimodal tasks using HuggingFace transformers library",
+  "runner": "transformers",
+  "defaults": {
+    "max_new_tokens": 512,
+    "temperature": 0.7,
+    "do_sample": true
+  },
+  "inputs": {
+    "prompt": { "required": false, "type": "text" },
+    "image": { "required": false, "type": "image" },
+    "max_new_tokens": { "required": false, "type": "int", "default": 512, "min": 1, "max": 4096 },
+    "temperature": { "required": false, "type": "float", "default": 0.7, "min": 0.0, "max": 2.0 },
+    "do_sample": { "required": false, "type": "bool", "default": true }
+  },
+  "output": { "type": "text", "mime": "text/plain" },
+  "variants": [
+    {
+      "key": "florence-2-large",
+      "name": "Florence-2 Large",
+      "hf_name": "microsoft/Florence-2-large-ft",
+      "type": "installable",
+      "size_gb": 2.3,
+      "modality": "image-to-text",
+      "model_class": "Florence2ForConditionalGeneration",
+      "processor_class": "AutoProcessor"
+    },
+    {
+      "key": "florence-2-base",
+      "name": "Florence-2 Base",
+      "hf_name": "microsoft/Florence-2-base-ft",
+      "type": "installable",
+      "size_gb": 0.5,
+      "modality": "image-to-text",
+      "model_class": "Florence2ForConditionalGeneration",
+      "processor_class": "AutoProcessor"
+    },
+    {
+      "key": "blip2-base",
+      "name": "BLIP-2 Base",
+      "hf_name": "Salesforce/blip2-opt-2.7b",
+      "type": "installable",
+      "size_gb": 5.4,
+      "modality": "image-to-text",
+      "model_class": "Blip2ForConditionalGeneration",
+      "processor_class": "Blip2Processor"
+    },
+    {
+      "key": "qwen-vl-max",
+      "name": "Qwen-VL Max",
+      "hf_name": "Qwen/Qwen-VL-Max",
+      "type": "installable",
+      "size_gb": 15.0,
+      "modality": "image-to-text",
+      "model_class": "Qwen2VLForConditionalGeneration",
+      "processor_class": "AutoProcessor"
+    },
+    {
+      "key": "qwen2-vl-7b",
+      "name": "Qwen2-VL 7B",
+      "hf_name": "Qwen/Qwen2-VL-7B-Instruct",
+      "type": "installable",
+      "size_gb": 4.5,
+      "modality": "image-to-text",
+      "model_class": "Qwen2VLForConditionalGeneration",
+      "processor_class": "AutoProcessor"
+    }
+  ]
+}

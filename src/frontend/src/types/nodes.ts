@@ -23,6 +23,7 @@ export type NodeType =
   | 'imageToVideo'
   | 'videoToVideo'
   | 'imageToImage'
+  | 'imageToText'
   | 'runwayVideoToVideo'
   | 'runwayImageToVideo'
   | 'groupNode'
@@ -144,6 +145,15 @@ export interface VLMData extends Record<string, unknown> {
   loading: boolean
 }
 
+export interface ImageToTextData extends Record<string, unknown> {
+  model: string
+  prompt: string
+  max_new_tokens: number
+  temperature: number
+  result: string
+  loading: boolean
+}
+
 export interface LoRAData extends Record<string, unknown> {
   loraFile: string
   scale: number
@@ -192,6 +202,7 @@ export type NodeData =
   | DenoisingStrengthData
   | GenerationData
   | VLMData
+  | ImageToTextData
   | LoRAData
   | ControlNetData
   | TransformersData
@@ -331,6 +342,20 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
       { id: 'text_out', label: 'Text', type: 'prompt' },
     ],
     defaultData: { result: '', loading: false },
+  },
+  imageToText: {
+    type: 'imageToText',
+    label: 'Image-to-Text',
+    color: '#06b6d4',
+    description: 'Generate text from images using transformer models (Florence-2, BLIP-2, Qwen-VL).',
+    inputs: [
+      { id: 'image_in', label: 'Image', type: 'video_tensor' },
+      { id: 'prompt_pos', label: 'Prompt', type: 'prompt' },
+    ],
+    outputs: [
+      { id: 'text_out', label: 'Text', type: 'prompt' },
+    ],
+    defaultData: { model: '', prompt: '', max_new_tokens: 512, temperature: 0.7, result: '', loading: false },
   },
   llmGenerator: {
     type: 'llmGenerator',
