@@ -16,9 +16,10 @@ function PromptNode(props: NodeProps) {
   const [inlineNegOpen, setInlineNegOpen] = useState(false)
 
   const upstreamText = useMemo(() => {
-    const inEdges = edges.filter((e) => e.target === props.id && e.targetHandle === 'text_in')
+    const state = useGraphStore.getState()
+    const inEdges = state.edges.filter((e) => e.target === props.id && e.targetHandle === 'text_in')
     if (inEdges.length === 0) return ''
-    const sourceNode = nodes.find((n) => n.id === inEdges[0].source)
+    const sourceNode = state.nodes.find((n) => n.id === inEdges[0].source)
     if (!sourceNode) return ''
     const sd = sourceNode.data as Record<string, unknown>
     if (typeof sd.result === 'string' && sd.result) return sd.result
@@ -31,15 +32,22 @@ function PromptNode(props: NodeProps) {
   const lastUpstreamRef = useRef(upstreamText)
 
   useEffect(() => {
-    if (upstreamText && upstreamText !== lastUpstreamRef.current) {
-      const prevUpstream = lastUpstreamRef.current
-      lastUpstreamRef.current = upstreamText
-      if (!localValue || localValue === prevUpstream) {
-        setLocalValue(upstreamText)
-        updateNodeData(props.id, { positive: upstreamText } as Partial<PromptData>)
-      }
+    const state = useGraphStore.getState()
+    const inEdges = state.edges.filter((e) => e.target === props.id && e.targetHandle === 'text_in')
+    if (inEdges.length === 0) return
+    const sourceNode = state.nodes.find((n) => n.id === inEdges[0].source)
+    if (!sourceNode) return
+    const sd = sourceNode.data as Record<string, unknown>
+    let current = ''
+    if (typeof sd.result === 'string' && sd.result) current = sd.result
+    else if (typeof sd.text === 'string' && sd.text) current = sd.text
+    else if (typeof sd.positive === 'string' && sd.positive) current = sd.positive
+    if (current && current !== lastUpstreamRef.current) {
+      lastUpstreamRef.current = current
+      setLocalValue(current)
+      updateNodeData(props.id, { positive: current } as Partial<PromptData>)
     }
-  }, [upstreamText])
+  })
 
   const effectivePositive = localValue || upstreamText
 
