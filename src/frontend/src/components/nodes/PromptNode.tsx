@@ -76,7 +76,7 @@ function PromptNode(props: NodeProps) {
       <div className="nodrag" style={{ padding: '4px 6px', fontSize: 10, color: '#ccc' }}>
         <textarea
           placeholder={upstreamText ? 'Using connected text...' : 'Positive prompt...'}
-          value={data.positive || ''}
+          value={data.positive || upstreamText || ''}
           onChange={(e) => updateNodeData(props.id, { positive: e.target.value } as Partial<PromptData>)}
           style={{
             width: '100%',

@@ -47,7 +47,8 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
     const genEdges = edges.filter((e) => e.target === nodeId)
     const promptEdge = genEdges.find((e) => e.targetHandle === 'prompt_pos')
     const promptNode = promptEdge ? nodes.find((n) => n.id === promptEdge.source) : undefined
-    const promptText = (promptNode?.data as PromptData)?.positive || ''
+    const pd = promptNode?.data as Record<string, unknown> | undefined
+    const promptText = (typeof pd?.positive === 'string' && pd.positive) || (typeof pd?.result === 'string' && pd.result) || (typeof pd?.text === 'string' && pd.text) || ''
     const negEdge = genEdges.find((e) => e.targetHandle === 'prompt_neg')
     const negNode = negEdge ? nodes.find((n) => n.id === negEdge.source) : undefined
     const negText = (negNode?.data as PromptData)?.negative || ''
@@ -116,8 +117,8 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
     const videoEdge = genEdges.find((e) => e.targetHandle === 'video_in')
     const imageEdge = genEdges.find((e) => e.targetHandle === 'image_in')
 
-    const promptData = promptEdgePos ? getNode(promptEdgePos)?.data as PromptData | undefined : undefined
-    const promptText = promptData?.positive || ''
+    const promptData = promptEdgePos ? getNode(promptEdgePos)?.data as Record<string, unknown> | undefined : undefined
+    const promptText = (typeof promptData?.positive === 'string' && promptData.positive) || (typeof promptData?.result === 'string' && promptData.result) || (typeof promptData?.text === 'string' && promptData.text) || ''
     if (!promptText) return
 
     const isI2V = /i2v/i.test(data.model ?? '')
@@ -265,7 +266,7 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
 
     if (timerRef.current) clearTimeout(timerRef.current)
 
-    const hasPrompt = previewDeps.split('|')[5]
+    const hasPrompt = previewDeps.split('|')[7]
     if (!hasPrompt) return
 
     timerRef.current = setTimeout(() => {
