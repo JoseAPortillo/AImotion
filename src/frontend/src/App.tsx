@@ -49,6 +49,7 @@ import RunwayVideoToVideoNode from './components/nodes/generators/RunwayVideoToV
 import RunwayImageToVideoNode from './components/nodes/generators/RunwayImageToVideoNode'
 import TransformersGeneratorNode from './components/nodes/generators/TransformersGeneratorNode'
 import ImageToTextNode from './components/nodes/generators/ImageToTextNode'
+import TextOutputNode from './components/nodes/TextOutputNode'
 import VLMNode from './components/nodes/generators/VLMNode'
 import LLMGeneratorNode from './components/nodes/generators/LLMGeneratorNode'
 import CVTaskProcessorNode from './components/nodes/processors/CVTaskProcessorNode'
@@ -82,6 +83,7 @@ const nodeTypes: NodeTypes = {
   samplingParams: SamplingParamsNode,
   denoisingStrength: DenoisingStrengthNode,
   output: OutputNode,
+  textOutput: TextOutputNode,
   preview: PreviewNode,
   groupNode: GroupNode,
 }

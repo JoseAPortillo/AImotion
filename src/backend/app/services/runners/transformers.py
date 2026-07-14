@@ -42,6 +42,13 @@ class TransformersRunner(BaseRunner):
             # Process inputs based on model type
             inputs = self._build_inputs(task_prompt, image)
 
+            # Cast inputs to match model dtype
+            model_dtype = next(self._model.parameters()).dtype
+            inputs = {
+                k: v.to(model_dtype) if hasattr(v, 'to') and v.is_floating_point() else v
+                for k, v in inputs.items()
+            }
+
             # Generate
             with torch.no_grad():
                 outputs = self._model.generate(
@@ -132,6 +139,10 @@ class TransformersRunner(BaseRunner):
                 image_size=(self._processor.image_processor.crop_size["height"],
                            self._processor.image_processor.crop_size["width"])
             )
+            # Extract text value from dict
+            if isinstance(parsed, dict):
+                values = list(parsed.values())
+                return str(values[0]) if values else ""
             return str(parsed)
 
         # Standard decoding for other models
@@ -141,48 +152,77 @@ class TransformersRunner(BaseRunner):
             response_tokens = generated_ids[input_length:]
             return self._processor.decode(response_tokens, skip_special_tokens=True)
 
+    def _resolve_hf_name(self, model_key: str) -> str:
+        """Resolve a registry key to a HuggingFace repo ID."""
+        from app.services.model_registry import find_installed
+        from app.services.model_catalog import catalog
+
+        # Try registry first
+        inst = find_installed(model_key)
+        if inst and inst.hf_name:
+            return inst.hf_name
+
+        # Try catalog
+        variant = catalog.get_variant(model_key)
+        if variant and getattr(variant, "hf_name", None):
+            return variant.hf_name
+
+        # Already looks like an HF name (contains /)
+        if "/" in model_key:
+            return model_key
+
+        return model_key
+
     def load(self, model_key: str) -> None:
         """Load model and processor into memory."""
         import torch
         from transformers import AutoModelForCausalLM, AutoProcessor
 
-        logger.info(f"Loading transformers model: {model_key}")
+        hf_name = self._resolve_hf_name(model_key)
+        logger.info(f"Loading transformers model: {model_key} -> {hf_name}")
 
         # Try to find model class from catalog
-        model_class_name = self._detect_model_class(model_key)
+        model_class_name = self._detect_model_class(hf_name)
 
         # Load processor
         self._processor = AutoProcessor.from_pretrained(
-            model_key,
+            hf_name,
             trust_remote_code=True,
         )
 
         # Load model with appropriate class
         if model_class_name:
             try:
-                from transformers import AutoModel
                 model_cls = getattr(__import__("transformers", fromlist=[model_class_name]), model_class_name)
                 self._model = model_cls.from_pretrained(
-                    model_key,
+                    hf_name,
                     torch_dtype=torch.float16,
-                    device_map="auto",
                     trust_remote_code=True,
                 )
             except (AttributeError, ImportError):
-                # Fallback to AutoModelForCausalLM
                 self._model = AutoModelForCausalLM.from_pretrained(
-                    model_key,
+                    hf_name,
+                    torch_dtype=torch.float16,
+                    trust_remote_code=True,
+                )
+        else:
+            try:
+                self._model = AutoModelForCausalLM.from_pretrained(
+                    hf_name,
                     torch_dtype=torch.float16,
                     device_map="auto",
                     trust_remote_code=True,
                 )
-        else:
-            self._model = AutoModelForCausalLM.from_pretrained(
-                model_key,
-                torch_dtype=torch.float16,
-                device_map="auto",
-                trust_remote_code=True,
-            )
+            except (ValueError, RuntimeError):
+                self._model = AutoModelForCausalLM.from_pretrained(
+                    hf_name,
+                    torch_dtype=torch.float16,
+                    trust_remote_code=True,
+                )
+
+        # Move to GPU if available and model didn't auto-place
+        if hasattr(self._model, 'device') and self._model.device.type == 'cpu' and torch.cuda.is_available():
+            self._model = self._model.cuda()
 
         self._model_key = model_key
         self._loaded = True

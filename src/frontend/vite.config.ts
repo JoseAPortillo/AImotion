@@ -14,6 +14,9 @@ export default defineConfig({
       '/hardware': 'http://localhost:8000',
       '/credentials': 'http://localhost:8000',
       '/credits': 'http://localhost:8000',
+      '/transformers': 'http://localhost:8000',
+      '/vlm': 'http://localhost:8000',
+      '/llm': 'http://localhost:8000',
     },
   },
 })

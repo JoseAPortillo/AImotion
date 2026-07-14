@@ -60,7 +60,7 @@ const NODE_GROUPS: NodeGroup[] = [
   },
   {
     label: 'Outputs',
-    nodes: ['output', 'preview'],
+    nodes: ['output', 'textOutput', 'preview'],
   },
   {
     label: 'Groups',

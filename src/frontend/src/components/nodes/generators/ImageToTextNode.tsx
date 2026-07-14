@@ -53,6 +53,12 @@ function ImageToTextNode(props: NodeProps) {
     fetchModels()
   }, [fetchModels])
 
+  useEffect(() => {
+    if (modelsLoaded && models.length > 0 && !data.model) {
+      updateNodeData(props.id, { model: models[0].key } as Partial<ImageToTextData>)
+    }
+  }, [modelsLoaded, models, data.model, props.id, updateNodeData])
+
   const handleAnalyze = useCallback(async () => {
     const inEdges = edges.filter((e) => e.target === props.id)
     const getNode = (edge: typeof inEdges[0]) => nodes.find((n) => n.id === edge.source)
@@ -68,6 +74,12 @@ function ImageToTextNode(props: NodeProps) {
 
     if (!imageFile) {
       addToast('Connect an Image Input node with an image', 'info')
+      return
+    }
+
+    if (!data.model) {
+      addToast('Select a model from the dropdown', 'info')
+      updateNodeData(props.id, { loading: false } as Partial<ImageToTextData>)
       return
     }
 

@@ -35,6 +35,7 @@ const NODE_DEFAULT_SIZE: Record<NodeType, { width: number; height: number }> = {
   samplingParams: { width: 260, height: 180 },
   denoisingStrength: { width: 260, height: 100 },
   output: { width: 260, height: 200 },
+  textOutput: { width: 260, height: 200 },
   preview: { width: 260, height: 200 },
   groupNode: { width: 400, height: 400 },
 }

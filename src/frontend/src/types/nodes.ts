@@ -26,6 +26,7 @@ export type NodeType =
   | 'imageToText'
   | 'runwayVideoToVideo'
   | 'runwayImageToVideo'
+  | 'textOutput'
   | 'groupNode'
 
 export interface ModelEntry {
@@ -182,6 +183,10 @@ export interface OutputData extends Record<string, unknown> {
   format: 'mp4' | 'gif'
 }
 
+export interface TextOutputData extends Record<string, unknown> {
+  text: string
+}
+
 export interface GroupNodeData extends Record<string, unknown> {
   collapsed: boolean
   childIds: string[]
@@ -206,6 +211,7 @@ export type NodeData =
   | LoRAData
   | ControlNetData
   | TransformersData
+  | TextOutputData
   | OutputData
   | GroupNodeData
 
@@ -565,6 +571,15 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
       { id: 'video_out', label: 'Video', type: 'video_tensor' },
     ],
     defaultData: { model: '', scheduler: '', execution_mode: 'local', vae_tiling: false, vae_tile_overlap: 0.0, steps: 50, cfg: 6, seed: 42, strength: 0.8, width: 1280, height: 720, duration: 5 },
+  },
+  textOutput: {
+    type: 'textOutput',
+    label: 'Text Output',
+    color: '#64748b',
+    description: 'Displays text output from transformer models, VLMs, or LLMs.',
+    inputs: [{ id: 'text_in', label: 'Text', type: 'prompt' }],
+    outputs: [],
+    defaultData: { text: '' },
   },
   groupNode: {
     type: 'groupNode',
