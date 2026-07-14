@@ -32,8 +32,9 @@ function PromptNode(props: NodeProps) {
 
   useEffect(() => {
     if (upstreamText && upstreamText !== lastUpstreamRef.current) {
+      const prevUpstream = lastUpstreamRef.current
       lastUpstreamRef.current = upstreamText
-      if (!data.positive) {
+      if (!localValue || localValue === prevUpstream) {
         setLocalValue(upstreamText)
         updateNodeData(props.id, { positive: upstreamText } as Partial<PromptData>)
       }
