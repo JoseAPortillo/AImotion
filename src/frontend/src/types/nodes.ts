@@ -297,7 +297,7 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
     label: 'Prompt',
     color: '#22c55e',
     description: 'Describe the video you want to generate. The positive prompt describes what you want; the negative prompt describes what to avoid.',
-    inputs: [],
+    inputs: [{ id: 'text_in', label: 'Text', type: 'prompt' }],
     outputs: [
       { id: 'positive', label: 'Positive', type: 'prompt' },
       { id: 'negative', label: 'Negative', type: 'prompt' },
@@ -578,7 +578,7 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
     color: '#64748b',
     description: 'Displays text output from transformer models, VLMs, or LLMs.',
     inputs: [{ id: 'text_in', label: 'Text', type: 'prompt' }],
-    outputs: [],
+    outputs: [{ id: 'text_out', label: 'Text', type: 'prompt' }],
     defaultData: { text: '' },
   },
   groupNode: {

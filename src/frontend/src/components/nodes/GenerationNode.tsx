@@ -170,7 +170,17 @@ function GenerationNode(props: NodeProps) {
     const videoNode = videoEdge ? getNode(videoEdge) : undefined
     const imageNode = imageEdge ? getNode(imageEdge) : undefined
 
-    if (!promptData?.positive) {
+    const resolvePromptText = (sd: Record<string, unknown> | undefined): string => {
+      if (!sd) return ''
+      if (typeof sd.positive === 'string' && sd.positive) return sd.positive
+      if (typeof sd.result === 'string' && sd.result) return sd.result
+      if (typeof sd.text === 'string' && sd.text) return sd.text
+      return ''
+    }
+
+    const positivePrompt = resolvePromptText(promptData as unknown as Record<string, unknown>)
+
+    if (!positivePrompt) {
       addToast('Connect a Prompt node to this Generation node', 'info')
       return
     }
@@ -196,7 +206,7 @@ function GenerationNode(props: NodeProps) {
     taskIdRef.current = ''
     try {
       const task = await startGeneration(
-        promptData.positive,
+        positivePrompt,
         promptEdgeNeg ? (getNode(promptEdgeNeg)?.data as PromptData | undefined)?.negative || '' : '',
         {
           width: data.width ?? 720,

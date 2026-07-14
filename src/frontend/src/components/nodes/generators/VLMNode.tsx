@@ -28,7 +28,17 @@ function VLMNode(props: NodeProps) {
       ? (imageNode.data as { file?: unknown }).file as File
       : null
 
-    if (!promptData?.positive) {
+    const resolvePromptText = (sd: Record<string, unknown> | undefined): string => {
+      if (!sd) return ''
+      if (typeof sd.positive === 'string' && sd.positive) return sd.positive
+      if (typeof sd.result === 'string' && sd.result) return sd.result
+      if (typeof sd.text === 'string' && sd.text) return sd.text
+      return ''
+    }
+
+    const positivePrompt = resolvePromptText(promptData as unknown as Record<string, unknown>)
+
+    if (!positivePrompt) {
       addToast('Connect a Prompt node with text', 'info')
       return
     }
@@ -39,7 +49,7 @@ function VLMNode(props: NodeProps) {
 
     updateNodeData(props.id, { loading: true, result: '' } as Partial<VLMData>)
     try {
-      const result = await analyzeVLM(imageFile, promptData.positive)
+      const result = await analyzeVLM(imageFile, positivePrompt)
       updateNodeData(props.id, { result, loading: false } as Partial<VLMData>)
     } catch (err: any) {
       addToast(`VLM error: ${err.message}`, 'error')

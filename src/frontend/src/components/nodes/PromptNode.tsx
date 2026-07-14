@@ -1,4 +1,4 @@
-import { memo, useCallback, useState } from 'react'
+import { memo, useCallback, useState, useMemo } from 'react'
 import type { NodeProps } from '@xyflow/react'
 import { Handle, Position } from '@xyflow/react'
 import { NODE_DEFINITIONS, getHandleColor, type NodeType, type PromptData } from '../../types/nodes'
@@ -10,14 +10,30 @@ function PromptNode(props: NodeProps) {
   const def = NODE_DEFINITIONS[props.type as NodeType]
   const data = props.data as PromptData
   const updateNodeData = useGraphStore((s) => s.updateNodeData)
+  const nodes = useGraphStore((s) => s.nodes)
+  const edges = useGraphStore((s) => s.edges)
   const [improving, setImproving] = useState(false)
   const [inlineNegOpen, setInlineNegOpen] = useState(false)
 
+  const upstreamText = useMemo(() => {
+    const inEdges = edges.filter((e) => e.target === props.id && e.targetHandle === 'text_in')
+    if (inEdges.length === 0) return ''
+    const sourceNode = nodes.find((n) => n.id === inEdges[0].source)
+    if (!sourceNode) return ''
+    const sd = sourceNode.data as Record<string, unknown>
+    if (typeof sd.result === 'string' && sd.result) return sd.result
+    if (typeof sd.text === 'string' && sd.text) return sd.text
+    if (typeof sd.positive === 'string' && sd.positive) return sd.positive
+    return ''
+  }, [nodes, edges, props.id])
+
+  const effectivePositive = data.positive || upstreamText
+
   const handleImprove = async () => {
-    if (!data.positive || improving) return
+    if (!effectivePositive || improving) return
     setImproving(true)
     try {
-      const improved = await improvePrompt(data.positive)
+      const improved = await improvePrompt(effectivePositive)
       updateNodeData(props.id, { positive: improved } as Partial<PromptData>)
     } catch (err) {
       console.error('Failed to improve prompt:', err)
@@ -30,7 +46,7 @@ function PromptNode(props: NodeProps) {
     <NodeWrapper def={def} selected={props.selected} headerRight={
       <button
         onClick={handleImprove}
-        disabled={improving || !data.positive}
+        disabled={improving || !effectivePositive}
         style={{
           background: improving ? '#555' : '#2563eb',
           color: 'white',
@@ -38,7 +54,7 @@ function PromptNode(props: NodeProps) {
           borderRadius: 4,
           padding: '1px 6px',
           fontSize: 9,
-          cursor: improving || !data.positive ? 'not-allowed' : 'pointer',
+          cursor: improving || !effectivePositive ? 'not-allowed' : 'pointer',
           lineHeight: 1.4,
         }}
       >
@@ -46,6 +62,9 @@ function PromptNode(props: NodeProps) {
       </button>
     } handles={
       <>
+        <Handle type="target" position={Position.Left} id="text_in" style={{ top: '35%', background: getHandleColor('text_in', 'prompt') }}>
+          <div style={{ position: 'absolute', left: -6, top: -2, transform: 'translateX(-100%)', fontSize: 9, color: getHandleColor('text_in', 'prompt'), whiteSpace: 'nowrap' }}>Text</div>
+        </Handle>
         <Handle type="source" position={Position.Right} id="positive" style={{ top: '35%', background: getHandleColor('positive', 'prompt') }}>
           <div style={{ position: 'absolute', right: -6, top: -2, transform: 'translateX(100%)', fontSize: 9, color: getHandleColor('positive', 'prompt'), whiteSpace: 'nowrap' }}>Positive</div>
         </Handle>
@@ -56,7 +75,7 @@ function PromptNode(props: NodeProps) {
     }>
       <div className="nodrag" style={{ padding: '4px 6px', fontSize: 10, color: '#ccc' }}>
         <textarea
-          placeholder="Positive prompt..."
+          placeholder={upstreamText ? 'Using connected text...' : 'Positive prompt...'}
           value={data.positive || ''}
           onChange={(e) => updateNodeData(props.id, { positive: e.target.value } as Partial<PromptData>)}
           style={{

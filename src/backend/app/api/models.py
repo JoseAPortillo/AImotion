@@ -626,7 +626,13 @@ async def list_models():
             pipeline_defaults = variant.defaults
             is_video = variant.is_video
             runner = variant.family.runner
-            if inst.pipeline_class and _is_diffusers_pipeline(inst.pipeline_class):
+            if inst.runner == "transformers":
+                runner = "transformers"
+                pipeline_inputs = catalog.get_family("transformers").inputs if catalog.get_family("transformers") else {}
+                pipeline_accepts = {"image": True, "video": False, "strength": False}
+                pipeline_defaults = inst.defaults or {"max_new_tokens": 512, "temperature": 0.7}
+                is_video = False
+            elif inst.pipeline_class and _is_diffusers_pipeline(inst.pipeline_class):
                 runner = "diffusers"
         elif inst.runner == "transformers":
             # Transformers model - use catalog inputs

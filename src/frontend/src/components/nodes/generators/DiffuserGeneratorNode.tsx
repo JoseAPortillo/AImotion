@@ -234,6 +234,16 @@ function DiffuserGeneratorNode(props: NodeProps) {
     const videoNode = videoEdge ? getNode(videoEdge) : undefined
     const imageNode = imageEdge ? getNode(imageEdge) : undefined
 
+    const resolvePromptText = (sd: Record<string, unknown> | undefined): string => {
+      if (!sd) return ''
+      if (typeof sd.positive === 'string' && sd.positive) return sd.positive
+      if (typeof sd.result === 'string' && sd.result) return sd.result
+      if (typeof sd.text === 'string' && sd.text) return sd.text
+      return ''
+    }
+
+    const positivePrompt = resolvePromptText(promptData as unknown as Record<string, unknown>)
+
     console.log('[DiffuserGen] Image node:', imageNode)
     console.log('[DiffuserGen] Image node data:', imageNode?.data)
     
@@ -286,7 +296,7 @@ function DiffuserGeneratorNode(props: NodeProps) {
     console.log('[DiffuserGen] Video file to send:', videoFile)
 
     const isSVD = data.model?.includes('stable_video_diffusion')
-    if (!isSVD && !promptData?.positive) {
+    if (!isSVD && !positivePrompt) {
       addToast('Connect a Prompt node to this node', 'info')
       return
     }
@@ -318,7 +328,7 @@ function DiffuserGeneratorNode(props: NodeProps) {
     taskIdRef.current = ''
     try {
       const task = await startGeneration(
-        promptData?.positive || '',
+        positivePrompt,
         promptEdgeNeg ? (getNode(promptEdgeNeg)?.data as PromptData | undefined)?.negative || '' : '',
         {
           width: data.width ?? 720,
