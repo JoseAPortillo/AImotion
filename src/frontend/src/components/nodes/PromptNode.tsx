@@ -29,7 +29,7 @@ function PromptNode(props: NodeProps) {
   }, [nodes, edges, props.id])
 
   useEffect(() => {
-    if (upstreamText && !userTypedRef.current && !data.positive) {
+    if (upstreamText && !userTypedRef.current) {
       updateNodeData(props.id, { positive: upstreamText } as Partial<PromptData>)
     }
   }, [upstreamText])
@@ -85,7 +85,11 @@ function PromptNode(props: NodeProps) {
           placeholder={upstreamText ? 'Using connected text...' : 'Positive prompt...'}
           value={data.positive || upstreamText || ''}
           onChange={(e) => {
-            userTypedRef.current = true
+            if (e.target.value) {
+              userTypedRef.current = true
+            } else {
+              userTypedRef.current = false
+            }
             updateNodeData(props.id, { positive: e.target.value } as Partial<PromptData>)
           }}
           style={{
