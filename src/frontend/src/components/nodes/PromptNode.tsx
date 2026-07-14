@@ -1,4 +1,4 @@
-import { memo, useCallback, useState, useMemo } from 'react'
+import { memo, useCallback, useState, useMemo, useEffect, useRef } from 'react'
 import type { NodeProps } from '@xyflow/react'
 import { Handle, Position } from '@xyflow/react'
 import { NODE_DEFINITIONS, getHandleColor, type NodeType, type PromptData } from '../../types/nodes'
@@ -14,6 +14,7 @@ function PromptNode(props: NodeProps) {
   const edges = useGraphStore((s) => s.edges)
   const [improving, setImproving] = useState(false)
   const [inlineNegOpen, setInlineNegOpen] = useState(false)
+  const userTypedRef = useRef(false)
 
   const upstreamText = useMemo(() => {
     const inEdges = edges.filter((e) => e.target === props.id && e.targetHandle === 'text_in')
@@ -26,6 +27,12 @@ function PromptNode(props: NodeProps) {
     if (typeof sd.positive === 'string' && sd.positive) return sd.positive
     return ''
   }, [nodes, edges, props.id])
+
+  useEffect(() => {
+    if (upstreamText && !userTypedRef.current && !data.positive) {
+      updateNodeData(props.id, { positive: upstreamText } as Partial<PromptData>)
+    }
+  }, [upstreamText])
 
   const effectivePositive = data.positive || upstreamText
 
@@ -77,7 +84,10 @@ function PromptNode(props: NodeProps) {
         <textarea
           placeholder={upstreamText ? 'Using connected text...' : 'Positive prompt...'}
           value={data.positive || upstreamText || ''}
-          onChange={(e) => updateNodeData(props.id, { positive: e.target.value } as Partial<PromptData>)}
+          onChange={(e) => {
+            userTypedRef.current = true
+            updateNodeData(props.id, { positive: e.target.value } as Partial<PromptData>)
+          }}
           style={{
             width: '100%',
             background: '#0f0f0f',
