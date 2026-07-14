@@ -1,4 +1,4 @@
-import { memo, useCallback, useState, useMemo } from 'react'
+import { memo, useCallback, useState, useMemo, useEffect, useRef } from 'react'
 import type { NodeProps } from '@xyflow/react'
 import { Handle, Position } from '@xyflow/react'
 import { NODE_DEFINITIONS, getHandleColor, type NodeType, type PromptData } from '../../types/nodes'
@@ -27,14 +27,27 @@ function PromptNode(props: NodeProps) {
     return ''
   }, [nodes, edges, props.id])
 
-  const hasUserInput = !!data.positive
-  const effectivePositive = data.positive || upstreamText
+  const [localValue, setLocalValue] = useState(() => data.positive || upstreamText || '')
+  const lastUpstreamRef = useRef(upstreamText)
+
+  useEffect(() => {
+    if (upstreamText && upstreamText !== lastUpstreamRef.current) {
+      lastUpstreamRef.current = upstreamText
+      if (!data.positive) {
+        setLocalValue(upstreamText)
+        updateNodeData(props.id, { positive: upstreamText } as Partial<PromptData>)
+      }
+    }
+  }, [upstreamText])
+
+  const effectivePositive = localValue || upstreamText
 
   const handleImprove = async () => {
     if (!effectivePositive || improving) return
     setImproving(true)
     try {
       const improved = await improvePrompt(effectivePositive)
+      setLocalValue(improved)
       updateNodeData(props.id, { positive: improved } as Partial<PromptData>)
     } catch (err) {
       console.error('Failed to improve prompt:', err)
@@ -77,8 +90,9 @@ function PromptNode(props: NodeProps) {
       <div className="nodrag" style={{ padding: '4px 6px', fontSize: 10, color: '#ccc' }}>
         <textarea
           placeholder={upstreamText ? 'Using connected text...' : 'Positive prompt...'}
-          value={effectivePositive}
-          onChange={(e) => updateNodeData(props.id, { positive: e.target.value } as Partial<PromptData>)}
+          value={localValue}
+          onChange={(e) => setLocalValue(e.target.value)}
+          onBlur={() => updateNodeData(props.id, { positive: localValue } as Partial<PromptData>)}
           style={{
             width: '100%',
             background: '#0f0f0f',
