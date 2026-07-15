@@ -194,13 +194,15 @@ class DiffusersGenerator:
         mismatched = []
         for name, param in pipe.named_parameters():
             if param.dtype != dtype:
-                mismatched.append((name, param.dtype))
+                mismatched.append(name)
         for name, buf in pipe.named_buffers():
             if buf.dtype != dtype:
-                mismatched.append((name, buf.dtype))
-        if mismatched:
-            logger.warning(f"Aligning {len(mismatched)} tensors to {dtype}")
-            pipe.to(dtype=dtype)
+                mismatched.append(name)
+        if not mismatched:
+            return
+        logger.warning(f"Aligning {len(mismatched)} tensors to {dtype}: {mismatched[:5]}...")
+        for module in pipe.modules():
+            module.to(dtype=dtype)
 
     @staticmethod
     def _inject_missing_i2v_components(pipe, model_name: str, dtype):
