@@ -135,10 +135,7 @@ class DiffusersGenerator:
         # (e.g. raw models that don't ship model_index.json but have config.json).
         if mod_cls:
             try:
-                pipe = mod_cls.from_pretrained(
-                    model_name, torch_dtype=dtype, token=token,
-                    local_files_only=model_is_cached,
-                )
+                pipe = self._load_with_image_encoder_fix(mod_cls, model_name, dtype, token, model_is_cached)
                 self._apply_post_load(pipe, model_name, dtype)
                 return pipe
             except Exception as e:
@@ -205,6 +202,29 @@ class DiffusersGenerator:
             except Exception:
                 logger.debug(f"VAE tiling not supported for {type(pipe.vae).__name__}")
 
+    def _load_with_image_encoder_fix(self, mod_cls, model_name, dtype, token, model_is_cached):
+        """Load pipeline, pre-loading image_encoder to avoid CLIPVisionModel type mismatch."""
+        from diffusers import WanImageToVideoPipeline, CogVideoXImageToVideoPipeline
+
+        extra_kwargs = {}
+        if issubclass(mod_cls, (WanImageToVideoPipeline, CogVideoXImageToVideoPipeline)):
+            try:
+                from transformers import CLIPVisionModelWithProjection
+                image_encoder = CLIPVisionModelWithProjection.from_pretrained(
+                    model_name, subfolder="image_encoder", torch_dtype=dtype, token=token,
+                    local_files_only=model_is_cached,
+                )
+                extra_kwargs["image_encoder"] = image_encoder
+                logger.info(f"Pre-loaded image_encoder as CLIPVisionModelWithProjection")
+            except Exception as e:
+                logger.warning(f"Could not pre-load image_encoder: {e}")
+
+        return mod_cls.from_pretrained(
+            model_name, torch_dtype=dtype, token=token,
+            local_files_only=model_is_cached,
+            **extra_kwargs,
+        )
+
     def _apply_post_load(self, pipe, model_name: str, dtype):
         """Apply post-load optimizations: offloading, dtype alignment, attention slicing, VAE tiling."""
         import torch
@@ -240,7 +260,8 @@ class DiffusersGenerator:
             return False
 
         free_gb = torch.cuda.mem_get_info(0)[0] / (1024 ** 3)
-        total_gb = torch.cuda.get_device_properties(0).total_mem / (1024 ** 3)
+        props = torch.cuda.get_device_properties(0)
+        total_gb = getattr(props, "total_memory", getattr(props, "total_mem", 0)) / (1024 ** 3)
 
         # Rough estimate: count parameters in billions
         n_params = sum(p.numel() for p in pipe.parameters()) / 1e9
