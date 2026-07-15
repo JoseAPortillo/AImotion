@@ -16,6 +16,13 @@ def _resolve_pipeline_class(pipeline_class: str) -> type | None:
 
     cls = getattr(diffusers, pipeline_class, None)
     if cls is not None:
+        # Reject dummy objects from diffusers.utils.dummy_torch_and_transformers_objects
+        mod_name = getattr(cls, "__module__", "")
+        if "dummy" in mod_name:
+            cls = None
+        elif not inspect.isclass(cls):
+            cls = None
+    if cls is not None:
         return cls
 
     pipelines_dir = os.path.join(os.path.dirname(diffusers.__file__), "pipelines")
@@ -30,6 +37,9 @@ def _resolve_pipeline_class(pipeline_class: str) -> type | None:
             mod = importlib.import_module(f"diffusers.pipelines.{sub_name}")
             cls = getattr(mod, pipeline_class, None)
             if cls is not None:
+                mod_name = getattr(cls, "__module__", "")
+                if "dummy" in mod_name or not inspect.isclass(cls):
+                    continue
                 return cls
         except Exception:
             continue
@@ -103,8 +113,7 @@ class DiffusersGenerator:
 
         mod_cls = None
         if pipeline_class_name:
-            import importlib
-            mod_cls = getattr(importlib.import_module("diffusers"), pipeline_class_name, None)
+            mod_cls = _resolve_pipeline_class(pipeline_class_name)
 
         # Use cached repo file list to avoid HF API call on every load
         repo_info = get_cached_repo_info(model_name)
@@ -121,24 +130,27 @@ class DiffusersGenerator:
 
         model_is_cached = is_model_cached(model_name)
 
+        # When we know the pipeline class, always try from_pretrained first.
+        # This handles repos with model_index.json AND repos with just config.json
+        # (e.g. raw models that don't ship model_index.json but have config.json).
+        if mod_cls:
+            try:
+                pipe = mod_cls.from_pretrained(
+                    model_name, torch_dtype=dtype, token=token,
+                    local_files_only=model_is_cached,
+                )
+                self._apply_post_load(pipe, model_name, dtype)
+                return pipe
+            except Exception as e:
+                logger.warning(f"{mod_cls.__name__}.from_pretrained failed: {e}")
+
         if has_model_index or not checkpoint_file:
             pipe_cls = mod_cls or DiffusionPipeline
             pipe = pipe_cls.from_pretrained(
                 model_name, torch_dtype=dtype, token=token,
                 local_files_only=model_is_cached,
             )
-            pipe.to(self.device)
-            self._align_dtype(pipe, dtype)
-            if hasattr(pipe, "enable_attention_slicing"):
-                pipe.enable_attention_slicing()
-            if hasattr(pipe, "vae") and hasattr(pipe.vae, "enable_tiling"):
-                try:
-                    pipe.vae.enable_tiling()
-                except Exception:
-                    logger.debug(f"VAE tiling not supported for {type(pipe.vae).__name__}")
-            self._inject_missing_i2v_components(pipe, model_name, dtype)
-            self._log_vram()
-            logger.info(f"Pipeline loaded on {self.device}: {type(pipe).__name__}({model_name})")
+            self._apply_post_load(pipe, model_name, dtype)
             return pipe
 
         # Single-file checkpoint — try generic auto-detect first
@@ -159,25 +171,30 @@ class DiffusersGenerator:
 
         pipe = self._try_load_single_file(local_path, dtype, mod_cls)
         if pipe is not None:
-            pipe.to(self.device)
-            self._enable_vae_tiling(pipe)
-            self._log_vram()
-            logger.info(f"Pipeline loaded on {self.device}: {type(pipe).__name__}({model_name})")
+            self._apply_post_load(pipe, model_name, dtype)
             return pipe
 
         # Last resort: component-by-component loading for SDXL/SD single-file checkpoints
         # that are missing subcomponent weights in the checkpoint itself.
-        pipe = self._try_load_single_file_with_components(local_path, dtype)
+        pipe = self._try_load_single_file_with_components(local_path, dtype, mod_cls)
         if pipe is not None:
-            pipe.to(self.device)
-            self._enable_vae_tiling(pipe)
-            self._log_vram()
-            logger.info(f"Pipeline loaded on {self.device}: {type(pipe).__name__}({model_name})")
+            self._apply_post_load(pipe, model_name, dtype)
             return pipe
+
+        # If we know the pipeline class but from_pretrained failed, the model repo
+        # might be raw-weights format instead of Diffusers format.
+        hint = ""
+        if mod_cls:
+            cls_name = getattr(mod_cls, "__name__", "")
+            if any(kw in cls_name for kw in ("Wan", "CogVideo")):
+                hint = (
+                    f" Hint: {model_name} may be the raw-weights repo. "
+                    f"Try reinstalling with the Diffusers version (e.g. add '-Diffusers' suffix)."
+                )
 
         raise ValueError(
             f"Could not load {model_name} — tried auto-detect via {mod_cls or 'DiffusionPipeline'}, "
-            f"and component-wise fallback for SDXL/SD."
+            f"and component-wise fallback for SDXL/SD.{hint}"
         )
 
     @staticmethod
@@ -187,6 +204,62 @@ class DiffusersGenerator:
                 pipe.vae.enable_tiling()
             except Exception:
                 logger.debug(f"VAE tiling not supported for {type(pipe.vae).__name__}")
+
+    def _apply_post_load(self, pipe, model_name: str, dtype):
+        """Apply post-load optimizations: offloading, dtype alignment, attention slicing, VAE tiling."""
+        import torch
+
+        # Check if we need CPU offloading (model too large for VRAM)
+        needs_offload = self._should_offload(pipe)
+        if needs_offload:
+            logger.info(f"Enabling sequential CPU offloading for {type(pipe).__name__} (model too large for VRAM)")
+            pipe.enable_sequential_cpu_offload()
+        else:
+            pipe.to(self.device)
+
+        self._align_dtype(pipe, dtype)
+
+        if hasattr(pipe, "enable_attention_slicing"):
+            pipe.enable_attention_slicing()
+
+        if hasattr(pipe, "vae") and hasattr(pipe.vae, "enable_tiling"):
+            try:
+                pipe.vae.enable_tiling()
+            except Exception:
+                logger.debug(f"VAE tiling not supported for {type(pipe.vae).__name__}")
+
+        self._inject_missing_i2v_components(pipe, model_name, dtype)
+        self._log_vram()
+        logger.info(f"Pipeline loaded on {self.device}: {type(pipe).__name__}({model_name})")
+
+    @staticmethod
+    def _should_offload(pipe) -> bool:
+        """Check if model is too large for available VRAM and needs CPU offloading."""
+        import torch
+        if not torch.cuda.is_available():
+            return False
+
+        free_gb = torch.cuda.mem_get_info(0)[0] / (1024 ** 3)
+        total_gb = torch.cuda.get_device_properties(0).total_mem / (1024 ** 3)
+
+        # Rough estimate: count parameters in billions
+        n_params = sum(p.numel() for p in pipe.parameters()) / 1e9
+
+        # bfloat16/float16 = 2 bytes per param
+        dtype_bytes = 2
+        estimated_gb = n_params * dtype_bytes
+
+        # Add ~30% overhead for activations, VAE, text encoders
+        estimated_gb *= 1.3
+
+        logger.info(f"VRAM: {free_gb:.1f}/{total_gb:.1f} GB free, model ~{estimated_gb:.1f} GB (params: {n_params:.1f}B)")
+
+        # If estimated model size exceeds 80% of free VRAM, offload
+        if estimated_gb > free_gb * 0.8:
+            logger.warning(f"Model ({estimated_gb:.1f} GB) may not fit in VRAM ({free_gb:.1f} GB free)")
+            return True
+
+        return False
 
     @staticmethod
     def _align_dtype(pipe, dtype):
@@ -214,10 +287,19 @@ class DiffusersGenerator:
         if image_enc is not None:
             return
 
+        # Map pipeline types to their expected CLIP variants.
+        # Wan I2V uses OpenCLIP (xlm-roberta-large-vit-huge-14) — cannot inject
+        # from a standard CLIP model; the image_encoder MUST come from the repo.
+        if isinstance(pipe, WanImageToVideoPipeline):
+            logger.warning(
+                f"Wan I2V pipeline missing image_encoder — cannot inject fallback "
+                f"(Wan uses OpenCLIP, not standard CLIP). Reinstall with the -Diffusers repo."
+            )
+            return
+
         # Map pipeline types to their expected CLIP variants
         _CLIP_FALLBACKS = {
             CogVideoXImageToVideoPipeline: "openai/clip-vit-large-patch14",
-            WanImageToVideoPipeline: "openai/clip-vit-large-patch14",
         }
         clip_name = None
         for pipe_type, cname in _CLIP_FALLBACKS.items():
@@ -282,10 +364,17 @@ class DiffusersGenerator:
         return None
 
     @staticmethod
-    def _try_load_single_file_with_components(local_path: str, dtype):
+    def _try_load_single_file_with_components(local_path: str, dtype, pipe_cls=None):
         from diffusers import StableDiffusionXLPipeline, StableDiffusionPipeline
         from diffusers import AutoencoderKL, UNet2DConditionModel
         from transformers import CLIPTextModel, CLIPTextModelWithProjection, CLIPTokenizer
+
+        # Skip SDXL fallback for known non-SDXL pipeline types (Wan, CogVideo, etc.)
+        if pipe_cls is not None:
+            cls_name = getattr(pipe_cls, "__name__", "")
+            if any(kw in cls_name for kw in ("Wan", "CogVideo", "LTX", "Mochi", "AnimateDiff")):
+                logger.info(f"Skipping SDXL component fallback — pipeline {cls_name} is not SDXL-compatible")
+                return None
 
         logger.info("Trying SDXL component-by-component loading as last resort...")
         try:

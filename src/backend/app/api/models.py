@@ -561,8 +561,10 @@ def _is_diffusers_pipeline(pipeline_class: str) -> bool:
 def _inputs_from_pipeline(pipeline_class: str) -> dict:
     """Infer inputs from pipeline class for installed models without a catalog variant."""
     params = infer_pipeline_params(pipeline_class)
-    if params is None:
-        return {}
+    if params is None or set(params.keys()) <= {"args", "kwargs"}:
+        from app.services.model_catalog import _KNOWN_PIPELINE_INPUTS
+        known = _KNOWN_PIPELINE_INPUTS.get(pipeline_class, {"prompt": {"required": True, "type": "text"}})
+        return {k: {"has_default": v.get("default") is not None, "default": v.get("default")} for k, v in known.items()}
     inputs = {}
     for pname, pinfo in params.items():
         inputs[pname] = {

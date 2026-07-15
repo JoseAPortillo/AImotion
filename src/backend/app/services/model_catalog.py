@@ -272,7 +272,7 @@ _INFERRED_VIDEO_PIPELINES = {
 def _is_video_pipeline(pipeline_class: str) -> bool:
     """Detect if pipeline is video-based, dynamically from signature or fallback set."""
     params = infer_pipeline_params(pipeline_class)
-    if params is not None:
+    if params is not None and set(params.keys()) - {"args", "kwargs"}:
         return "video" in params or "num_frames" in params or "fps" in params
     return pipeline_class in _INFERRED_VIDEO_PIPELINES
 
