@@ -170,7 +170,7 @@ function RunwayVideoToVideoNode(props: NodeProps) {
     data,
     modalityFilter: (m: ModelEntry) => m.runner === 'api' && m.key.startsWith('runway') && !m.key.includes('-i2v'),
   })
-  const autoPreview = useAutoPreview({ nodeId: props.id, data })
+  const autoPreview = useAutoPreview({ nodeId: props.id, data, autoTrigger: false })
 
   const activeInputs = useMemo(() => {
     const active = new Set<string>(['prompt_pos', 'prompt_neg', 'video_in'])
@@ -322,6 +322,27 @@ function RunwayVideoToVideoNode(props: NodeProps) {
             onChange={handleSeedChange}
           />
         </div>
+
+        {!autoPreview.previewRunning && !autoPreview.previewUrl && (
+          <button
+            onClick={() => autoPreview.triggerPreview()}
+            disabled={!data.model}
+            style={{
+              width: '100%',
+              marginTop: 4,
+              padding: '4px 0',
+              borderRadius: 4,
+              border: 'none',
+              fontSize: 10,
+              fontWeight: 600,
+              cursor: data.model ? 'pointer' : 'not-allowed',
+              background: data.model ? '#6366f1' : '#333',
+              color: data.model ? '#fff' : '#888',
+            }}
+          >
+            Generate Preview
+          </button>
+        )}
 
         {(autoPreview.previewRunning || autoPreview.previewUrl) && (
           <div style={{ marginTop: 4, textAlign: 'center' }}>

@@ -7,9 +7,10 @@ import { resolveNodeFile } from '../utils/resolveNodeFile'
 interface UseAutoPreviewOptions {
   nodeId: string
   data: GenerationData
+  autoTrigger?: boolean
 }
 
-export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
+export function useAutoPreview({ nodeId, data, autoTrigger = true }: UseAutoPreviewOptions) {
   const nodes = useGraphStore((s) => s.nodes)
   const edges = useGraphStore((s) => s.edges)
   const autoPreviews = useGraphStore((s) => s.autoPreviews)
@@ -209,6 +210,7 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
   }, [])
 
   useEffect(() => {
+    if (!autoTrigger) return
     if (!data.model) return
     if (!previewDeps) return
     if (previewDeps === lastKeyRef.current) return
@@ -226,7 +228,7 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current)
     }
-  }, [previewDeps, data.model, run])
+  }, [previewDeps, data.model, run, autoTrigger])
 
   return {
     previewUrl,
@@ -237,5 +239,6 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
     previewTotalSteps,
     previewEtaSec,
     cancelAutoPreview: cancel,
+    triggerPreview: run,
   }
 }
