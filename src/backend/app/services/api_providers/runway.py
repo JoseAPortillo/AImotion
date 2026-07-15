@@ -163,7 +163,12 @@ class RunwayProvider(BaseApiProvider):
 
             target_ratio = params.extra.get("targetAspectRatio")
             if target_ratio:
-                body["targetAspectRatio"] = target_ratio
+                body["ratio"] = target_ratio
+
+            image_path = params.extra.get("image_path")
+            if image_path and os.path.exists(image_path):
+                image_uri = await self._upload_media(client, image_path, "image/png")
+                body["references"] = [{"type": "image", "uri": image_uri}]
 
             if progress_callback:
                 await progress_callback(2, 5)
