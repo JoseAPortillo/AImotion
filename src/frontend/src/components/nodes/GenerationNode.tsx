@@ -6,6 +6,7 @@ import NodeWrapper, { CollapsibleSection, InfoLabel, FIELD_DESCS } from './NodeW
 import { useGraphStore } from '../../store/graph'
 import { useToastStore } from '../../store/toast'
 import { startGeneration, pollTask, cancelTask, type TaskStatus } from '../../api/backend'
+import { resolveNodeFile } from '../../utils/resolveNodeFile'
 import ModelSelect from '../ModelSelect'
 
 const schedLabels: Record<string, string> = {
@@ -167,8 +168,6 @@ function GenerationNode(props: NodeProps) {
     const imageEdge = genEdges.find((e) => e.targetHandle === 'image_in')
 
     const promptData = promptEdgePos ? getNode(promptEdgePos)?.data as PromptData | undefined : undefined
-    const videoNode = videoEdge ? getNode(videoEdge) : undefined
-    const imageNode = imageEdge ? getNode(imageEdge) : undefined
 
     const resolvePromptText = (sd: Record<string, unknown> | undefined): string => {
       if (!sd) return ''
@@ -205,6 +204,8 @@ function GenerationNode(props: NodeProps) {
     startTimeRef.current = Date.now()
     taskIdRef.current = ''
     try {
+      const videoFile = videoEdge ? await resolveNodeFile(videoEdge.source) : undefined
+      const imageFile = imageEdge ? await resolveNodeFile(imageEdge.source) : undefined
       const task = await startGeneration(
         positivePrompt,
         promptEdgeNeg ? (getNode(promptEdgeNeg)?.data as PromptData | undefined)?.negative || '' : '',
@@ -229,8 +230,8 @@ function GenerationNode(props: NodeProps) {
           max_guidance_scale: data.max_guidance_scale,
           extraParams,
         },
-        (videoNode?.data && 'file' in videoNode.data && (videoNode.data as { file?: File }).file instanceof File) ? (videoNode.data as { file?: unknown }).file as File : undefined,
-        (imageNode?.data && 'file' in imageNode.data && (imageNode.data as { file?: File }).file instanceof File) ? (imageNode.data as { file?: unknown }).file as File : undefined,
+        videoFile,
+        imageFile,
       )
 
       taskIdRef.current = task.task_id

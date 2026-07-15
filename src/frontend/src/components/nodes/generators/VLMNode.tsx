@@ -6,6 +6,7 @@ import NodeWrapper from '../NodeWrapper'
 import { useGraphStore } from '../../../store/graph'
 import { useToastStore } from '../../../store/toast'
 import { analyzeVLM } from '../../../api/backend'
+import { resolveNodeFile } from '../../../utils/resolveNodeFile'
 
 function VLMNode(props: NodeProps) {
   const def = NODE_DEFINITIONS[props.type as NodeType]
@@ -23,10 +24,7 @@ function VLMNode(props: NodeProps) {
     const imageEdge = inEdges.find((e) => e.targetHandle === 'image_in')
 
     const promptData = promptEdge ? getNode(promptEdge)?.data as PromptData | undefined : undefined
-    const imageNode = imageEdge ? getNode(imageEdge) : undefined
-    const imageFile = imageNode?.data && 'file' in imageNode.data && (imageNode.data as { file?: File }).file instanceof File
-      ? (imageNode.data as { file?: unknown }).file as File
-      : null
+    const imageFile = imageEdge ? await resolveNodeFile(imageEdge.source) : null
 
     const resolvePromptText = (sd: Record<string, unknown> | undefined): string => {
       if (!sd) return ''

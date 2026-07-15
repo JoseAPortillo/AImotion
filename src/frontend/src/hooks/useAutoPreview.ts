@@ -1,7 +1,8 @@
 import { useCallback, useMemo, useState, useEffect, useRef } from 'react'
 import { startGeneration, pollTask, cancelTask } from '../api/backend'
 import { useGraphStore } from '../store/graph'
-import type { GenerationData, PromptData, ModelEntry, GroupNodeData } from '../types/nodes'
+import type { GenerationData, PromptData, ModelEntry } from '../types/nodes'
+import { resolveNodeFile } from '../utils/resolveNodeFile'
 
 interface UseAutoPreviewOptions {
   nodeId: string
@@ -125,57 +126,6 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
     if (isI2V && !imageEdge) {
       console.warn('[auto-preview] Model', data.model, 'requires image input but no image_in edge — skipping')
       return
-    }
-
-    const getFileFromNodeData = async (nodeData: any): Promise<File | undefined> => {
-      if (!nodeData) return undefined
-      if (nodeData.file instanceof File) return nodeData.file
-      if (nodeData.fileDataUrl) {
-        const r = await fetch(nodeData.fileDataUrl)
-        const blob = await r.blob()
-        return new File([blob], nodeData.fileName || 'file', { type: blob.type })
-      }
-      return undefined
-    }
-
-    const resolveNodeFile = async (sourceNodeId: string, visited?: Set<string>): Promise<File | undefined> => {
-      const store = useGraphStore.getState()
-      const sourceNode = store.nodes.find((n) => n.id === sourceNodeId)
-      if (!sourceNode) return undefined
-
-      const file = await getFileFromNodeData(sourceNode.data)
-      if (file) return file
-
-      const output = store.nodeOutputs[sourceNodeId]
-      if (output?.url) {
-        const r = await fetch(output.url)
-        const blob = await r.blob()
-        return new File([blob], 'output', { type: blob.type })
-      }
-
-      if (sourceNode.type === 'groupNode') {
-        const childIds = (sourceNode.data as GroupNodeData).childIds || []
-        for (const cid of childIds) {
-          const childOutput = store.nodeOutputs[cid]
-          if (childOutput?.url) {
-            const r = await fetch(childOutput.url)
-            const blob = await r.blob()
-            return new File([blob], 'group-output', { type: blob.type })
-          }
-        }
-      }
-
-      if (sourceNode.type === 'preview' || sourceNode.type === 'groupNode') {
-        const cycleGuard = visited ?? new Set<string>()
-        if (cycleGuard.has(sourceNodeId)) return undefined
-        cycleGuard.add(sourceNodeId)
-        const incoming = store.edges.find((e) => e.target === sourceNodeId)
-        if (incoming) {
-          return resolveNodeFile(incoming.source, cycleGuard)
-        }
-      }
-
-      return undefined
     }
 
     const imageFile = imageEdge ? await resolveNodeFile(imageEdge.source) : undefined

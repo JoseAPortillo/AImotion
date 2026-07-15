@@ -1,9 +1,10 @@
 import { useCallback, useMemo, useState, useEffect, useRef } from 'react'
 import { flushSync } from 'react-dom'
-import type { GenerationData, PromptData, ModelEntry, GroupNodeData } from '../types/nodes'
+import type { GenerationData, PromptData, ModelEntry } from '../types/nodes'
 import { useGraphStore } from '../store/graph'
 import { useToastStore } from '../store/toast'
 import { startGeneration, pollTask, cancelTask, type TaskStatus } from '../api/backend'
+import { resolveNodeFile } from '../utils/resolveNodeFile'
 
 export const schedLabels: Record<string, string> = {
   cogvideox_ddim: 'DDIM',
@@ -38,26 +39,6 @@ export interface UseGeneratorBaseOptions {
   nodeId: string
   data: GenerationData
   modalityFilter: (model: ModelEntry) => boolean
-}
-
-function extForMime(mime: string): string {
-  if (mime.includes('png')) return '.png'
-  if (mime.includes('jpeg') || mime.includes('jpg')) return '.jpg'
-  if (mime.includes('webp')) return '.webp'
-  if (mime.includes('gif')) return '.gif'
-  if (mime.includes('bmp')) return '.bmp'
-  if (mime.includes('tiff')) return '.tiff'
-  if (mime.includes('mp4')) return '.mp4'
-  if (mime.includes('webm')) return '.webm'
-  if (mime.includes('wav')) return '.wav'
-  if (mime.includes('mp3')) return '.mp3'
-  return '.bin'
-}
-
-function fileWithName(baseName: string, blob: Blob): File {
-  const ext = extForMime(blob.type)
-  const hasExt = /\.\w+$/.test(baseName)
-  return new File([blob], hasExt ? baseName : `${baseName}${ext}`, { type: blob.type })
 }
 
 export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorBaseOptions) {
@@ -137,61 +118,6 @@ export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorB
     const promptData = promptEdgePos ? getNode(promptEdgePos)?.data as PromptData | undefined : undefined
     const videoNode = videoEdge ? getNode(videoEdge) : undefined
     const imageNode = imageEdge ? getNode(imageEdge) : undefined
-
-    const getFileFromNodeData = async (nodeData: any): Promise<File | undefined> => {
-      if (!nodeData) return undefined
-      if (nodeData.file instanceof File) return nodeData.file
-      if (nodeData.fileDataUrl) {
-        const response = await fetch(nodeData.fileDataUrl)
-        const blob = await response.blob()
-        return fileWithName(nodeData.fileName || 'file', blob)
-      }
-      return undefined
-    }
-
-    const resolveNodeFile = async (sourceNodeId: string, visited?: Set<string>): Promise<File | undefined> => {
-      const store = useGraphStore.getState()
-      const sourceNode = store.nodes.find((n) => n.id === sourceNodeId)
-      if (!sourceNode) return undefined
-
-      // Direct file from node data
-      const file = await getFileFromNodeData(sourceNode.data)
-      if (file) return file
-
-      // Check stored node output for ANY node type
-      const output = store.nodeOutputs[sourceNodeId]
-      if (output?.url) {
-        const response = await fetch(output.url)
-        const blob = await response.blob()
-        return fileWithName('output', blob)
-      }
-
-      // If source is a group, try its children
-      if (sourceNode.type === 'groupNode') {
-        const childIds = (sourceNode.data as GroupNodeData).childIds || []
-        for (const cid of childIds) {
-          const childOutput = store.nodeOutputs[cid]
-          if (childOutput?.url) {
-            const response = await fetch(childOutput.url)
-            const blob = await response.blob()
-            return fileWithName('group-output', blob)
-          }
-        }
-      }
-
-      // Passthrough nodes (preview, group): follow upstream
-      if (sourceNode.type === 'preview' || sourceNode.type === 'groupNode') {
-        const cycleGuard = visited ?? new Set<string>()
-        if (cycleGuard.has(sourceNodeId)) return undefined
-        cycleGuard.add(sourceNodeId)
-        const incoming = store.edges.find((e) => e.target === sourceNodeId)
-        if (incoming) {
-          return resolveNodeFile(incoming.source, cycleGuard)
-        }
-      }
-
-      return undefined
-    }
 
     const imageFile = imageEdge ? await resolveNodeFile(imageEdge.source) : undefined
     const videoFile = videoEdge ? await resolveNodeFile(videoEdge.source) : undefined
