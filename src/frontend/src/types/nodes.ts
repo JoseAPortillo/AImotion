@@ -549,6 +549,7 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
     description: "Generate video using Runway's API — Aleph 2.0 video-to-video.",
     inputs: [
       { id: 'video_in', label: 'Video', type: 'video_tensor' },
+      { id: 'image_in', label: 'Image', type: 'video_tensor' },
       { id: 'prompt_pos', label: 'Positive Prompt', type: 'prompt' },
       { id: 'prompt_neg', label: 'Negative Prompt', type: 'prompt' },
     ],
