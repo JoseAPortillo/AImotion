@@ -128,6 +128,7 @@ class DiffusersGenerator:
                 local_files_only=model_is_cached,
             )
             pipe.to(self.device)
+            self._align_dtype(pipe, dtype)
             if hasattr(pipe, "enable_attention_slicing"):
                 pipe.enable_attention_slicing()
             if hasattr(pipe, "vae") and hasattr(pipe.vae, "enable_tiling"):
@@ -186,6 +187,20 @@ class DiffusersGenerator:
                 pipe.vae.enable_tiling()
             except Exception:
                 logger.debug(f"VAE tiling not supported for {type(pipe.vae).__name__}")
+
+    @staticmethod
+    def _align_dtype(pipe, dtype):
+        import torch
+        mismatched = []
+        for name, param in pipe.named_parameters():
+            if param.dtype != dtype:
+                mismatched.append((name, param.dtype))
+        for name, buf in pipe.named_buffers():
+            if buf.dtype != dtype:
+                mismatched.append((name, buf.dtype))
+        if mismatched:
+            logger.warning(f"Aligning {len(mismatched)} tensors to {dtype}")
+            pipe.to(dtype=dtype)
 
     @staticmethod
     def _inject_missing_i2v_components(pipe, model_name: str, dtype):

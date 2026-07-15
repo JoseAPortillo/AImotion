@@ -255,13 +255,35 @@ def discover_pipeline(hf_name: str) -> dict:
             if tag_is_i2v and not is_i2v_pipeline:
                 has_image_encoder = bool(model_index and "image_encoder" in model_index)
                 if has_image_encoder:
-                    logger.info(f"Overriding pipeline {pipeline_class} -> image-to-video based on pipeline_tag (has image_encoder)")
-                    pipeline_class = "CogVideoXImageToVideoPipeline" if "cogvideox" in pipeline_class.lower() else pipeline_class
+                    _i2v_map = {
+                        "cogvideox": "CogVideoXImageToVideoPipeline",
+                        "wan": "WanImageToVideoPipeline",
+                    }
+                    override = None
+                    for keyword, cls in _i2v_map.items():
+                        if keyword in pipeline_class.lower():
+                            override = cls
+                            break
+                    if override:
+                        logger.info(f"Overriding pipeline {pipeline_class} -> {override} based on pipeline_tag (has image_encoder)")
+                        pipeline_class = override
+                    else:
+                        logger.info(f"Model {hf_name} tagged image-to-video with unknown pipeline {pipeline_class} — keeping as-is")
                 else:
                     logger.info(f"Model {hf_name} tagged image-to-video but has no image_encoder — keeping detected pipeline {pipeline_class}")
             elif tag_is_v2v and not is_v2v_pipeline:
-                logger.info(f"Overriding pipeline {pipeline_class} -> video-to-video based on pipeline_tag")
-                pipeline_class = "CogVideoXVideoToVideoPipeline" if "cogvideox" in pipeline_class.lower() else pipeline_class
+                _v2v_map = {
+                    "cogvideox": "CogVideoXVideoToVideoPipeline",
+                    "wan": "WanVideoToVideoPipeline",
+                }
+                override = None
+                for keyword, cls in _v2v_map.items():
+                    if keyword in pipeline_class.lower():
+                        override = cls
+                        break
+                if override:
+                    logger.info(f"Overriding pipeline {pipeline_class} -> {override} based on pipeline_tag")
+                    pipeline_class = override
             if not pipeline_class:
                 supported_keywords = {}
                 for fam in _catalog_families():
