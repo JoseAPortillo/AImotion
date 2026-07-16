@@ -99,7 +99,7 @@ class DiffusersGenerator:
     def _load_pipe(self, model_name: str, dtype, token=None, pipeline_class_name: str | None = None):
         from diffusers import DiffusionPipeline
         from huggingface_hub import HfApi, hf_hub_download
-        from app.services.model_registry import get_cached_repo_info, is_model_cached
+        from app.services.model_registry import get_cached_repo_info, is_model_cached, list_hf_files
 
         mod_cls = None
         if pipeline_class_name:
@@ -113,8 +113,7 @@ class DiffusersGenerator:
             checkpoint_file = repo_info.get("checkpoint_file", "")
             has_model_index = "model_index.json" in files
         else:
-            api = HfApi()
-            files = api.list_repo_files(model_name)
+            files = list_hf_files(model_name)
             weight_files = [f for f in files if f.endswith(('.safetensors', '.ckpt'))]
             has_model_index = 'model_index.json' in files
             checkpoint_file = weight_files[0] if weight_files and not has_model_index else ""
@@ -142,8 +141,7 @@ class DiffusersGenerator:
 
         # Single-file checkpoint — try generic auto-detect first
         if not checkpoint_file:
-            api = HfApi()
-            files = api.list_repo_files(model_name)
+            files = list_hf_files(model_name)
             weight_files = [f for f in files if f.endswith(('.safetensors', '.ckpt'))]
             checkpoint_file = weight_files[0] if weight_files else ""
 

@@ -10,6 +10,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from huggingface_hub import HfApi, hf_hub_download
+from app.services.model_registry import list_hf_files
 from app.config import settings
 from app.services.generator import VideoGenerator, get_model_config
 from app.services.model_catalog import catalog
@@ -129,8 +130,7 @@ def detect_requirements(hf_name: str, discovered: dict) -> list[dict]:
 
     # Check if model has GGUF files
     try:
-        api = HfApi()
-        files = api.list_repo_files(hf_name)
+        files = list_hf_files(hf_name)
         has_gguf = any(f.endswith('.gguf') or f.endswith('.ggufs') for f in files)
 
         if has_gguf:
@@ -388,8 +388,7 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
 
         task.status = "downloading"
 
-        api = HfApi()
-        files = api.list_repo_files(hf_name)
+        files = list_hf_files(hf_name)
         weight_exts = (".safetensors", ".bin", ".pt", ".pth", ".gguf", ".ggufs")
         weight_files = [f for f in files if f.endswith(weight_exts)]
 
