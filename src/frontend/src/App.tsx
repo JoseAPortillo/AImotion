@@ -28,6 +28,7 @@ import { checkHealth, startGeneration, pollTask, type TaskStatus } from './api/b
 import type { PromptData, ImageInputData, VideoInputData, GenerationData } from './types/nodes'
 import ToastContainer from './components/Toast'
 import ErrorBoundary from './components/ErrorBoundary'
+import LoadingScreen from './components/LoadingScreen'
 import { useToastStore } from './store/toast'
 import { saveWorkflowToDirectory, downloadWorkflowJson, loadWorkflowFromDirectory, hasDirectorySupport } from './utils/workflowIO'
 import ImageInputNode from './components/nodes/ImageInputNode'
@@ -104,6 +105,9 @@ export default function App() {
 
 function AppInner() {
   const [backendOk, setBackendOk] = useState(false)
+  const [vramLoaded, setVramLoaded] = useState(false)
+  const [creditsLoaded, setCreditsLoaded] = useState(false)
+  const [modelsLoaded, setModelsLoaded] = useState(false)
   const { screenToFlowPosition } = useReactFlow()
 
   const nodes = useGraphStore((s) => s.nodes)
@@ -420,6 +424,18 @@ function AppInner() {
     checkHealth()
       .then(() => setBackendOk(true))
       .catch(() => setBackendOk(false))
+
+    fetch('/hardware/vram')
+      .then(() => setVramLoaded(true))
+      .catch(() => setVramLoaded(true))
+
+    fetch('/credits')
+      .then(() => setCreditsLoaded(true))
+      .catch(() => setCreditsLoaded(true))
+
+    fetch('/models')
+      .then(() => setModelsLoaded(true))
+      .catch(() => setModelsLoaded(true))
   }, [])
 
   const [generating, setGenerating] = useState(false)
@@ -577,8 +593,17 @@ function AppInner() {
     }
   }, [nodes, setOutputUrl, setNodeOutput])
 
+  const loadingReady = backendOk && vramLoaded && creditsLoaded && modelsLoaded
+
   return (
     <div style={{ display: 'flex', height: '100vh', background: '#0f0f0f', color: '#e0e0e0' }}>
+      <LoadingScreen ready={loadingReady} />
+      <div style={{
+        display: 'contents',
+        pointerEvents: loadingReady ? 'auto' : 'none',
+        opacity: loadingReady ? 1 : 0.3,
+        transition: 'opacity 0.6s ease-out',
+      }}>
       <Sidebar />
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden', background: '#747474' }}>
         <img
@@ -708,6 +733,7 @@ function AppInner() {
         <ToastContainer />
       </div>
       <NodeInspector />
+      </div>
     </div>
   )
 }
