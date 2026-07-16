@@ -8,6 +8,7 @@ from typing import Optional, Callable, Awaitable
 from app.services.runners.base import BaseRunner, GenerateParams, GenerateResult
 from app.services.model_catalog import catalog
 from app.config import settings
+from app.services.model_registry import list_hf_files
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,7 @@ class WanRunner(BaseRunner):
         cache_dir = settings.model_cache_dir
 
         try:
-            files = HfApi().list_repo_files(hf_name)
+            files = list_hf_files(hf_name)
         except Exception as e:
             raise RuntimeError(
                 f"Failed to list files for {hf_name}: {e}"

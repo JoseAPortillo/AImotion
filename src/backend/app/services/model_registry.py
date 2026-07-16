@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+import time
 from typing import Optional
 from dataclasses import dataclass, asdict
 from datetime import datetime
@@ -25,6 +26,8 @@ class InstalledModel:
     hf_pipeline_tag: str = ""
     repo_files: list[str] | None = None
     checkpoint_file: str = ""
+    runner: str = ""
+    model_class: str = ""
 
 
 def _load_registry() -> list[dict]:
@@ -86,13 +89,24 @@ def generate_key(hf_name: str) -> str:
 
 
 def get_cached_repo_info(hf_name: str) -> dict | None:
-    """Return cached repo file info for an installed model, without hitting HF API."""
+    """Return cached repo file info for an installed model.
+    
+    If the model is installed but missing repo_files (legacy entry), 
+    fetches from HF API and persists for next time.
+    """
     for e in _load_registry():
-        if e.get("hf_name") == hf_name and e.get("repo_files"):
-            return {
-                "repo_files": e["repo_files"],
-                "checkpoint_file": e.get("checkpoint_file", ""),
-            }
+        if e.get("hf_name") == hf_name:
+            if e.get("repo_files"):
+                return {
+                    "repo_files": e["repo_files"],
+                    "checkpoint_file": e.get("checkpoint_file", ""),
+                }
+            # Legacy entry without repo_files — populate lazily
+            files = _list_hf_files(hf_name)
+            if files:
+                update_repo_info(hf_name, files)
+                return {"repo_files": files, "checkpoint_file": ""}
+            return None
     return None
 
 
@@ -185,11 +199,24 @@ def _read_scheduler_config(hf_name: str, comp_name: str) -> Optional[dict]:
 
 
 def _list_hf_files(hf_name: str) -> list[str]:
-    try:
-        from huggingface_hub import HfApi
-        return HfApi().list_repo_files(hf_name)
-    except Exception:
-        return []
+    from huggingface_hub import HfApi
+    for attempt in range(3):
+        try:
+            api = HfApi()
+            return api.list_repo_files(hf_name)
+        except Exception as e:
+            if attempt < 2:
+                wait = 2 ** (attempt + 1)
+                logger.warning(f"HF list_repo_files({hf_name}) attempt {attempt+1} failed: {e}, retrying in {wait}s")
+                time.sleep(wait)
+            else:
+                logger.error(f"HF list_repo_files({hf_name}) failed after 3 attempts: {e}")
+                return []
+
+
+def list_hf_files(hf_name: str) -> list[str]:
+    """Public wrapper with retry — use from diffusers_generator instead of HfApi directly."""
+    return _list_hf_files(hf_name)
 
 
 def discover_pipeline(hf_name: str) -> dict:

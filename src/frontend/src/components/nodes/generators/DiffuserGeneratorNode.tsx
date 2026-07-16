@@ -2,11 +2,12 @@ import { memo, useCallback, useMemo, useState, useEffect, useRef } from 'react'
 import { flushSync } from 'react-dom'
 import type { NodeProps } from '@xyflow/react'
 import { Handle, Position } from '@xyflow/react'
-import { NODE_DEFINITIONS, getHandleColor, type NodeType, type GenerationData, type PromptData, type GroupNodeData } from '../../../types/nodes'
+import { NODE_DEFINITIONS, getHandleColor, type NodeType, type GenerationData, type PromptData } from '../../../types/nodes'
 import NodeWrapper, { CollapsibleSection, InfoLabel, FIELD_DESCS } from '../NodeWrapper'
 import { useGraphStore } from '../../../store/graph'
 import { useToastStore } from '../../../store/toast'
 import { startGeneration, pollTask, cancelTask, type TaskStatus } from '../../../api/backend'
+import { resolveNodeFile } from '../../../utils/resolveNodeFile'
 import ModelSelect from '../../ModelSelect'
 import NumberInput from '../../NumberInput'
 
@@ -234,51 +235,18 @@ function DiffuserGeneratorNode(props: NodeProps) {
     const videoNode = videoEdge ? getNode(videoEdge) : undefined
     const imageNode = imageEdge ? getNode(imageEdge) : undefined
 
+    const resolvePromptText = (sd: Record<string, unknown> | undefined): string => {
+      if (!sd) return ''
+      if (typeof sd.positive === 'string' && sd.positive) return sd.positive
+      if (typeof sd.result === 'string' && sd.result) return sd.result
+      if (typeof sd.text === 'string' && sd.text) return sd.text
+      return ''
+    }
+
+    const positivePrompt = resolvePromptText(promptData as unknown as Record<string, unknown>)
+
     console.log('[DiffuserGen] Image node:', imageNode)
     console.log('[DiffuserGen] Image node data:', imageNode?.data)
-    
-    const resolveNodeFile = async (sourceNodeId: string, visited?: Set<string>): Promise<File | undefined> => {
-      const store = useGraphStore.getState()
-      const sourceNode = store.nodes.find((n) => n.id === sourceNodeId)
-      if (!sourceNode) return undefined
-
-      const nd = sourceNode.data as Record<string, unknown>
-      if (nd.file instanceof File) return nd.file
-      if (nd.fileDataUrl) {
-        const r = await fetch(nd.fileDataUrl as string)
-        const blob = await r.blob()
-        return new File([blob], (nd.fileName as string) || 'file', { type: blob.type })
-      }
-
-      const output = store.nodeOutputs[sourceNodeId]
-      if (output?.url) {
-        const r = await fetch(output.url)
-        const blob = await r.blob()
-        return new File([blob], 'output', { type: blob.type })
-      }
-
-      if (sourceNode.type === 'groupNode') {
-        const childIds = (sourceNode.data as GroupNodeData).childIds || []
-        for (const cid of childIds) {
-          const co = store.nodeOutputs[cid]
-          if (co?.url) {
-            const r = await fetch(co.url)
-            const blob = await r.blob()
-            return new File([blob], 'group-output', { type: blob.type })
-          }
-        }
-      }
-
-      if (sourceNode.type === 'preview' || sourceNode.type === 'groupNode') {
-        const guard = visited ?? new Set<string>()
-        if (guard.has(sourceNodeId)) return undefined
-        guard.add(sourceNodeId)
-        const incoming = store.edges.find((e) => e.target === sourceNodeId)
-        if (incoming) return resolveNodeFile(incoming.source, guard)
-      }
-
-      return undefined
-    }
     
     const imageFile = imageEdge ? await resolveNodeFile(imageEdge.source) : undefined
     const videoFile = videoEdge ? await resolveNodeFile(videoEdge.source) : undefined
@@ -286,7 +254,7 @@ function DiffuserGeneratorNode(props: NodeProps) {
     console.log('[DiffuserGen] Video file to send:', videoFile)
 
     const isSVD = data.model?.includes('stable_video_diffusion')
-    if (!isSVD && !promptData?.positive) {
+    if (!isSVD && !positivePrompt) {
       addToast('Connect a Prompt node to this node', 'info')
       return
     }
@@ -318,7 +286,7 @@ function DiffuserGeneratorNode(props: NodeProps) {
     taskIdRef.current = ''
     try {
       const task = await startGeneration(
-        promptData?.positive || '',
+        positivePrompt,
         promptEdgeNeg ? (getNode(promptEdgeNeg)?.data as PromptData | undefined)?.negative || '' : '',
         {
           width: data.width ?? 720,

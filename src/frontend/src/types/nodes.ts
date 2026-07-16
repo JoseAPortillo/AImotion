@@ -23,8 +23,10 @@ export type NodeType =
   | 'imageToVideo'
   | 'videoToVideo'
   | 'imageToImage'
+  | 'imageToText'
   | 'runwayVideoToVideo'
   | 'runwayImageToVideo'
+  | 'textOutput'
   | 'groupNode'
 
 export interface ModelEntry {
@@ -144,6 +146,15 @@ export interface VLMData extends Record<string, unknown> {
   loading: boolean
 }
 
+export interface ImageToTextData extends Record<string, unknown> {
+  model: string
+  prompt: string
+  max_new_tokens: number
+  temperature: number
+  result: string
+  loading: boolean
+}
+
 export interface LoRAData extends Record<string, unknown> {
   loraFile: string
   scale: number
@@ -172,6 +183,10 @@ export interface OutputData extends Record<string, unknown> {
   format: 'mp4' | 'gif'
 }
 
+export interface TextOutputData extends Record<string, unknown> {
+  text: string
+}
+
 export interface GroupNodeData extends Record<string, unknown> {
   collapsed: boolean
   childIds: string[]
@@ -192,9 +207,11 @@ export type NodeData =
   | DenoisingStrengthData
   | GenerationData
   | VLMData
+  | ImageToTextData
   | LoRAData
   | ControlNetData
   | TransformersData
+  | TextOutputData
   | OutputData
   | GroupNodeData
 
@@ -280,7 +297,7 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
     label: 'Prompt',
     color: '#22c55e',
     description: 'Describe the video you want to generate. The positive prompt describes what you want; the negative prompt describes what to avoid.',
-    inputs: [],
+    inputs: [{ id: 'text_in', label: 'Text', type: 'prompt' }],
     outputs: [
       { id: 'positive', label: 'Positive', type: 'prompt' },
       { id: 'negative', label: 'Negative', type: 'prompt' },
@@ -331,6 +348,20 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
       { id: 'text_out', label: 'Text', type: 'prompt' },
     ],
     defaultData: { result: '', loading: false },
+  },
+  imageToText: {
+    type: 'imageToText',
+    label: 'Image-to-Text',
+    color: '#06b6d4',
+    description: 'Generate text from images using transformer models (Florence-2, BLIP-2, Qwen-VL).',
+    inputs: [
+      { id: 'image_in', label: 'Image', type: 'video_tensor' },
+      { id: 'prompt_pos', label: 'Prompt', type: 'prompt' },
+    ],
+    outputs: [
+      { id: 'text_out', label: 'Text', type: 'prompt' },
+    ],
+    defaultData: { model: '', prompt: '', max_new_tokens: 512, temperature: 0.7, result: '', loading: false },
   },
   llmGenerator: {
     type: 'llmGenerator',
@@ -518,6 +549,7 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
     description: "Generate video using Runway's API — Aleph 2.0 video-to-video.",
     inputs: [
       { id: 'video_in', label: 'Video', type: 'video_tensor' },
+      { id: 'image_in', label: 'Image', type: 'video_tensor' },
       { id: 'prompt_pos', label: 'Positive Prompt', type: 'prompt' },
       { id: 'prompt_neg', label: 'Negative Prompt', type: 'prompt' },
     ],
@@ -540,6 +572,15 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
       { id: 'video_out', label: 'Video', type: 'video_tensor' },
     ],
     defaultData: { model: '', scheduler: '', execution_mode: 'local', vae_tiling: false, vae_tile_overlap: 0.0, steps: 50, cfg: 6, seed: 42, strength: 0.8, width: 1280, height: 720, duration: 5 },
+  },
+  textOutput: {
+    type: 'textOutput',
+    label: 'Text Output',
+    color: '#64748b',
+    description: 'Displays text output from transformer models, VLMs, or LLMs.',
+    inputs: [{ id: 'text_in', label: 'Text', type: 'prompt' }],
+    outputs: [{ id: 'text_out', label: 'Text', type: 'prompt' }],
+    defaultData: { text: '' },
   },
   groupNode: {
     type: 'groupNode',

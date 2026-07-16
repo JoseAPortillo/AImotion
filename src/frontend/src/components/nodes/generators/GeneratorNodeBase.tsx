@@ -77,7 +77,8 @@ function GeneratorNodeBase(props: NodeBaseProps) {
   const def = NODE_DEFINITIONS[props.type as NodeType]
   const data = props.data as GenerationData
   const base = useGeneratorBase({ nodeId: props.id, data, modalityFilter: props.modalityFilter })
-  const autoPreview = useAutoPreview({ nodeId: props.id, data })
+  const isCloudModel = base.modelConfig?.runner === 'api'
+  const autoPreview = useAutoPreview({ nodeId: props.id, data, autoTrigger: !isCloudModel })
 
   const activeInputs = useMemo(() => new Set(props.activeInputs), [props.activeInputs])
 
@@ -421,6 +422,27 @@ function GeneratorNodeBase(props: NodeBaseProps) {
               )}
             </div>
           </CollapsibleSection>
+        )}
+
+        {isCloudModel && !autoPreview.previewRunning && (
+          <button
+            onClick={() => autoPreview.triggerPreview()}
+            disabled={!data.model}
+            style={{
+              width: '100%',
+              marginTop: 4,
+              padding: '4px 0',
+              borderRadius: 4,
+              border: 'none',
+              fontSize: 10,
+              fontWeight: 600,
+              cursor: data.model ? 'pointer' : 'not-allowed',
+              background: data.model ? '#6366f1' : '#333',
+              color: data.model ? '#fff' : '#888',
+            }}
+          >
+            {autoPreview.previewUrl ? 'Regenerate Preview' : 'Generate Preview'}
+          </button>
         )}
 
       </div>

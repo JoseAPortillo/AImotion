@@ -33,11 +33,13 @@ from app.api.hardware import router as hardware_router
 from app.api.models import router as models_router
 from app.api.credentials import router as credentials_router
 from app.api.credits import router as credits_router
+from app.api.transformers import router as transformers_router
 from app.services.runners.registry import RunnerRegistry
 from app.services.runners.diffusers import DiffusersRunner
 from app.services.runners.gguf import GGUFRunner
 from app.services.runners.api import APIRunner
 from app.services.runners.wan import WanRunner
+from app.services.runners.transformers import TransformersRunner
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -58,6 +60,7 @@ async def lifespan(app: FastAPI):
     RunnerRegistry.register("gguf", GGUFRunner())
     RunnerRegistry.register("api", APIRunner())
     RunnerRegistry.register("wan2.2", WanRunner())
+    RunnerRegistry.register("transformers", TransformersRunner())
     logger.info("Built-in runners registered")
 
     logger.info("AImation backend started")
@@ -79,6 +82,7 @@ app.include_router(hardware_router)
 app.include_router(models_router)
 app.include_router(credentials_router)
 app.include_router(credits_router)
+app.include_router(transformers_router)
 
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(static_dir, exist_ok=True)

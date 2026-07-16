@@ -69,7 +69,17 @@ function TransformersGeneratorNode(props: NodeProps) {
     const promptData = promptEdge ? getNode(promptEdge)?.data as PromptData | undefined : undefined
     const systemData = systemEdge ? getNode(systemEdge)?.data as PromptData | undefined : undefined
 
-    if (!promptData?.positive) {
+    const resolvePromptText = (sd: Record<string, unknown> | undefined): string => {
+      if (!sd) return ''
+      if (typeof sd.positive === 'string' && sd.positive) return sd.positive
+      if (typeof sd.result === 'string' && sd.result) return sd.result
+      if (typeof sd.text === 'string' && sd.text) return sd.text
+      return ''
+    }
+
+    const positivePrompt = resolvePromptText(promptData as unknown as Record<string, unknown>)
+
+    if (!positivePrompt) {
       addToast('Connect a Prompt node', 'info')
       return
     }
@@ -77,7 +87,7 @@ function TransformersGeneratorNode(props: NodeProps) {
     setGenerating(true)
     try {
       const result = await generateLLM({
-        prompt: promptData.positive,
+        prompt: positivePrompt,
         system_prompt: systemData?.positive || data.system_prompt || '',
         model: data.model,
         temperature: data.temperature ?? 0.7,

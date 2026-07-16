@@ -1,14 +1,16 @@
 import { useCallback, useMemo, useState, useEffect, useRef } from 'react'
 import { startGeneration, pollTask, cancelTask } from '../api/backend'
 import { useGraphStore } from '../store/graph'
-import type { GenerationData, PromptData, ModelEntry, GroupNodeData } from '../types/nodes'
+import type { GenerationData, PromptData, ModelEntry } from '../types/nodes'
+import { resolveNodeFile } from '../utils/resolveNodeFile'
 
 interface UseAutoPreviewOptions {
   nodeId: string
   data: GenerationData
+  autoTrigger?: boolean
 }
 
-export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
+export function useAutoPreview({ nodeId, data, autoTrigger = true }: UseAutoPreviewOptions) {
   const nodes = useGraphStore((s) => s.nodes)
   const edges = useGraphStore((s) => s.edges)
   const autoPreviews = useGraphStore((s) => s.autoPreviews)
@@ -47,7 +49,8 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
     const genEdges = edges.filter((e) => e.target === nodeId)
     const promptEdge = genEdges.find((e) => e.targetHandle === 'prompt_pos')
     const promptNode = promptEdge ? nodes.find((n) => n.id === promptEdge.source) : undefined
-    const promptText = (promptNode?.data as PromptData)?.positive || ''
+    const pd = promptNode?.data as Record<string, unknown> | undefined
+    const promptText = (typeof pd?.positive === 'string' && pd.positive) || (typeof pd?.result === 'string' && pd.result) || (typeof pd?.text === 'string' && pd.text) || ''
     const negEdge = genEdges.find((e) => e.targetHandle === 'prompt_neg')
     const negNode = negEdge ? nodes.find((n) => n.id === negEdge.source) : undefined
     const negText = (negNode?.data as PromptData)?.negative || ''
@@ -86,7 +89,7 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
     return {
       width: pw,
       height: ph,
-      steps: Math.max(2, Math.round((data.steps ?? 50) / 2)),
+      steps: Math.max(2, Math.round((data.steps ?? 50) * 0.75)),
       cfg: data.cfg ?? 6,
       strength: isVideo ? Math.min(data.strength ?? 0.8, 0.6) : (data.strength ?? 0.8),
       seed: data.seed ?? 0,
@@ -116,65 +119,14 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
     const videoEdge = genEdges.find((e) => e.targetHandle === 'video_in')
     const imageEdge = genEdges.find((e) => e.targetHandle === 'image_in')
 
-    const promptData = promptEdgePos ? getNode(promptEdgePos)?.data as PromptData | undefined : undefined
-    const promptText = promptData?.positive || ''
+    const promptData = promptEdgePos ? getNode(promptEdgePos)?.data as Record<string, unknown> | undefined : undefined
+    const promptText = (typeof promptData?.positive === 'string' && promptData.positive) || (typeof promptData?.result === 'string' && promptData.result) || (typeof promptData?.text === 'string' && promptData.text) || ''
     if (!promptText) return
 
     const isI2V = /i2v/i.test(data.model ?? '')
     if (isI2V && !imageEdge) {
       console.warn('[auto-preview] Model', data.model, 'requires image input but no image_in edge — skipping')
       return
-    }
-
-    const getFileFromNodeData = async (nodeData: any): Promise<File | undefined> => {
-      if (!nodeData) return undefined
-      if (nodeData.file instanceof File) return nodeData.file
-      if (nodeData.fileDataUrl) {
-        const r = await fetch(nodeData.fileDataUrl)
-        const blob = await r.blob()
-        return new File([blob], nodeData.fileName || 'file', { type: blob.type })
-      }
-      return undefined
-    }
-
-    const resolveNodeFile = async (sourceNodeId: string, visited?: Set<string>): Promise<File | undefined> => {
-      const store = useGraphStore.getState()
-      const sourceNode = store.nodes.find((n) => n.id === sourceNodeId)
-      if (!sourceNode) return undefined
-
-      const file = await getFileFromNodeData(sourceNode.data)
-      if (file) return file
-
-      const output = store.nodeOutputs[sourceNodeId]
-      if (output?.url) {
-        const r = await fetch(output.url)
-        const blob = await r.blob()
-        return new File([blob], 'output', { type: blob.type })
-      }
-
-      if (sourceNode.type === 'groupNode') {
-        const childIds = (sourceNode.data as GroupNodeData).childIds || []
-        for (const cid of childIds) {
-          const childOutput = store.nodeOutputs[cid]
-          if (childOutput?.url) {
-            const r = await fetch(childOutput.url)
-            const blob = await r.blob()
-            return new File([blob], 'group-output', { type: blob.type })
-          }
-        }
-      }
-
-      if (sourceNode.type === 'preview' || sourceNode.type === 'groupNode') {
-        const cycleGuard = visited ?? new Set<string>()
-        if (cycleGuard.has(sourceNodeId)) return undefined
-        cycleGuard.add(sourceNodeId)
-        const incoming = store.edges.find((e) => e.target === sourceNodeId)
-        if (incoming) {
-          return resolveNodeFile(incoming.source, cycleGuard)
-        }
-      }
-
-      return undefined
     }
 
     const imageFile = imageEdge ? await resolveNodeFile(imageEdge.source) : undefined
@@ -258,6 +210,7 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
   }, [])
 
   useEffect(() => {
+    if (!autoTrigger) return
     if (!data.model) return
     if (!previewDeps) return
     if (previewDeps === lastKeyRef.current) return
@@ -265,7 +218,7 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
 
     if (timerRef.current) clearTimeout(timerRef.current)
 
-    const hasPrompt = previewDeps.split('|')[5]
+    const hasPrompt = previewDeps.split('|')[7]
     if (!hasPrompt) return
 
     timerRef.current = setTimeout(() => {
@@ -275,7 +228,7 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current)
     }
-  }, [previewDeps, data.model, run])
+  }, [previewDeps, data.model, run, autoTrigger])
 
   return {
     previewUrl,
@@ -286,5 +239,6 @@ export function useAutoPreview({ nodeId, data }: UseAutoPreviewOptions) {
     previewTotalSteps,
     previewEtaSec,
     cancelAutoPreview: cancel,
+    triggerPreview: run,
   }
 }

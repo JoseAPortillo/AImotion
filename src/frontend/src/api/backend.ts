@@ -117,6 +117,33 @@ export async function analyzeVLM(image: File, prompt: string): Promise<string> {
   return data.result
 }
 
+export interface ImageToTextResponse {
+  result: string
+}
+
+export async function analyzeImageToText(
+  image: File,
+  prompt: string,
+  modelKey: string,
+  maxNewTokens: number,
+  temperature: number
+): Promise<string> {
+  const formData = new FormData()
+  formData.append('image', image)
+  formData.append('prompt', prompt)
+  formData.append('model_key', modelKey)
+  formData.append('max_new_tokens', String(maxNewTokens))
+  formData.append('temperature', String(temperature))
+
+  const r = await fetch('/transformers/image-to-text', { method: 'POST', body: formData })
+  if (!r.ok) {
+    const err = await r.json()
+    throw new Error(err.detail || 'Image-to-text analysis failed')
+  }
+  const data: ImageToTextResponse = await r.json()
+  return data.result
+}
+
 export interface LLMGenerateResponse {
   result: string
 }
