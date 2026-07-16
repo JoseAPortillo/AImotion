@@ -56,8 +56,8 @@ export function useAutoPreview({ nodeId, data, autoTrigger = true }: UseAutoPrev
     const negText = (negNode?.data as PromptData)?.negative || ''
     const hasImage = genEdges.some((e) => e.targetHandle === 'image_in')
     const hasVideo = genEdges.some((e) => e.targetHandle === 'video_in')
-    return `${data.model}|${data.seed}|${data.cfg}|${data.strength}|${data.scheduler}|${data.width}|${data.height}|${promptText}|${negText}|${hasImage}|${hasVideo}`
-  }, [edges, nodes, nodeId, data.model, data.seed, data.cfg, data.strength, data.scheduler, data.width, data.height])
+    return `${data.model}|${data.seed}|${data.cfg}|${data.steps}|${data.strength}|${data.scheduler}|${data.width}|${data.height}|${promptText}|${negText}|${hasImage}|${hasVideo}`
+  }, [edges, nodes, nodeId, data.model, data.seed, data.cfg, data.steps, data.strength, data.scheduler, data.width, data.height])
 
   function getPreviewParams(): Record<string, unknown> {
     const genEdges = edges.filter((e) => e.target === nodeId)

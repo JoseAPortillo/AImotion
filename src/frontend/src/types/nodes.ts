@@ -264,7 +264,7 @@ export const MODALITY_FILTERS: Record<string, (m: ModelEntry) => boolean> = {
   textToVideo: (m) => m.runner !== 'api' && m.is_video === true && !m.accepts?.image && !m.accepts?.video,
   imageToVideo: (m) => m.runner !== 'api' && m.is_video === true && m.accepts?.image === true,
   videoToVideo: (m) => m.runner !== 'api' && m.accepts?.video === true,
-  imageToImage: (m) => m.runner !== 'api' && m.is_video !== true && m.accepts?.image === true,
+  imageToImage: (m) => m.runner !== 'api' && m.runner !== 'transformers' && m.is_video !== true && m.accepts?.image === true,
 }
 
 export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
