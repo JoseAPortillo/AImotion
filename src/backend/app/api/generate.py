@@ -62,8 +62,7 @@ def _validate_dimensions(width: int, height: int):
 
 def _get_runner(model_key: str):
     variant = catalog.get_variant(model_key)
-    family = variant.family if variant else None
-    runner_key = family.runner if family else "diffusers"
+    runner_key = variant.runner if variant else "diffusers"
 
     runner = RunnerRegistry.get(runner_key)
     if runner is not None:
@@ -86,6 +85,8 @@ def _get_runner(model_key: str):
 async def create_generation(
     image: Optional[UploadFile] = File(None),
     video: Optional[UploadFile] = File(None),
+    pose_video: Optional[UploadFile] = File(None),
+    face_video: Optional[UploadFile] = File(None),
     prompt: str = Form("", max_length=1000),
     negative_prompt: str = Form("", max_length=1000),
     width: int = Form(_defaults["width"]),
@@ -124,6 +125,27 @@ async def create_generation(
             status_code=422,
             detail=f"Unknown scheduler '{scheduler}' for {model}. Valid: {valid}",
         )
+    variant = catalog.get_variant(model)
+    if variant:
+        missing = []
+        for inp_name, inp_info in variant.inputs.items():
+            if not inp_info.get("required", False):
+                continue
+            if inp_name == "prompt":
+                continue
+            if inp_name == "image" and image is None:
+                missing.append("image")
+            elif inp_name == "video" and video is None:
+                missing.append("video")
+            elif inp_name == "pose_video" and pose_video is None:
+                missing.append("pose_video")
+            elif inp_name == "face_video" and face_video is None:
+                missing.append("face_video")
+        if missing:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Missing required input(s) for {model}: {', '.join(missing)}",
+            )
     image_path = None
     if image:
         logger.info(f"Received image file: {image.filename}, content_type: {image.content_type}")
@@ -155,9 +177,31 @@ async def create_generation(
         with open(upload_path, "wb") as f:
             f.write(content)
         video_path = upload_path
+    pose_video_path = None
+    if pose_video:
+        _validate_video(pose_video)
+        os.makedirs(settings.upload_dir, exist_ok=True)
+        file_ext = os.path.splitext(pose_video.filename or "pose.mp4")[1] or ".mp4"
+        upload_path = os.path.join(settings.upload_dir, f"pose_{seed}{file_ext}")
+        content = await pose_video.read()
+        with open(upload_path, "wb") as f:
+            f.write(content)
+        pose_video_path = upload_path
+    face_video_path = None
+    if face_video:
+        _validate_video(face_video)
+        os.makedirs(settings.upload_dir, exist_ok=True)
+        file_ext = os.path.splitext(face_video.filename or "face.mp4")[1] or ".mp4"
+        upload_path = os.path.join(settings.upload_dir, f"face_{seed}{file_ext}")
+        content = await face_video.read()
+        with open(upload_path, "wb") as f:
+            f.write(content)
+        face_video_path = upload_path
     params = {
         "image_path": image_path,
         "video_path": video_path,
+        "pose_video_path": pose_video_path,
+        "face_video_path": face_video_path,
         "prompt": prompt,
         "negative_prompt": negative_prompt,
         "width": width,
@@ -227,6 +271,10 @@ async def _run_generation(task_id: str, params: dict):
             extra["video_path"] = video_path
         if image_path:
             extra["image_path"] = image_path
+        if params.get("pose_video_path"):
+            extra["pose_video_path"] = params["pose_video_path"]
+        if params.get("face_video_path"):
+            extra["face_video_path"] = params["face_video_path"]
         if params.get("vae_tiling") is not None:
             extra["vae_tiling"] = params["vae_tiling"]
         if params.get("vae_tile_overlap") is not None:

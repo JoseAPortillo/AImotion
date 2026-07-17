@@ -23,21 +23,48 @@
   "inputs": {
     "prompt": { "required": true, "type": "text" },
     "image": { "required": false, "type": "image" },
-    "pose_video": { "required": false, "type": "video" },
-    "face_video": { "required": false, "type": "video" },
-    "background_video": { "required": false, "type": "video" },
-    "mask_video": { "required": false, "type": "video" },
+    "negative_prompt": { "required": false, "type": "text" },
     "steps": { "required": false, "type": "int", "default": 50, "min": 1, "max": 200 },
     "cfg": { "required": false, "type": "float", "default": 6.0, "min": 1.0, "max": 30.0 },
     "seed": { "required": false, "type": "int", "default": 0, "min": 0, "max": 2147483647 },
-    "width": { "required": false, "type": "int", "default": 480, "min": 128, "max": 1920 },
-    "height": { "required": false, "type": "int", "default": 832, "min": 128, "max": 1920 },
+    "width": { "required": false, "type": "int", "default": 832, "min": 128, "max": 1920 },
+    "height": { "required": false, "type": "int", "default": 480, "min": 128, "max": 1920 },
     "num_frames": { "required": false, "type": "int", "default": 81, "min": 1, "max": 200 },
-    "fps": { "required": false, "type": "int", "default": 16, "min": 1, "max": 60 },
-    "strength": { "required": false, "type": "float", "default": 0.8, "min": 0, "max": 1 }
+    "fps": { "required": false, "type": "int", "default": 24, "min": 1, "max": 60 }
   },
   "output": { "type": "video", "mime": "video/mp4" },
   "variants": [
+    {
+      "key": "wan_ai_wan2.2_ti2v_5b_diffusers",
+      "name": "Wan2.2 TI2V 5B (Diffusers)",
+      "hf_name": "Wan-AI/Wan2.2-TI2V-5B-Diffusers",
+      "type": "installable",
+      "size_gb": 12.0,
+      "dtype": "bfloat16",
+      "needs_token": false,
+      "runner": "diffusers",
+      "pipeline": { "class": "WanPipeline", "video_pipeline": true },
+      "inputs": {
+        "prompt": { "required": true, "type": "text" },
+        "image": { "required": false, "type": "image" },
+        "negative_prompt": { "required": false, "type": "text" },
+        "steps": { "required": false, "type": "int", "default": 50, "min": 1, "max": 200 },
+        "cfg": { "required": false, "type": "float", "default": 5.0, "min": 1.0, "max": 30.0 },
+        "seed": { "required": false, "type": "int", "default": 0, "min": 0, "max": 2147483647 },
+        "width": { "required": false, "type": "int", "default": 832, "min": 128, "max": 1920 },
+        "height": { "required": false, "type": "int", "default": 480, "min": 128, "max": 1920 },
+        "num_frames": { "required": false, "type": "int", "default": 81, "min": 1, "max": 200 },
+        "fps": { "required": false, "type": "int", "default": 24, "min": 1, "max": 60 }
+      },
+      "defaults": {
+        "steps": 50,
+        "cfg": 5.0,
+        "width": 832,
+        "height": 480,
+        "num_frames": 81,
+        "fps": 24
+      }
+    },
     {
       "key": "wan2.2-gguf",
       "name": "Wan2.2 TI2V 5B (GGUF)",
