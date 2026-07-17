@@ -456,22 +456,33 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
                 )
                 return
 
-        def _download_file(fname: str) -> bool:
-            try:
-                hf_hub_download(
-                    repo_id=hf_name,
-                    filename=fname,
-                    token=tok,
-                    resume_download=True,
-                    cache_dir=cache_dir,
-                )
-                return True
-            except Exception as e:
+        def _download_file(fname: str, max_retries: int = 3) -> bool:
+            import time as _time
+            last_err = None
+            for attempt in range(max_retries):
                 if task.cancel_event.is_set():
                     return False
-                task.status = "error"
-                task.error_msg = f"Failed to download {fname}: {e}"
-                return False
+                try:
+                    hf_hub_download(
+                        repo_id=hf_name,
+                        filename=fname,
+                        token=tok,
+                        resume_download=True,
+                        cache_dir=cache_dir,
+                    )
+                    return True
+                except Exception as e:
+                    last_err = e
+                    if task.cancel_event.is_set():
+                        return False
+                    if attempt < max_retries - 1:
+                        wait = 5 * (attempt + 1)
+                        logger.warning(f"Download {fname} failed (attempt {attempt+1}/{max_retries}): {e}. Retrying in {wait}s...")
+                        task.current_file = f"retrying {fname} ({attempt+2}/{max_retries})"
+                        _time.sleep(wait)
+            task.status = "error"
+            task.error_msg = f"Failed to download {fname} after {max_retries} attempts: {last_err}"
+            return False
 
         # Download config files first (small files, needed for from_pretrained)
         task.total_files = len(config_files) + len(download_weights)
