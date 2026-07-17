@@ -80,7 +80,19 @@ function GeneratorNodeBase(props: NodeBaseProps) {
   const isCloudModel = base.modelConfig?.runner === 'api'
   const autoPreview = useAutoPreview({ nodeId: props.id, data, autoTrigger: !isCloudModel })
 
-  const activeInputs = useMemo(() => new Set(props.activeInputs), [props.activeInputs])
+  const activeInputs = useMemo(() => {
+    if (base.modelConfig?.accepts) {
+      const active = new Set<string>(['prompt_pos', 'prompt_neg'])
+      const accepts = base.modelConfig.accepts
+      if (accepts.image) active.add('image_in')
+      if (accepts.video) active.add('video_in')
+      const modelInputs = base.modelConfig.inputs || {}
+      if (modelInputs.pose_video || accepts.pose_video) active.add('pose_video_in')
+      if (modelInputs.face_video || accepts.face_video) active.add('face_video_in')
+      return active
+    }
+    return new Set(props.activeInputs)
+  }, [base.modelConfig, props.activeInputs])
 
   useEffect(() => {
     if (!base.modelsLoaded || base.visibleModels.length === 0) return

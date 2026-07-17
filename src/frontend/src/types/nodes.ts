@@ -42,6 +42,8 @@ export interface ModelEntry {
     image: boolean
     video: boolean
     strength: boolean
+    pose_video?: boolean
+    face_video?: boolean
   }
   defaults?: Record<string, unknown>
   inputs?: Record<string, {
@@ -249,6 +251,8 @@ export function getHandleColor(handleId: string, portType: PortType): string {
   if (handleId === 'strength') return '#a78bfa'
   if (handleId === 'image_in') return '#f97316'
   if (handleId === 'video_in') return '#ef4444'
+  if (handleId === 'pose_video_in') return '#f59e0b'
+  if (handleId === 'face_video_in') return '#8b5cf6'
   return PORT_COLORS[portType]
 }
 
@@ -312,6 +316,8 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
     inputs: [
       { id: 'video_in', label: 'Video', type: 'video_tensor' },
       { id: 'image_in', label: 'Image', type: 'video_tensor' },
+      { id: 'pose_video_in', label: 'Pose Video', type: 'video_tensor' },
+      { id: 'face_video_in', label: 'Face Video', type: 'video_tensor' },
       { id: 'audio_in', label: 'Audio', type: 'audio_features' },
       { id: 'prompt_pos', label: 'Positive Prompt', type: 'prompt' },
       { id: 'prompt_neg', label: 'Negative Prompt', type: 'prompt' },
@@ -422,6 +428,8 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
     inputs: [
       { id: 'video_in', label: 'Video', type: 'video_tensor' },
       { id: 'image_in', label: 'Image', type: 'video_tensor' },
+      { id: 'pose_video_in', label: 'Pose Video', type: 'video_tensor' },
+      { id: 'face_video_in', label: 'Face Video', type: 'video_tensor' },
       { id: 'audio_in', label: 'Audio', type: 'audio_features' },
       { id: 'prompt_pos', label: 'Positive Prompt', type: 'prompt' },
       { id: 'prompt_neg', label: 'Negative Prompt', type: 'prompt' },
@@ -504,6 +512,8 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
     description: 'Generate a video from an image and text prompt using image-to-video models.',
     inputs: [
       { id: 'image_in', label: 'Image', type: 'video_tensor' },
+      { id: 'pose_video_in', label: 'Pose Video', type: 'video_tensor' },
+      { id: 'face_video_in', label: 'Face Video', type: 'video_tensor' },
       { id: 'prompt_pos', label: 'Positive Prompt', type: 'prompt' },
       { id: 'prompt_neg', label: 'Negative Prompt', type: 'prompt' },
     ],
@@ -519,6 +529,8 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
     description: 'Transform an input video using text-guided video-to-video models.',
     inputs: [
       { id: 'video_in', label: 'Video', type: 'video_tensor' },
+      { id: 'pose_video_in', label: 'Pose Video', type: 'video_tensor' },
+      { id: 'face_video_in', label: 'Face Video', type: 'video_tensor' },
       { id: 'prompt_pos', label: 'Positive Prompt', type: 'prompt' },
       { id: 'prompt_neg', label: 'Negative Prompt', type: 'prompt' },
     ],

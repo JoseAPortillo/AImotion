@@ -114,6 +114,8 @@ export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorB
     const promptEdgeNeg = genEdges.find((e) => e.targetHandle === 'prompt_neg')
     const videoEdge = genEdges.find((e) => e.targetHandle === 'video_in')
     const imageEdge = genEdges.find((e) => e.targetHandle === 'image_in')
+    const poseVideoEdge = genEdges.find((e) => e.targetHandle === 'pose_video_in')
+    const faceVideoEdge = genEdges.find((e) => e.targetHandle === 'face_video_in')
 
     const promptData = promptEdgePos ? getNode(promptEdgePos)?.data as PromptData | undefined : undefined
     const videoNode = videoEdge ? getNode(videoEdge) : undefined
@@ -121,6 +123,8 @@ export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorB
 
     const imageFile = imageEdge ? await resolveNodeFile(imageEdge.source) : undefined
     const videoFile = videoEdge ? await resolveNodeFile(videoEdge.source) : undefined
+    const poseVideoFile = poseVideoEdge ? await resolveNodeFile(poseVideoEdge.source) : undefined
+    const faceVideoFile = faceVideoEdge ? await resolveNodeFile(faceVideoEdge.source) : undefined
 
     const extraParams: Record<string, number | string | boolean> = {}
     if (modelConfig?.inputs) {
@@ -175,6 +179,8 @@ export function useGeneratorBase({ nodeId, data, modalityFilter }: UseGeneratorB
         },
         videoFile,
         imageFile,
+        poseVideoFile,
+        faceVideoFile,
       )
 
       taskIdRef.current = task.task_id

@@ -40,6 +40,8 @@ interface ModelEntry {
     image: boolean
     video: boolean
     strength: boolean
+    pose_video?: boolean
+    face_video?: boolean
   }
   defaults?: Record<string, unknown>
   inputs?: Record<string, {
@@ -191,6 +193,9 @@ function DiffuserGeneratorNode(props: NodeProps) {
     if (!modelConfig?.accepts) return active
     if (modelConfig.accepts.image) active.add('image_in')
     if (modelConfig.accepts.video) active.add('video_in')
+    const modelInputs = modelConfig.inputs || {}
+    if (modelInputs.pose_video || modelConfig.accepts.pose_video) active.add('pose_video_in')
+    if (modelInputs.face_video || modelConfig.accepts.face_video) active.add('face_video_in')
     return active
   }, [modelConfig])
 
@@ -227,6 +232,8 @@ function DiffuserGeneratorNode(props: NodeProps) {
     const promptEdgeNeg = genEdges.find((e) => e.targetHandle === 'prompt_neg')
     const videoEdge = genEdges.find((e) => e.targetHandle === 'video_in')
     const imageEdge = genEdges.find((e) => e.targetHandle === 'image_in')
+    const poseVideoEdge = genEdges.find((e) => e.targetHandle === 'pose_video_in')
+    const faceVideoEdge = genEdges.find((e) => e.targetHandle === 'face_video_in')
 
     console.log('[DiffuserGen] Edges to this node:', genEdges.map(e => ({ source: e.source, targetHandle: e.targetHandle })))
     console.log('[DiffuserGen] Image edge found:', imageEdge)
@@ -250,6 +257,8 @@ function DiffuserGeneratorNode(props: NodeProps) {
     
     const imageFile = imageEdge ? await resolveNodeFile(imageEdge.source) : undefined
     const videoFile = videoEdge ? await resolveNodeFile(videoEdge.source) : undefined
+    const poseVideoFile = poseVideoEdge ? await resolveNodeFile(poseVideoEdge.source) : undefined
+    const faceVideoFile = faceVideoEdge ? await resolveNodeFile(faceVideoEdge.source) : undefined
     console.log('[DiffuserGen] Image file to send:', imageFile)
     console.log('[DiffuserGen] Video file to send:', videoFile)
 
@@ -311,6 +320,8 @@ function DiffuserGeneratorNode(props: NodeProps) {
         },
         videoFile,
         imageFile,
+        poseVideoFile,
+        faceVideoFile,
       )
 
       taskIdRef.current = task.task_id
