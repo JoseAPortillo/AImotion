@@ -67,6 +67,39 @@
       }
     },
     {
+      "key": "wan_ai_wan2.2_animate_14b",
+      "name": "Wan2.2 Animate 14B (Diffusers)",
+      "hf_name": "Wan-AI/Wan2.2-Animate-14B",
+      "type": "installable",
+      "size_gb": 34.0,
+      "dtype": "bfloat16",
+      "needs_token": false,
+      "runner": "diffusers",
+      "dependencies": ["ftfy"],
+      "pipeline": { "class": "WanVideoToVideoPipeline", "video_pipeline": true },
+      "inputs": {
+        "prompt": { "required": true, "type": "text" },
+        "video": { "required": true, "type": "video" },
+        "image": { "required": false, "type": "image" },
+        "negative_prompt": { "required": false, "type": "text" },
+        "steps": { "required": false, "type": "int", "default": 50, "min": 1, "max": 200 },
+        "cfg": { "required": false, "type": "float", "default": 5.0, "min": 1.0, "max": 30.0 },
+        "seed": { "required": false, "type": "int", "default": 0, "min": 0, "max": 2147483647 },
+        "width": { "required": false, "type": "int", "default": 832, "min": 128, "max": 1920 },
+        "height": { "required": false, "type": "int", "default": 480, "min": 128, "max": 1920 },
+        "num_frames": { "required": false, "type": "int", "default": 81, "min": 1, "max": 200 },
+        "fps": { "required": false, "type": "int", "default": 24, "min": 1, "max": 60 }
+      },
+      "defaults": {
+        "steps": 50,
+        "cfg": 5.0,
+        "width": 832,
+        "height": 480,
+        "num_frames": 81,
+        "fps": 24
+      }
+    },
+    {
       "key": "wan2.2-gguf",
       "name": "Wan2.2 TI2V 5B (GGUF)",
       "hf_name": "QuantStack/Wan2.2-TI2V-5B-GGUF",
