@@ -39,6 +39,10 @@ class ModelFamily:
         return self._data.get("runner_install")
 
     @property
+    def dependencies(self) -> list[str]:
+        return self._data.get("dependencies") or []
+
+    @property
     def schedulers(self) -> dict[str, str]:
         return self._data.get("schedulers", {})
 
@@ -100,6 +104,12 @@ class ModelVariant:
     @property
     def runner(self) -> str:
         return self._data.get("runner") or self._family.runner
+
+    @property
+    def dependencies(self) -> list[str]:
+        family_deps = self._family._data.get("dependencies") or []
+        variant_deps = self._data.get("dependencies") or []
+        return list(dict.fromkeys(family_deps + variant_deps))
 
     @property
     def is_video(self) -> bool:

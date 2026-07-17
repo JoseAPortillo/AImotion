@@ -13,8 +13,7 @@ from huggingface_hub import HfApi, hf_hub_download
 from app.services.model_registry import list_hf_files
 from app.config import settings
 from app.services.generator import VideoGenerator, get_model_config
-from app.services.model_catalog import catalog
-from app.services.diffusers_generator import infer_pipeline_params
+from app.services.model_catalog import catalog, _infer_inputs
 from app.services.model_registry import (
     list_installed, find_installed, add_installed, remove_installed,
     remove_cached, generate_key, is_model_cached, discover_pipeline,
@@ -160,6 +159,17 @@ def detect_requirements(hf_name: str, discovered: dict) -> list[dict]:
             })
     except Exception as e:
         logger.warning(f"Could not check model access requirements: {e}")
+
+    # Check catalog variant for declared dependencies
+    variants = catalog.get_variants_by_hf(hf_name)
+    if variants:
+        for dep in variants[0].dependencies:
+            requirements.append({
+                "type": "python_package",
+                "package": dep,
+                "reason": f"Declared dependency for {variants[0].name}",
+                "optional": False,
+            })
 
     # Check if the model's family needs a custom runner or pip deps
     if family and family.runner not in ("diffusers",):
@@ -559,16 +569,7 @@ def _is_diffusers_pipeline(pipeline_class: str) -> bool:
 
 def _inputs_from_pipeline(pipeline_class: str) -> dict:
     """Infer inputs from pipeline class for installed models without a catalog variant."""
-    params = infer_pipeline_params(pipeline_class)
-    if params is None:
-        return {}
-    inputs = {}
-    for pname, pinfo in params.items():
-        inputs[pname] = {
-            "has_default": pinfo.get("has_default", False),
-            "default": pinfo.get("default"),
-        }
-    return inputs
+    return _infer_inputs(pipeline_class)
 
 
 def _accepts_from_pipeline(pipeline_class: str) -> dict:
@@ -577,6 +578,8 @@ def _accepts_from_pipeline(pipeline_class: str) -> dict:
         "image": "image" in inputs,
         "video": "video" in inputs,
         "strength": "strength" in inputs,
+        "pose_video": "pose_video" in inputs,
+        "face_video": "face_video" in inputs,
     }
 
 

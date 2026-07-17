@@ -43,6 +43,7 @@
       "dtype": "bfloat16",
       "needs_token": false,
       "runner": "diffusers",
+      "dependencies": ["ftfy"],
       "pipeline": { "class": "WanPipeline", "video_pipeline": true },
       "inputs": {
         "prompt": { "required": true, "type": "text" },
