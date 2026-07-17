@@ -77,29 +77,6 @@
     "checkpoint_file": ""
   },
   {
-    "key": "quantstack_wan2.2_ti2v_5b_gguf",
-    "hf_name": "QuantStack/Wan2.2-TI2V-5B-GGUF",
-    "alias": "Wan2.2-TI2V-5B-GGUF",
-    "pipeline_class": "CogVideoXPipeline",
-    "dtype": "bfloat16",
-    "schedulers": {
-      "cogvideox_ddim": "CogVideoXDDIMScheduler",
-      "cogvideox_dpm": "CogVideoXDPMScheduler"
-    },
-    "default_scheduler": "cogvideox_ddim",
-    "needs_token": false,
-    "defaults": {
-      "width": 720,
-      "height": 480,
-      "steps": 50,
-      "cfg": 6.0,
-      "num_frames": 49,
-      "fps": 8,
-      "max_seq": 226
-    },
-    "installed_at": "2026-07-01T09:30:30.230595"
-  },
-  {
     "key": "stabilityai_stable_video_diffusion_img2vid_xt",
     "hf_name": "stabilityai/stable-video-diffusion-img2vid-xt",
     "alias": "stable-video-diffusion-img2vid-xt",
@@ -118,25 +95,6 @@
       "height": 576
     },
     "installed_at": "2026-07-01T20:11:48.600660"
-  },
-  {
-    "key": "wan_ai_wan2.2_animate_14b",
-    "hf_name": "Wan-AI/Wan2.2-Animate-14B",
-    "alias": "Wan2.2-Animate-14B",
-    "pipeline_class": "WanAnimatePipeline",
-    "dtype": "bfloat16",
-    "schedulers": {},
-    "default_scheduler": "",
-    "needs_token": false,
-    "defaults": {
-      "steps": 30,
-      "cfg": 5.0,
-      "num_frames": 81,
-      "width": 832,
-      "height": 480,
-      "max_seq": 512
-    },
-    "installed_at": "2026-07-02T19:40:17.823268"
   },
   {
     "key": "nimvideo_cogvideox_2b_img2vid",
@@ -256,5 +214,107 @@
     "checkpoint_file": "model.safetensors",
     "runner": "transformers",
     "model_class": "Florence2ForConditionalGeneration"
+  },
+  {
+    "key": "black_forest_labs_flux.2_klein_4b",
+    "hf_name": "black-forest-labs/FLUX.2-klein-4B",
+    "alias": "FLUX.2-klein-4B",
+    "dtype": "float16",
+    "schedulers": {
+      "scheduler": "FlowMatchEulerDiscreteScheduler"
+    },
+    "default_scheduler": "scheduler",
+    "needs_token": false,
+    "defaults": {
+      "steps": 50,
+      "cfg": 7.0
+    },
+    "installed_at": "2026-07-16T12:52:48.091424",
+    "pipeline_class": "Flux2KleinPipeline",
+    "hf_pipeline_tag": "image-to-image",
+    "repo_files": [
+      ".gitattributes",
+      "LICENSE.md",
+      "README.md",
+      "editing.jpg",
+      "flux-2-klein-4b.safetensors",
+      "model_index.json",
+      "others.jpg",
+      "realism.jpg",
+      "scheduler/scheduler_config.json",
+      "text_encoder/config.json",
+      "text_encoder/generation_config.json",
+      "text_encoder/model-00001-of-00002.safetensors",
+      "text_encoder/model-00002-of-00002.safetensors",
+      "text_encoder/model.safetensors.index.json",
+      "tokenizer/added_tokens.json",
+      "tokenizer/chat_template.jinja",
+      "tokenizer/merges.txt",
+      "tokenizer/special_tokens_map.json",
+      "tokenizer/tokenizer.json",
+      "tokenizer/tokenizer_config.json",
+      "tokenizer/vocab.json",
+      "transformer/config.json",
+      "transformer/diffusion_pytorch_model.safetensors",
+      "vae/config.json",
+      "vae/diffusion_pytorch_model.safetensors"
+    ],
+    "checkpoint_file": "",
+    "runner": "diffusers",
+    "model_class": ""
+  },
+  {
+    "key": "wan_ai_wan2.2_ti2v_5b_diffusers",
+    "hf_name": "Wan-AI/Wan2.2-TI2V-5B-Diffusers",
+    "alias": "Wan2.2-TI2V-5B-Diffusers",
+    "dtype": "bfloat16",
+    "schedulers": {},
+    "default_scheduler": "",
+    "needs_token": false,
+    "defaults": {
+      "steps": 50,
+      "cfg": 6.0,
+      "width": 480,
+      "height": 832,
+      "num_frames": 81,
+      "fps": 16
+    },
+    "installed_at": "2026-07-17T11:54:16.241543",
+    "pipeline_class": "WanPipeline",
+    "hf_pipeline_tag": "text-to-video",
+    "repo_files": [
+      ".gitattributes",
+      "README.md",
+      "assets/comp_effic.png",
+      "assets/logo.png",
+      "assets/moe_2.png",
+      "assets/moe_arch.png",
+      "assets/performance.png",
+      "assets/vae.png",
+      "examples/i2v_input.JPG",
+      "model_index.json",
+      "scheduler/scheduler_config.json",
+      "text_encoder/config.json",
+      "text_encoder/model-00001-of-00003.safetensors",
+      "text_encoder/model-00002-of-00003.safetensors",
+      "text_encoder/model-00003-of-00003.safetensors",
+      "text_encoder/model.safetensors.index.json",
+      "tokenizer/special_tokens_map.json",
+      "tokenizer/spiece.model",
+      "tokenizer/tokenizer.json",
+      "tokenizer/tokenizer_config.json",
+      "transformer/config.json",
+      "transformer/diffusion_pytorch_model-00001-of-00005.safetensors",
+      "transformer/diffusion_pytorch_model-00002-of-00005.safetensors",
+      "transformer/diffusion_pytorch_model-00003-of-00005.safetensors",
+      "transformer/diffusion_pytorch_model-00004-of-00005.safetensors",
+      "transformer/diffusion_pytorch_model-00005-of-00005.safetensors",
+      "transformer/diffusion_pytorch_model.safetensors.index.json",
+      "vae/config.json",
+      "vae/diffusion_pytorch_model.safetensors"
+    ],
+    "checkpoint_file": "",
+    "runner": "diffusers",
+    "model_class": ""
   }
 ]

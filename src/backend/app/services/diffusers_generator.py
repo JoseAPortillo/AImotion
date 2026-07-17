@@ -126,14 +126,7 @@ class DiffusersGenerator:
                 model_name, torch_dtype=dtype, token=token,
                 local_files_only=model_is_cached,
             )
-            pipe.to(self.device)
-            if hasattr(pipe, "enable_attention_slicing"):
-                pipe.enable_attention_slicing()
-            if hasattr(pipe, "vae") and hasattr(pipe.vae, "enable_tiling"):
-                try:
-                    pipe.vae.enable_tiling()
-                except Exception:
-                    logger.debug(f"VAE tiling not supported for {type(pipe.vae).__name__}")
+            self._apply_memory_optimizations(pipe, dtype)
             self._inject_missing_i2v_components(pipe, model_name, dtype)
             self._log_vram()
             logger.info(f"Pipeline loaded on {self.device}: {type(pipe).__name__}({model_name})")
@@ -324,9 +317,14 @@ class DiffusersGenerator:
 
         return None
 
-    def _ensure_pipe(self, model_key: str):
+    _I2V_OVERRIDES = {
+        "WanPipeline": "WanImageToVideoPipeline",
+    }
+
+    def _ensure_pipe(self, model_key: str, has_image: bool = False):
         from app.services.generator import get_model_config
-        if self._pipe is not None and self._current_model_key == model_key:
+        cache_key = f"{model_key}{'_i2v' if has_image else ''}"
+        if self._pipe is not None and self._current_model_key == cache_key:
             return self._pipe
         import torch
         cfg = get_model_config(model_key)
@@ -339,9 +337,13 @@ class DiffusersGenerator:
         dtype_name = cfg.get("dtype", settings.dtype)
         dtype = torch.bfloat16 if dtype_name == "bfloat16" else torch.float16
         pipeline_class = cfg.get("pipeline_class")
+        if has_image and pipeline_class in self._I2V_OVERRIDES:
+            override = self._I2V_OVERRIDES[pipeline_class]
+            logger.info(f"I2V mode: overriding pipeline {pipeline_class} → {override}")
+            pipeline_class = override
         self.unload()
         self._pipe = self._load_pipe(model_name, dtype, tok, pipeline_class_name=pipeline_class)
-        self._current_model_key = model_key
+        self._current_model_key = cache_key
         self._current_model_name = model_name
         return self._pipe
 
@@ -390,6 +392,32 @@ class DiffusersGenerator:
                 else 0
             )
             logger.info(f"VRAM: {free:.1f} GB free / {total:.1f} GB total")
+
+    def _apply_memory_optimizations(self, pipe, dtype):
+        import torch
+        vram_gb = 0
+        if torch.cuda.is_available():
+            free, total = torch.cuda.mem_get_info(0)
+            vram_gb = total / (1024 ** 3)
+            logger.info(f"GPU VRAM: {vram_gb:.1f} GB total")
+
+        if vram_gb > 0 and vram_gb <= 12:
+            logger.info(f"VRAM ≤12 GB detected ({vram_gb:.1f} GB). Enabling model CPU offload.")
+            try:
+                pipe.enable_model_cpu_offload()
+                logger.info("Model CPU offload enabled — components will move to GPU on demand")
+                return
+            except Exception as e:
+                logger.warning(f"enable_model_cpu_offload failed: {e}. Falling back to device placement.")
+
+        pipe.to(self.device)
+        if hasattr(pipe, "enable_attention_slicing"):
+            pipe.enable_attention_slicing()
+        if hasattr(pipe, "vae") and hasattr(pipe.vae, "enable_tiling"):
+            try:
+                pipe.vae.enable_tiling()
+            except Exception:
+                logger.debug(f"VAE tiling not supported for {type(pipe.vae).__name__}")
 
     def _build_callback(self, steps: int, total_phases: int, progress_callback, cancel_event=None):
         if not progress_callback:
@@ -608,7 +636,8 @@ class DiffusersGenerator:
         min_cfg = min_guidance_scale if min_guidance_scale is not None else d.get("min_guidance_scale")
         max_cfg = max_guidance_scale if max_guidance_scale is not None else d.get("max_guidance_scale")
 
-        pipe = self._ensure_pipe(model)
+        has_image = video_frames is not None and len(video_frames) == 1
+        pipe = self._ensure_pipe(model, has_image=has_image)
         self._apply_scheduler(scheduler, pipe=pipe, cfg=model_cfg)
 
         sig = inspect.signature(pipe.__call__)
@@ -636,6 +665,19 @@ class DiffusersGenerator:
                 if orig != (w, h):
                     video_frames[0] = video_frames[0].resize((w, h), Image.LANCZOS)
                     logger.info(f"Resized video frame from {orig} to ({w}, {h})")
+
+        pose_video_path = extra_kwargs.pop("pose_video_path", None)
+        face_video_path = extra_kwargs.pop("face_video_path", None)
+        if pose_video_path and os.path.exists(pose_video_path):
+            pose_frames = extract_frames(pose_video_path, max_frames=nf or 81)
+            if pose_frames:
+                extra_kwargs["pose_video"] = pose_frames
+                logger.info(f"Extracted {len(pose_frames)} pose video frames")
+        if face_video_path and os.path.exists(face_video_path):
+            face_frames = extract_frames(face_video_path, max_frames=nf or 81)
+            if face_frames:
+                extra_kwargs["face_video"] = face_frames
+                logger.info(f"Extracted {len(face_frames)} face video frames")
 
         pipe_kwargs = self._build_pipe_kwargs(
             pipe, prompt, negative_prompt, video_frames, strength,
