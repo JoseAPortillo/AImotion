@@ -603,6 +603,17 @@ def _accepts_from_pipeline(pipeline_class: str) -> dict:
 
 def _build_variant_entry(variant) -> dict:
     hf_name = variant.hf_name
+    pipeline_inputs = variant.inputs
+    if variant.pipeline_class and _is_diffusers_pipeline(variant.pipeline_class):
+        discovered = _inputs_from_pipeline(variant.pipeline_class)
+        pipeline_inputs = {**discovered, **pipeline_inputs}
+    accepts = {
+        "image": "image" in pipeline_inputs,
+        "video": "video" in pipeline_inputs,
+        "strength": "strength" in pipeline_inputs,
+        "pose_video": "pose_video" in pipeline_inputs,
+        "face_video": "face_video" in pipeline_inputs,
+    }
     return {
         "key": variant.key,
         "name": variant.name,
@@ -614,9 +625,9 @@ def _build_variant_entry(variant) -> dict:
         "pipeline_class": variant.pipeline_class,
         "schedulers": list(variant.schedulers.keys()),
         "default_scheduler": variant.default_scheduler,
-        "accepts": variant.accepts(),
+        "accepts": accepts,
         "defaults": variant.defaults,
-        "inputs": variant.inputs,
+        "inputs": pipeline_inputs,
         "is_video": variant.is_video,
         "runner": variant.family.runner,
         "pricing": variant._data.get("pricing"),
@@ -642,7 +653,17 @@ async def list_models():
             continue
         if variant:
             pipeline_inputs = variant.inputs
-            pipeline_accepts = variant.accepts()
+            if variant.pipeline_class and _is_diffusers_pipeline(variant.pipeline_class):
+                discovered = _inputs_from_pipeline(variant.pipeline_class)
+                merged = {**discovered, **pipeline_inputs}
+                pipeline_inputs = merged
+            pipeline_accepts = {
+                "image": "image" in pipeline_inputs,
+                "video": "video" in pipeline_inputs,
+                "strength": "strength" in pipeline_inputs,
+                "pose_video": "pose_video" in pipeline_inputs,
+                "face_video": "face_video" in pipeline_inputs,
+            }
             pipeline_defaults = variant.defaults
             is_video = variant.is_video
             runner = variant.family.runner

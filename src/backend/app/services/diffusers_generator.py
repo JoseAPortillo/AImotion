@@ -120,9 +120,26 @@ class DiffusersGenerator:
 
         model_is_cached = is_model_cached(model_name)
 
+        if mod_cls:
+            try:
+                pipe = mod_cls.from_pretrained(
+                    model_name, torch_dtype=dtype, token=token,
+                    local_files_only=model_is_cached,
+                )
+            except Exception:
+                logger.info(f"Local load failed for {mod_cls.__name__}, retrying with network access...")
+                pipe = mod_cls.from_pretrained(
+                    model_name, torch_dtype=dtype, token=token,
+                    local_files_only=False,
+                )
+            self._apply_memory_optimizations(pipe, dtype)
+            self._inject_missing_i2v_components(pipe, model_name, dtype)
+            self._log_vram()
+            logger.info(f"Pipeline loaded on {self.device}: {type(pipe).__name__}({model_name})")
+            return pipe
+
         if has_model_index or not checkpoint_file:
-            pipe_cls = mod_cls or DiffusionPipeline
-            pipe = pipe_cls.from_pretrained(
+            pipe = DiffusionPipeline.from_pretrained(
                 model_name, torch_dtype=dtype, token=token,
                 local_files_only=model_is_cached,
             )
@@ -447,6 +464,7 @@ class DiffusersGenerator:
         decode_chunk, noise_aug, fps, motion_bucket,
         min_cfg, max_cfg,
         callback,
+        ref_image=None,
         **extra_kwargs,
     ):
         import torch
@@ -482,14 +500,23 @@ class DiffusersGenerator:
 
         if video_frames:
             if "image" in valid:
-                kw["image"] = video_frames[0]
-                logger.info(f"Set kw['image'] from video_frames[0], size: {video_frames[0].size}")
+                if ref_image is not None:
+                    kw["image"] = ref_image
+                    logger.info(f"Using dedicated reference image for pipeline, size: {ref_image.size}")
+                else:
+                    kw["image"] = video_frames[0]
+                    logger.info(f"Set kw['image'] from video_frames[0], size: {video_frames[0].size}")
                 if "strength" in valid:
                     kw["strength"] = strength
             elif "video" in valid:
                 kw["video"] = video_frames
                 if "strength" in valid:
                     kw["strength"] = strength
+        elif ref_image is not None and "image" in valid:
+            kw["image"] = ref_image
+            logger.info(f"Using reference image (no video connected), size: {ref_image.size}")
+            if "strength" in valid:
+                kw["strength"] = strength
 
         if width is not None and "width" in valid:
             kw["width"] = width
@@ -507,6 +534,11 @@ class DiffusersGenerator:
             kw["fps"] = fps
         if motion_bucket is not None and "motion_bucket_id" in valid:
             kw["motion_bucket_id"] = motion_bucket
+
+        if "segment_frame_length" in valid:
+            kw["segment_frame_length"] = nf
+        if "mode" in valid and "mode" not in kw:
+            kw["mode"] = "animate"
 
         for k, v in extra_kwargs.items():
             if k in valid and v is not None:
@@ -624,6 +656,7 @@ class DiffusersGenerator:
             raise ValueError(f"Unsupported model: {model}")
 
         d = model_cfg["defaults"]
+        dtype = torch.bfloat16 if model_cfg.get("dtype", "bfloat16") == "bfloat16" else torch.float16
         w = width
         h = height
         s = steps or d.get("steps", 50)
@@ -679,10 +712,17 @@ class DiffusersGenerator:
                 extra_kwargs["face_video"] = face_frames
                 logger.info(f"Extracted {len(face_frames)} face video frames")
 
+        ref_image = None
+        image_path = extra_kwargs.pop("image_path", None)
+        if image_path and os.path.exists(image_path):
+            ref_image = Image.open(image_path).convert("RGB")
+            logger.info(f"Loaded reference image from {image_path}, size: {ref_image.size}")
+
         pipe_kwargs = self._build_pipe_kwargs(
             pipe, prompt, negative_prompt, video_frames, strength,
             w, h, s, c, seed, nf, max_seq, decode_chunk_size,
             noise_aug, fps_val, mbid, min_cfg, max_cfg, cb,
+            ref_image=ref_image,
             **extra_kwargs,
         )
 
@@ -732,7 +772,12 @@ class DiffusersGenerator:
 
         import asyncio
         loop = asyncio.get_running_loop()
-        output = await loop.run_in_executor(None, lambda: pipe(**pipe_kwargs))
+
+        def _run_generation():
+            with torch.autocast(str(self.device), dtype=dtype):
+                return pipe(**pipe_kwargs)
+
+        output = await loop.run_in_executor(None, _run_generation)
 
         if progress_callback:
             await progress_callback(s + 1, total_phases)  # decode/save

@@ -267,7 +267,7 @@ export const MODALITY_FILTERS: Record<string, (m: ModelEntry) => boolean> = {
   textToImage: (m) => m.runner !== 'api' && m.is_video !== true && !m.accepts?.image && !m.accepts?.video,
   textToVideo: (m) => m.runner !== 'api' && m.is_video === true && !m.accepts?.image && !m.accepts?.video,
   imageToVideo: (m) => m.runner !== 'api' && m.is_video === true && m.accepts?.image === true,
-  videoToVideo: (m) => m.runner !== 'api' && m.accepts?.video === true,
+  videoToVideo: (m) => m.runner !== 'api' && (m.accepts?.video === true || (m.accepts?.pose_video === true && m.accepts?.face_video === true)),
   imageToImage: (m) => m.runner !== 'api' && m.runner !== 'transformers' && m.is_video !== true && m.accepts?.image === true,
 }
 
@@ -529,6 +529,7 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
     description: 'Transform an input video using text-guided video-to-video models.',
     inputs: [
       { id: 'video_in', label: 'Video', type: 'video_tensor' },
+      { id: 'image_in', label: 'Image', type: 'video_tensor' },
       { id: 'pose_video_in', label: 'Pose Video', type: 'video_tensor' },
       { id: 'face_video_in', label: 'Face Video', type: 'video_tensor' },
       { id: 'prompt_pos', label: 'Positive Prompt', type: 'prompt' },
