@@ -121,16 +121,19 @@ class DiffusersGenerator:
         model_is_cached = is_model_cached(model_name)
 
         if mod_cls:
+            logger.info(f"Loading {mod_cls.__name__} from {model_name} (cached={model_is_cached})...")
             try:
                 pipe = mod_cls.from_pretrained(
                     model_name, torch_dtype=dtype, token=token,
                     local_files_only=model_is_cached,
+                    low_cpu_mem_usage=True,
                 )
-            except Exception:
-                logger.info(f"Local load failed for {mod_cls.__name__}, retrying with network access...")
+            except Exception as e:
+                logger.info(f"Local load failed for {mod_cls.__name__}: {e}. Retrying with network access...")
                 pipe = mod_cls.from_pretrained(
                     model_name, torch_dtype=dtype, token=token,
                     local_files_only=False,
+                    low_cpu_mem_usage=True,
                 )
             self._apply_memory_optimizations(pipe, dtype)
             self._inject_missing_i2v_components(pipe, model_name, dtype)
@@ -139,9 +142,11 @@ class DiffusersGenerator:
             return pipe
 
         if has_model_index or not checkpoint_file:
+            logger.info(f"Loading via DiffusionPipeline.from_pretrained (cached={model_is_cached})...")
             pipe = DiffusionPipeline.from_pretrained(
                 model_name, torch_dtype=dtype, token=token,
                 local_files_only=model_is_cached,
+                low_cpu_mem_usage=True,
             )
             self._apply_memory_optimizations(pipe, dtype)
             self._inject_missing_i2v_components(pipe, model_name, dtype)
@@ -702,11 +707,13 @@ class DiffusersGenerator:
         pose_video_path = extra_kwargs.pop("pose_video_path", None)
         face_video_path = extra_kwargs.pop("face_video_path", None)
         if pose_video_path and os.path.exists(pose_video_path):
+            from app.services.generator import extract_frames
             pose_frames = extract_frames(pose_video_path, max_frames=nf or 81)
             if pose_frames:
                 extra_kwargs["pose_video"] = pose_frames
                 logger.info(f"Extracted {len(pose_frames)} pose video frames")
         if face_video_path and os.path.exists(face_video_path):
+            from app.services.generator import extract_frames
             face_frames = extract_frames(face_video_path, max_frames=nf or 81)
             if face_frames:
                 extra_kwargs["face_video"] = face_frames
