@@ -23,6 +23,7 @@ export interface WorkflowFile {
   resultType: 'image' | 'video' | null
   media: Record<string, WorkflowMedia>
   autoPreviews: Record<string, WorkflowMedia>
+  inputMedia: Record<string, WorkflowMedia>
 }
 
 type MediaMap = Record<string, { url: string; type: 'image' | 'video' }>
@@ -74,6 +75,118 @@ async function saveMediaMap(
   }
 
   return result
+}
+
+/** Extract fileDataUrl from input nodes and save as separate files */
+async function saveInputFiles(
+  dirHandle: FileSystemDirectoryHandle,
+  nodes: AppNode[],
+): Promise<{ inputMedia: Record<string, WorkflowMedia>; cleanedNodes: AppNode[] }> {
+  const inputMedia: Record<string, WorkflowMedia> = {}
+  const cleanedNodes = await Promise.all(nodes.map(async (node) => {
+    const data = node.data as Record<string, unknown>
+    if (
+      (node.type === 'videoInput' || node.type === 'imageInput') &&
+      typeof data.fileDataUrl === 'string' &&
+      data.fileDataUrl
+    ) {
+      const isVideo = node.type === 'videoInput'
+      const type = isVideo ? 'video' : 'image'
+      const ext = isVideo ? 'mp4' : 'png'
+      const fileName = `${node.id}_input.${ext}`
+
+      const inputDir = isVideo ? 'inputs/videos' : 'inputs/images'
+
+      let blob: Blob
+      if (data.fileDataUrl.startsWith('data:')) {
+        blob = dataURItoBlob(data.fileDataUrl)
+      } else {
+        const response = await fetch(data.fileDataUrl)
+        if (!response.ok) {
+          console.warn(`[saveInputFiles] fetch failed for ${data.fileDataUrl}`)
+          return node
+        }
+        blob = await response.blob()
+      }
+
+      await saveInputFileToDir(dirHandle, inputDir, fileName, blob)
+      inputMedia[node.id] = { path: `${inputDir}/${fileName}`, type }
+
+      const cleanedData = { ...data }
+      delete cleanedData.fileDataUrl
+      delete cleanedData.file
+      return { ...node, data: cleanedData }
+    }
+    return node
+  }))
+
+  return { inputMedia, cleanedNodes }
+}
+
+function dataURItoBlob(dataUri: string): Blob {
+  const parts = dataUri.split(',')
+  const meta = parts[0]
+  const byteString = atob(parts[1])
+  const mimeMatch = meta.match(/:(.*?);/)
+  const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream'
+  const ab = new ArrayBuffer(byteString.length)
+  const ia = new Uint8Array(ab)
+  for (let i = 0; i < byteString.length; i++) {
+    ia[i] = byteString.charCodeAt(i)
+  }
+  return new Blob([ab], { type: mime })
+}
+
+async function saveInputFileToDir(
+  dirHandle: FileSystemDirectoryHandle,
+  subDir: string,
+  fileName: string,
+  blob: Blob,
+): Promise<void> {
+  const parts = subDir.split('/').filter(Boolean)
+  let current = dirHandle
+  for (const part of parts) {
+    current = await current.getDirectoryHandle(part, { create: true })
+  }
+  const fileHandle = await current.getFileHandle(fileName, { create: true })
+  const writable = await fileHandle.createWritable()
+  await writable.write(blob)
+  await writable.close()
+}
+
+async function loadInputFiles(
+  dirHandle: FileSystemDirectoryHandle,
+  inputMedia: Record<string, WorkflowMedia>,
+  nodes: AppNode[],
+): Promise<AppNode[]> {
+  if (!inputMedia || Object.keys(inputMedia).length === 0) return nodes
+
+  const restored = await loadMediaMap(dirHandle, inputMedia)
+  const blobUrlMap: Record<string, string> = {}
+  for (const [nodeId, entry] of Object.entries(restored)) {
+    blobUrlMap[nodeId] = URL.createObjectURL(entry.blob)
+  }
+
+  return nodes.map((node) => {
+    const blobUrl = blobUrlMap[node.id]
+    if (!blobUrl) return node
+
+    const data = node.data as Record<string, unknown>
+    const isVideo = node.type === 'videoInput'
+    const ext = isVideo ? 'mp4' : 'png'
+    const type = isVideo ? 'video/mp4' : 'image/png'
+    const media = inputMedia[node.id]
+
+    return {
+      ...node,
+      data: {
+        ...data,
+        fileDataUrl: blobUrl,
+        fileName: media ? media.path.split('/').pop()?.replace(/_\w+\.\w+$/, `.${ext}`) : `input.${ext}`,
+        _inputMimeType: type,
+      },
+    }
+  })
 }
 
 async function loadMediaMap(
@@ -135,13 +248,15 @@ export async function saveWorkflowToDirectory(
   const previewsDir = await dirHandle.getDirectoryHandle('previews', { create: true })
   await previewsDir.getDirectoryHandle('images', { create: true })
   await previewsDir.getDirectoryHandle('videos', { create: true })
+  await dirHandle.getDirectoryHandle('inputs', { create: true })
 
+  const { inputMedia, cleanedNodes } = await saveInputFiles(dirHandle, nodes)
   const mediaMap = await saveMediaMap(dirHandle, nodeOutputs, '')
   const previewMap = await saveMediaMap(dirHandle, autoPreviews, 'previews')
 
   const workflow: WorkflowFile = {
-    version: 4,
-    nodes: nodes.map(({ id, type, position, data, width, height, hidden }) => ({
+    version: 5,
+    nodes: cleanedNodes.map(({ id, type, position, data, width, height, hidden }) => ({
       id, type, position, data, width, height, hidden,
     })),
     edges: edges.map(({ id, source, target, sourceHandle, targetHandle, style }) => ({
@@ -151,6 +266,7 @@ export async function saveWorkflowToDirectory(
     resultType,
     media: mediaMap,
     autoPreviews: previewMap,
+    inputMedia,
   }
 
   const fileName = `${folderName}.aimation`
@@ -179,6 +295,8 @@ export async function loadWorkflowFromDirectory(): Promise<{
 
   const mediaBlobs = await loadMediaMap(dirHandle, workflow.media ?? {})
   const previewBlobs = await loadMediaMap(dirHandle, workflow.autoPreviews ?? {})
+  const restoredNodes = await loadInputFiles(dirHandle, workflow.inputMedia ?? {}, workflow.nodes)
+  workflow.nodes = restoredNodes
 
   return { workflow, mediaBlobs, previewBlobs }
 }
@@ -214,6 +332,7 @@ export function downloadWorkflowJson(
     resultType,
     media: mediaMap,
     autoPreviews: previewMap,
+    inputMedia: {},
   }
 
   const blob = new Blob([JSON.stringify(workflow, null, 2)], { type: 'application/json' })
