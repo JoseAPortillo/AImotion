@@ -1,5 +1,0 @@
-INFO:     Started server process [19512]
-INFO:     Waiting for application startup.
-2026-06-30 08:26:07,096 - app.main - INFO - AImotion backend started
-INFO:     Application startup complete.
-INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
