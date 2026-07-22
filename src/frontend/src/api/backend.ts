@@ -52,10 +52,14 @@ export async function startGeneration(
   },
   videoFile?: File,
   imageFile?: File,
+  poseVideoFile?: File,
+  faceVideoFile?: File,
 ): Promise<TaskResponse> {
   const formData = new FormData()
   if (imageFile instanceof File) formData.append('image', imageFile)
   if (videoFile instanceof File) formData.append('video', videoFile)
+  if (poseVideoFile instanceof File) formData.append('pose_video', poseVideoFile)
+  if (faceVideoFile instanceof File) formData.append('face_video', faceVideoFile)
   formData.append('prompt', prompt)
   formData.append('negative_prompt', negativePrompt)
   formData.append('width', String(params.width))

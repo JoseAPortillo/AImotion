@@ -39,6 +39,10 @@ class ModelFamily:
         return self._data.get("runner_install")
 
     @property
+    def dependencies(self) -> list[str]:
+        return self._data.get("dependencies") or []
+
+    @property
     def schedulers(self) -> dict[str, str]:
         return self._data.get("schedulers", {})
 
@@ -60,6 +64,8 @@ class ModelFamily:
             "image": "image" in inputs,
             "video": "video" in inputs,
             "strength": "strength" in inputs,
+            "pose_video": "pose_video" in inputs,
+            "face_video": "face_video" in inputs,
         }
 
     def get_variant(self, key: str) -> Optional["ModelVariant"]:
@@ -96,6 +102,16 @@ class ModelVariant:
         return self._family.pipeline_class
 
     @property
+    def runner(self) -> str:
+        return self._data.get("runner") or self._family.runner
+
+    @property
+    def dependencies(self) -> list[str]:
+        family_deps = self._family._data.get("dependencies") or []
+        variant_deps = self._data.get("dependencies") or []
+        return list(dict.fromkeys(family_deps + variant_deps))
+
+    @property
     def is_video(self) -> bool:
         p = self._pipe_data()
         if p:
@@ -122,8 +138,7 @@ class ModelVariant:
         variant_inputs = self._data.get("inputs") or {}
         if not variant_inputs:
             return family_inputs
-        merged = {**family_inputs, **variant_inputs}
-        return merged
+        return variant_inputs
 
     def accepts(self) -> dict:
         inputs = self.inputs
@@ -131,6 +146,8 @@ class ModelVariant:
             "image": "image" in inputs,
             "video": "video" in inputs,
             "strength": "strength" in inputs,
+            "pose_video": "pose_video" in inputs,
+            "face_video": "face_video" in inputs,
         }
 
     def to_entry(self, cached: bool = False, loaded: bool = False) -> dict:
@@ -186,6 +203,9 @@ class ModelCatalog:
             return v
         inst = find_installed(key)
         if inst:
+            catalog_variants = self.get_variants_by_hf(inst.hf_name)
+            if catalog_variants:
+                return catalog_variants[0]
             return self._make_installed_variant(inst)
         return None
 
@@ -218,7 +238,7 @@ class ModelCatalog:
         inferred = _infer_inputs(inst.pipeline_class)
         inputs = inferred | (family.inputs if family else {})
 
-        if not inst.pipeline_class and inst.hf_pipeline_tag:
+        if inst.hf_pipeline_tag:
             tag = inst.hf_pipeline_tag.lower()
             if tag == "image-to-image":
                 inputs["image"] = {"required": False, "type": "image"}
@@ -231,11 +251,11 @@ class ModelCatalog:
         schedulers = inst.schedulers or (family.schedulers if family else {})
         default_scheduler = inst.default_scheduler or (family.default_scheduler if family else "")
         is_video = _is_video_pipeline(inst.pipeline_class) or (family and family.is_video)
-        if not inst.pipeline_class and inst.hf_pipeline_tag:
+        if inst.hf_pipeline_tag:
             tag = inst.hf_pipeline_tag.lower()
             if tag in ("image-to-video", "video-to-video"):
                 is_video = True
-        runner = family.runner if family else "diffusers"
+        runner = inst.runner or (family.runner if family else "diffusers")
         dummy_family = ModelFamily({
             "family": inst.key or inst.hf_name,
             "label": inst.alias or inst.hf_name,
@@ -298,6 +318,14 @@ _KNOWN_PIPELINE_INPUTS: dict[str, dict] = {
         "prompt": {"required": True, "type": "text"},
         "image": {"required": True, "type": "image"},
     },
+    "WanAnimatePipeline": {
+        "prompt": {"required": True, "type": "text"},
+        "image": {"required": True, "type": "image"},
+        "pose_video": {"required": True, "type": "video"},
+        "face_video": {"required": True, "type": "video"},
+        "background_video": {"required": False, "type": "video"},
+        "mask_video": {"required": False, "type": "video"},
+    },
 }
 
 
@@ -309,22 +337,26 @@ def _infer_inputs(pipeline_class: str | None) -> dict:
         return _KNOWN_PIPELINE_INPUTS.get(pipeline_class, {"prompt": {"required": True, "type": "text"}})
     inputs: dict = {}
     for pname, pinfo in params.items():
+        has_default = pinfo.get("has_default", False)
+        required = not has_default
+        default_val = pinfo.get("default")
         if pname in ("prompt",):
             inputs[pname] = {"required": True, "type": "text"}
         elif pname in ("num_frames", "width", "height", "max_sequence_length", "decode_chunk_size", "fps", "motion_bucket_id"):
-            inputs[pname] = {"required": False, "type": "int", "default": pinfo.get("default")}
+            inputs[pname] = {"required": False, "type": "int", "default": default_val}
         elif pname in ("guidance_scale", "num_inference_steps"):
             pass  # mapped to cfg/steps from defaults
         elif pname in ("min_guidance_scale", "max_guidance_scale", "noise_aug_strength"):
-            inputs[pname] = {"required": False, "type": "float", "default": pinfo.get("default", 0.0)}
+            inputs[pname] = {"required": False, "type": "float", "default": default_val or 0.0}
         elif pname == "strength":
-            inputs[pname] = {"required": False, "type": "float", "default": pinfo.get("default", 0.8), "min": 0, "max": 1}
-        elif pname == "image":
-            inputs[pname] = {"required": False, "type": "image"}
-        elif pname == "video":
-            inputs[pname] = {"required": False, "type": "video"}
+            inputs[pname] = {"required": False, "type": "float", "default": default_val or 0.8, "min": 0, "max": 1}
+        elif pname in ("image",):
+            inputs[pname] = {"required": required, "type": "image"}
+        elif pname in ("video",):
+            inputs[pname] = {"required": required, "type": "video"}
+        elif pname in ("pose_video", "face_video", "background_video", "mask_video"):
+            inputs[pname] = {"required": required, "type": "video"}
         else:
-            default_val = pinfo.get("default")
             if isinstance(default_val, float):
                 inputs[pname] = {"required": False, "type": "float", "default": default_val}
             elif isinstance(default_val, bool):
@@ -334,7 +366,7 @@ def _infer_inputs(pipeline_class: str | None) -> dict:
             elif isinstance(default_val, str):
                 inputs[pname] = {"required": False, "type": "text", "default": default_val}
             else:
-                inputs[pname] = {"required": False, "type": "float", "default": default_val}
+                inputs[pname] = {"required": required, "type": "float", "default": default_val}
     return inputs
 
 

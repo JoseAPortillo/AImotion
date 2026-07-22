@@ -13,8 +13,7 @@ from huggingface_hub import HfApi, hf_hub_download
 from app.services.model_registry import list_hf_files
 from app.config import settings
 from app.services.generator import VideoGenerator, get_model_config
-from app.services.model_catalog import catalog
-from app.services.diffusers_generator import infer_pipeline_params
+from app.services.model_catalog import catalog, _infer_inputs
 from app.services.model_registry import (
     list_installed, find_installed, add_installed, remove_installed,
     remove_cached, generate_key, is_model_cached, discover_pipeline,
@@ -161,22 +160,38 @@ def detect_requirements(hf_name: str, discovered: dict) -> list[dict]:
     except Exception as e:
         logger.warning(f"Could not check model access requirements: {e}")
 
+    # Check catalog variant for declared dependencies and runner
+    variants = catalog.get_variants_by_hf(hf_name)
+    variant = variants[0] if variants else None
+    
+    if variant:
+        for dep in variant.dependencies:
+            requirements.append({
+                "type": "python_package",
+                "package": dep,
+                "reason": f"Declared dependency for {variant.name}",
+                "optional": False,
+            })
+
     # Check if the model's family needs a custom runner or pip deps
-    if family and family.runner not in ("diffusers",):
-        if not RunnerRegistry.is_registered(family.runner):
-            ri = family.runner_install
+    # Use variant runner if available, otherwise family runner
+    effective_runner = variant.runner if variant else (family.runner if family else None)
+    
+    if effective_runner and effective_runner not in ("diffusers",):
+        if not RunnerRegistry.is_registered(effective_runner):
+            ri = family.runner_install if family else None
             if ri:
                 requirements.append({
                     "type": "runner",
-                    "runner_key": family.runner,
+                    "runner_key": effective_runner,
                     "package": ri.get("package"),
                     "url": ri.get("url"),
                     "entry": ri.get("entry"),
-                    "reason": f"Required runner for {family.label} models",
+                    "reason": f"Required runner for {family.label if family else effective_runner} models",
                     "optional": True,
                 })
-        # For wan2.2, always add stable-diffusion-cpp-python even if runner is built-in
-        if family.runner == "wan2.2":
+        # For wan2.2 GGUF models, add stable-diffusion-cpp-python
+        if effective_runner == "wan2.2":
             requirements.append({
                 "type": "python_package",
                 "package": "stable-diffusion-cpp-python",
@@ -446,22 +461,33 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
                 )
                 return
 
-        def _download_file(fname: str) -> bool:
-            try:
-                hf_hub_download(
-                    repo_id=hf_name,
-                    filename=fname,
-                    token=tok,
-                    resume_download=True,
-                    cache_dir=cache_dir,
-                )
-                return True
-            except Exception as e:
+        def _download_file(fname: str, max_retries: int = 3) -> bool:
+            import time as _time
+            last_err = None
+            for attempt in range(max_retries):
                 if task.cancel_event.is_set():
                     return False
-                task.status = "error"
-                task.error_msg = f"Failed to download {fname}: {e}"
-                return False
+                try:
+                    hf_hub_download(
+                        repo_id=hf_name,
+                        filename=fname,
+                        token=tok,
+                        resume_download=True,
+                        cache_dir=cache_dir,
+                    )
+                    return True
+                except Exception as e:
+                    last_err = e
+                    if task.cancel_event.is_set():
+                        return False
+                    if attempt < max_retries - 1:
+                        wait = 5 * (attempt + 1)
+                        logger.warning(f"Download {fname} failed (attempt {attempt+1}/{max_retries}): {e}. Retrying in {wait}s...")
+                        task.current_file = f"retrying {fname} ({attempt+2}/{max_retries})"
+                        _time.sleep(wait)
+            task.status = "error"
+            task.error_msg = f"Failed to download {fname} after {max_retries} attempts: {last_err}"
+            return False
 
         # Download config files first (small files, needed for from_pretrained)
         task.total_files = len(config_files) + len(download_weights)
@@ -506,9 +532,11 @@ def _run_install(task_id: str, hf_name: str, alias: str, cache_dir: str = ""):
                 remove_installed(existing.key)
         final_alias = alias or hf_name.split("/")[-1]
 
-        # Determine runner
+        # Determine runner: variant-level > family-level > default
         if is_transformers:
             runner = "transformers"
+        elif cat_variants and cat_variants[0].runner:
+            runner = cat_variants[0].runner
         elif family:
             runner = family.runner
         else:
@@ -559,16 +587,7 @@ def _is_diffusers_pipeline(pipeline_class: str) -> bool:
 
 def _inputs_from_pipeline(pipeline_class: str) -> dict:
     """Infer inputs from pipeline class for installed models without a catalog variant."""
-    params = infer_pipeline_params(pipeline_class)
-    if params is None:
-        return {}
-    inputs = {}
-    for pname, pinfo in params.items():
-        inputs[pname] = {
-            "has_default": pinfo.get("has_default", False),
-            "default": pinfo.get("default"),
-        }
-    return inputs
+    return _infer_inputs(pipeline_class)
 
 
 def _accepts_from_pipeline(pipeline_class: str) -> dict:
@@ -577,11 +596,24 @@ def _accepts_from_pipeline(pipeline_class: str) -> dict:
         "image": "image" in inputs,
         "video": "video" in inputs,
         "strength": "strength" in inputs,
+        "pose_video": "pose_video" in inputs,
+        "face_video": "face_video" in inputs,
     }
 
 
 def _build_variant_entry(variant) -> dict:
     hf_name = variant.hf_name
+    pipeline_inputs = variant.inputs
+    if variant.pipeline_class and _is_diffusers_pipeline(variant.pipeline_class):
+        discovered = _inputs_from_pipeline(variant.pipeline_class)
+        pipeline_inputs = {**discovered, **pipeline_inputs}
+    accepts = {
+        "image": "image" in pipeline_inputs,
+        "video": "video" in pipeline_inputs,
+        "strength": "strength" in pipeline_inputs,
+        "pose_video": "pose_video" in pipeline_inputs,
+        "face_video": "face_video" in pipeline_inputs,
+    }
     return {
         "key": variant.key,
         "name": variant.name,
@@ -593,9 +625,9 @@ def _build_variant_entry(variant) -> dict:
         "pipeline_class": variant.pipeline_class,
         "schedulers": list(variant.schedulers.keys()),
         "default_scheduler": variant.default_scheduler,
-        "accepts": variant.accepts(),
+        "accepts": accepts,
         "defaults": variant.defaults,
-        "inputs": variant.inputs,
+        "inputs": pipeline_inputs,
         "is_video": variant.is_video,
         "runner": variant.family.runner,
         "pricing": variant._data.get("pricing"),
@@ -621,7 +653,17 @@ async def list_models():
             continue
         if variant:
             pipeline_inputs = variant.inputs
-            pipeline_accepts = variant.accepts()
+            if variant.pipeline_class and _is_diffusers_pipeline(variant.pipeline_class):
+                discovered = _inputs_from_pipeline(variant.pipeline_class)
+                merged = {**discovered, **pipeline_inputs}
+                pipeline_inputs = merged
+            pipeline_accepts = {
+                "image": "image" in pipeline_inputs,
+                "video": "video" in pipeline_inputs,
+                "strength": "strength" in pipeline_inputs,
+                "pose_video": "pose_video" in pipeline_inputs,
+                "face_video": "face_video" in pipeline_inputs,
+            }
             pipeline_defaults = variant.defaults
             is_video = variant.is_video
             runner = variant.family.runner

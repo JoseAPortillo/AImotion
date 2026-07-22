@@ -30,6 +30,7 @@ function PromptNode(props: NodeProps) {
 
   const [localValue, setLocalValue] = useState(() => data.positive || upstreamText || '')
   const lastUpstreamRef = useRef(upstreamText)
+  const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     const state = useGraphStore.getState()
@@ -50,6 +51,13 @@ function PromptNode(props: NodeProps) {
   })
 
   const effectivePositive = localValue || upstreamText
+
+  const debouncedUpdate = useCallback((val: string) => {
+    if (blurTimerRef.current) clearTimeout(blurTimerRef.current)
+    blurTimerRef.current = setTimeout(() => {
+      updateNodeData(props.id, { positive: val } as Partial<PromptData>)
+    }, 300)
+  }, [props.id, updateNodeData])
 
   const handleImprove = async () => {
     if (!effectivePositive || improving) return
@@ -100,8 +108,15 @@ function PromptNode(props: NodeProps) {
         <textarea
           placeholder={upstreamText ? 'Using connected text...' : 'Positive prompt...'}
           value={localValue}
-          onChange={(e) => setLocalValue(e.target.value)}
-          onBlur={() => updateNodeData(props.id, { positive: localValue } as Partial<PromptData>)}
+          onChange={(e) => {
+            const val = e.target.value
+            setLocalValue(val)
+            debouncedUpdate(val)
+          }}
+          onBlur={() => {
+            if (blurTimerRef.current) clearTimeout(blurTimerRef.current)
+            updateNodeData(props.id, { positive: localValue } as Partial<PromptData>)
+          }}
           style={{
             width: '100%',
             background: '#0f0f0f',

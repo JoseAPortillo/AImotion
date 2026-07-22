@@ -43,6 +43,7 @@ export function useAutoPreview({ nodeId, data, autoTrigger = true }: UseAutoPrev
   const previewStartRef = useRef(0)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const abortRef = useRef(false)
+  const generationRef = useRef(0)
   const lastKeyRef = useRef('')
 
   const previewDeps = useMemo(() => {
@@ -56,8 +57,8 @@ export function useAutoPreview({ nodeId, data, autoTrigger = true }: UseAutoPrev
     const negText = (negNode?.data as PromptData)?.negative || ''
     const hasImage = genEdges.some((e) => e.targetHandle === 'image_in')
     const hasVideo = genEdges.some((e) => e.targetHandle === 'video_in')
-    return `${data.model}|${data.seed}|${data.cfg}|${data.strength}|${data.scheduler}|${data.width}|${data.height}|${promptText}|${negText}|${hasImage}|${hasVideo}`
-  }, [edges, nodes, nodeId, data.model, data.seed, data.cfg, data.strength, data.scheduler, data.width, data.height])
+    return `${data.model}|${data.seed}|${data.cfg}|${data.steps}|${data.strength}|${data.scheduler}|${data.width}|${data.height}|${promptText}|${negText}|${hasImage}|${hasVideo}`
+  }, [edges, nodes, nodeId, data.model, data.seed, data.cfg, data.steps, data.strength, data.scheduler, data.width, data.height])
 
   function getPreviewParams(): Record<string, unknown> {
     const genEdges = edges.filter((e) => e.target === nodeId)
@@ -110,6 +111,7 @@ export function useAutoPreview({ nodeId, data, autoTrigger = true }: UseAutoPrev
 
   const run = useCallback(async () => {
     if (!data.model) return
+    if (abortRef.current) return
 
     const genEdges = edges.filter((e) => e.target === nodeId)
     const getNode = (edge: typeof genEdges[0]) => nodes.find((n) => n.id === edge.source)
@@ -118,6 +120,8 @@ export function useAutoPreview({ nodeId, data, autoTrigger = true }: UseAutoPrev
     const promptEdgeNeg = genEdges.find((e) => e.targetHandle === 'prompt_neg')
     const videoEdge = genEdges.find((e) => e.targetHandle === 'video_in')
     const imageEdge = genEdges.find((e) => e.targetHandle === 'image_in')
+    const poseVideoEdge = genEdges.find((e) => e.targetHandle === 'pose_video_in')
+    const faceVideoEdge = genEdges.find((e) => e.targetHandle === 'face_video_in')
 
     const promptData = promptEdgePos ? getNode(promptEdgePos)?.data as Record<string, unknown> | undefined : undefined
     const promptText = (typeof promptData?.positive === 'string' && promptData.positive) || (typeof promptData?.result === 'string' && promptData.result) || (typeof promptData?.text === 'string' && promptData.text) || ''
@@ -131,6 +135,8 @@ export function useAutoPreview({ nodeId, data, autoTrigger = true }: UseAutoPrev
 
     const imageFile = imageEdge ? await resolveNodeFile(imageEdge.source) : undefined
     const videoFile = videoEdge ? await resolveNodeFile(videoEdge.source) : undefined
+    const poseVideoFile = poseVideoEdge ? await resolveNodeFile(poseVideoEdge.source) : undefined
+    const faceVideoFile = faceVideoEdge ? await resolveNodeFile(faceVideoEdge.source) : undefined
 
     abortRef.current = true
     if (taskIdRef.current) {
@@ -143,6 +149,8 @@ export function useAutoPreview({ nodeId, data, autoTrigger = true }: UseAutoPrev
       setPreviewRunning(false)
       return
     }
+
+    const myGeneration = ++generationRef.current
 
     setPreviewRunning(true)
     setPreviewProgress(0)
@@ -159,14 +167,21 @@ export function useAutoPreview({ nodeId, data, autoTrigger = true }: UseAutoPrev
         previewParams as Parameters<typeof startGeneration>[2],
         videoFile,
         imageFile,
+        poseVideoFile,
+        faceVideoFile,
       )
+
+      if (myGeneration !== generationRef.current) {
+        cancelTask(task.task_id).catch(() => {})
+        return
+      }
 
       taskIdRef.current = task.task_id
       const pollInterval = previewParams.num_frames && (previewParams.num_frames as number) > 1 ? 3000 : 1500
       let status: any
       do {
         await new Promise((r) => setTimeout(r, pollInterval))
-        if (abortRef.current) break
+        if (abortRef.current || myGeneration !== generationRef.current) break
         status = await pollTask(task.task_id)
         if (status.status === 'cancelled') break
         if (status.current_step != null) setPreviewCurrentStep(status.current_step)
@@ -178,7 +193,7 @@ export function useAutoPreview({ nodeId, data, autoTrigger = true }: UseAutoPrev
         }
       } while (status.status === 'pending' || status.status === 'running')
 
-      if (!abortRef.current && status && status.status === 'completed' && status.result_url) {
+      if (myGeneration === generationRef.current && !abortRef.current && status && status.status === 'completed' && status.result_url) {
         const rtype = status.result_type || 'image'
         setPreviewUrl(status.result_url)
         setPreviewType(rtype)
@@ -187,7 +202,9 @@ export function useAutoPreview({ nodeId, data, autoTrigger = true }: UseAutoPrev
     } catch (e: any) {
       console.error('[auto-preview] generation failed:', e?.message || e)
     } finally {
-      setPreviewRunning(false)
+      if (myGeneration === generationRef.current) {
+        setPreviewRunning(false)
+      }
     }
   }, [nodeId, data, nodes, edges, setAutoPreview])
 
